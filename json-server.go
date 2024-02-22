@@ -7,7 +7,7 @@ import (
         "net/http"
 )
 
-const jsonServerPort = ":8080" // Port to serve JSON api on
+const jsonServerPort = ":8888" // Port to serve JSON api on
 
 
 func responder(w http.ResponseWriter, r *http.Request) {

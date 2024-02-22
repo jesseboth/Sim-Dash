@@ -202,7 +202,7 @@ func main() {
 	// Parse flags
 	csvFilePtr := flag.String("c", "", "Log data to given file in CSV format")
 	horizonPTR := flag.Bool("z", false, "Enables Forza Horizon 4 support (Will default to Forza Motorsport if unset)")
-	jsonPTR := flag.Bool("j", false, "Enables JSON HTTP server on port 8080")
+	jsonPTR := flag.Bool("j", false, "Enables JSON HTTP server on port 8888")
 	noTermPTR := flag.Bool("q", false, "Disables realtime terminal output if set")
 	debugModePTR := flag.Bool("d", false, "Enables extra debug information if set")
 	flag.Parse()
