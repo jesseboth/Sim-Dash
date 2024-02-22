@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+</head>
+<body style="background-color:#999999">
+  <button id="motorsport" class="large-button">Forza Motorsport</button>
+  <button id="horizon" class="large-button">Forza Horizon</button>
+  <button id="stop" class="large-button" style="position:fixed; bottom: 20px; background-color: red;">Stop</button>
+
+</body>
+<style>
+  body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: start;
+  height: 100vh;
+  gap: 20px; /* Space between buttons */
+  margin: 0;
+  padding-top: 20px; /* To ensure some space from the top */
+}
+
+.large-button {
+  width: 500px;
+  height: 150px;
+  padding: 20px 40px; /* Size of the button */
+  font-size: 20px; /* Font size */
+  cursor: pointer;
+  border: 2px solid #007bff; /* Border color */
+  background-color: #007bff; /* Background color */
+  color: white; /* Text color */
+  border-radius: 10px; /* Rounded corners */
+  transition: background-color 0.3s, color 0.3s; /* Smooth transition for hover effect */
+}
+
+.large-button:hover {
+  background-color: #0056b3; /* Darker shade when hovered */
+  color: #d4d4d4;
+}
+</style>
+
+<script>
+    function createButtonListener(name){
+      document.getElementById(name).addEventListener('click', function() {
+        fetch('/' + name, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            // Optionally send data in the body if your command needs it
+        })
+        .then(response => response.json())
+        .catch(error => console.error('Error:', error));
+    });
+    }
+    createButtonListener("motorsport")
+    createButtonListener("horizon")
+    createButtonListener("stop")
+</script>
+</html>
