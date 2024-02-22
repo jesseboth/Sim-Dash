@@ -107,7 +107,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, csvFile string) {
 		totalSlipFront := int(f32map["TireCombinedSlipFrontLeft"] + f32map["TireCombinedSlipFrontRight"])
 		carAttitude := CheckAttitude(totalSlipFront, totalSlipRear)
 
-		log.Printf("RPM: %.0f \t Gear: %d \t BHP: %.0f \t Speed: %.0f \t Total slip: %.0f \t Attitude: %s", f32map["CurrentEngineRpm"], u8map["Gear"], (f32map["Power"] / 745.7), (f32map["Speed"] * 2.237), (f32map["TireCombinedSlipRearLeft"] + f32map["TireCombinedSlipRearRight"]), carAttitude)
+		// log.Printf("RPM: %.0f \t Gear: %d \t BHP: %.0f \t Speed: %.0f \t Total slip: %.0f \t Attitude: %s", f32map["CurrentEngineRpm"], u8map["Gear"], (f32map["Power"] / 745.7), (f32map["Speed"] * 2.237), (f32map["TireCombinedSlipRearLeft"] + f32map["TireCombinedSlipRearRight"]), carAttitude)
 
 		// Testing traction control sensors:
 		// log.Printf("TireSlipRatioFrontLeft: %.0f TireSlipRatioFrontRight %.0f", f32map["TireSlipRatioFrontLeft"], f32map["TireSlipRatioFrontRight"])
@@ -158,7 +158,6 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, csvFile string) {
 		csvLine += "\n"
 
 		// log.Println(csvLine[1:])
-		fmt.Fprintf(file, csvLine[1:]) // write new line to file
 	} // end of if CSV enabled
 
 	// Send data to JSON server if enabled:
@@ -362,7 +361,6 @@ func SetupCloseHandler(csvFile string) {
 		if isFlagPassed("c") == true { // Get stats if csv logging enabled
 			calcstats(csvFile)
 		}
-		fmt.Println("")
 		os.Exit(0)
 	}()
 }

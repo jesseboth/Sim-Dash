@@ -12,7 +12,6 @@ const jsonServerPort = ":8888" // Port to serve JSON api on
 
 func responder(w http.ResponseWriter, r *http.Request) {
 
-        fmp.Println("here")
         switch r.Method {
         case "GET":
                 enableCors(&w)

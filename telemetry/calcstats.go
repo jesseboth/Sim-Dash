@@ -2,11 +2,9 @@ package main
 
 import (
 	"encoding/csv"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
-	"sort"
 )
 
 func calcstats(csvFile string) {
@@ -99,21 +97,17 @@ func calculate(rows [][]string) [][]string {
 		totalSpeed += value // add all speed values together for getting average later
 	}
 
-	fmt.Printf("\nRace statistics:\n")
+	// fmt.Printf("\nRace statistics:\n")
 
 	// Get average speed
-	fmt.Printf("Average speed: %.2f MPH \n", totalSpeed/float64(len(s)))  // truncate to 2 decimal places
+	// fmt.Printf("Average speed: %.2f MPH \n", totalSpeed/float64(len(s)))  // truncate to 2 decimal places
 
 	// Get top speed
 	// fmt.Println(s)
-	sort.Float64s(s)
-	topSpeed := s[len(s)-1]
-	fmt.Printf("Top speed: %.2f MPH \n", topSpeed)
+	// fmt.Printf("Top speed: %.2f MPH \n", topSpeed)
 
 	// Get peak boost
-	sort.Float64s(b)
-	topBoost := b[len(b)-1]
-	fmt.Printf("Peak boost: %.2f PSI \n", topBoost)
+	// fmt.Printf("Peak boost: %.2f PSI \n", topBoost)
 
 	return rows
 }

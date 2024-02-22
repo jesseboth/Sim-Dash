@@ -7,6 +7,7 @@ const port = 3001; // This is the port for the Express server
 const control = 3000;
 
 telemetry = null;
+telemetryType = ""
 const options = {
     cwd: '../telemetry/', // Set the working directory
 };
@@ -46,10 +47,8 @@ const control_server = http.createServer((req, res) => {
     let contentType;
 
     if (req.url === '/motorsport' && req.method === 'POST') {
-        console.log("try motorsport")
         if(telemetry == null){
-            telemetry=1;
-            console.log("motorsport")
+            telemetryType = "motorsport"
             telemetry = spawn('../telemetry/fdt', ['-j'], options);
         }
 
@@ -58,10 +57,8 @@ const control_server = http.createServer((req, res) => {
         return;
     }
     else if (req.url === '/horizon' && req.method === 'POST') {
-        console.log("try horizon")
         if(telemetry == null){
-            telemetry=2;
-            console.log("horizon")
+            telemetryType = "horizon"
             telemetry = spawn('../telemetry/fdt', ['-z', '-j'], options);
         }
 
@@ -70,9 +67,8 @@ const control_server = http.createServer((req, res) => {
         return;
     }
     else if (req.url === '/stop' && req.method === 'POST') {
-        console.log("try stop")
         if(telemetry != null){
-            console.log("stop")
+            telemetryType = "";
             telemetry.kill('SIGKILL');
             telemetry = null
         }
@@ -148,11 +144,14 @@ const server = http.createServer((req, res) => {
 
   let contentType;
 
-  if (req.url === '/data' && req.method === 'GET') {
-      const jsonData = JSON.stringify(jsonEvents); // Your JSON data
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(jsonData);
-      return;
+  if(req.url == "/telemetry" && req.method === 'GET'){
+    retVal = {"type": null}
+    if(telemetry != null){
+        retVal["type"] = telemetryType;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(retVal));
+    return;
   }
 
   switch (extension) {
