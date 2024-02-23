@@ -61,3 +61,20 @@ function updateFuel(percentage) {
     fillWhite.style.width = (percentage - redWidth) + "%";
   }
 }
+
+function updateGear(gear) {
+  var gearElement = document.getElementById("gear");
+  if(gear == 0){
+    gearElement.style.color = "red"
+    gearElement.textContent = "R"
+  }
+  else if(gear > 0 && gear < 11){
+    gearElement.style.color = "#d0c5c3"
+    gearElement.textContent = gear
+  }
+  else{
+    gearElement.style.color = "#207dde"
+    gearElement.textContent = "N"
+    return;
+  }
+}
