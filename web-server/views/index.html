@@ -3,19 +3,23 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Forza Telemetry Data</title>
     <!-- Plotly.js -->
-    <script src="src/scripts.js"></script>
+    <link rel="stylesheet" type="text/css" href="css/style.css" />
 </head>
 
-<body>
-    <div id="rpmDiv" style="width: 600px; height: 400px;"><!-- Plotly chart will be drawn inside this DIV --></div>
-
-    <div id="speedDiv" style="width: 600px; height: 400px;"><!-- Plotly chart will be drawn inside this DIV --></div>
-
-    <div id="gearDiv" style="width: 600px; height: 400px;"><!-- Plotly chart will be drawn inside this DIV --></div>
+<body style="background-color: #09080e;">
+    <div class="centered">
+        <img src="img/dash-background.png" alt="dash">
+        
+        <div class="status-bar-container">
+            <div class="status-bar">
+                <div id="status-bar-fill"></div>
+                <div id="status-bar-fill-white"></div>
+            </div>
+        </div>
+    </div>
 </body>
+<script src="src/scripts.js"></script>
 
 </html>

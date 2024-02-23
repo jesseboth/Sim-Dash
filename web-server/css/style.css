@@ -1,0 +1,54 @@
+.centered {
+  position: absolute;
+  top: 50%;
+  /* left: 50%; */
+  transform: translate(0, -50%);
+}
+
+.centered img {
+  max-width: 100%; /* Set maximum width of image */
+  max-height: 100%; /* Set maximum height of image */
+  height: auto; /* Maintain aspect ratio */
+  width: auto;
+  display: inline-block; /* Make image inline to center with text-align */
+}
+body {
+  overflow: hidden;
+}
+
+.status-bar-container {
+  width: 100%;
+  height: 5px; /* Adjust height as needed */
+  /* bottom: -20px; */
+  position: absolute;
+  bottom: 21%;
+}
+.status-bar {
+  width: 5%;
+  height: 5px; /* Adjust height as needed */
+  background-color: #303030; /* Default background color */
+  right: 63.5%; /* Move right by 20% of the total width */
+
+  /* transform: translate(-50%, -50%); */
+  position: absolute;
+}
+
+#status-bar-fill {
+  height: 100%;
+  background-color: red; /* Color of the filled portion */
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  width: 15%;
+}
+
+#status-bar-fill-white {
+  height: 100%;
+  background-color: white; /* Color of the filled portion */
+  position: absolute;
+  left: 15%; /* Set the width of the red portion */
+  top: 0;
+  width: 85%;
+  z-index: 0;
+}

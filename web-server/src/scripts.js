@@ -50,3 +50,14 @@ async function display_data() {
 
   console.log(data[2]["CurrentEngineRpm"], data[4]["Gear"])
 }
+
+function updateFuel(percentage) {
+  var redWidth = Math.min(percentage, 15); // Limit to 15%
+  document.getElementById("status-bar-fill").style.width = redWidth + "%";
+
+  if(percentage > 15){
+    var fillWhite = document.getElementById("status-bar-fill-white");
+    fillWhite.style.left = redWidth + "%";
+    fillWhite.style.width = (percentage - redWidth) + "%";
+  }
+}
