@@ -1,5 +1,6 @@
 const repeat = setInterval(display_data, 25);
 const another = setInterval(get_telemetryType, 1000*10);
+const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/)[1];
 get_telemetryType()
 telemetry = null;
 telemetryType = null;
@@ -46,7 +47,7 @@ function get_data() {
     telemetry = null;
     return;
   }
-  fetch('http://192.168.4.199:8888/forza')
+  fetch('http://' + ipAddress + ':8888/forza')
   .then(response => {
     // Check if the response is successful
     if (!response.ok) {
