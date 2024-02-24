@@ -222,7 +222,7 @@ func main() {
 	}
 
 	// Switch to Horizon format if needed
-	var formatFile = "FM7_packetformat.dat" // Path to file containing Forzas data format
+	var formatFile = "FM_packetformat.dat" // Path to file containing Forzas data format
 	if horizonMode {
 		formatFile = "FH4_packetformat.dat"
 		log.Println("Forza Horizon mode selected")

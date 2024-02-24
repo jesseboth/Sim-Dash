@@ -23,7 +23,7 @@ body {
   height: 5px; /* Adjust height as needed */
   /* bottom: -20px; */
   position: absolute;
-  bottom: 18%;
+  bottom: 21%;
 }
 
 .status-bar {
@@ -56,6 +56,13 @@ body {
   z-index: 0;
 }
 
+.container {
+  position: absolute;
+  display: flex;
+  justify-content: center; /* Center horizontally */
+  align-items: center; /* Center vertically */
+}
+
 .gear-container {
   height: 18; /* Adjust height as needed */
   /* bottom: -20px; */
@@ -69,7 +76,7 @@ body {
 }
 
 #gear {
-  font-size: 750%;
+  font-size: 600%;
   color: #207dde;
   font-family: "Noto Sans";
   font-weight: 600;
@@ -81,4 +88,63 @@ body {
   font-family: "Noto Sans";
   bottom: -10px;
   position: absolute;
+}
+
+.container-time {
+  height: 18; /* Adjust height as needed */
+  /* bottom: -20px; */
+  width: 200px;
+  left: 77.5%;
+  top: 20%;
+}
+
+.time {
+  font-size: 200%;
+  color: #d0c5c3;
+  font-family: "Noto Sans";
+  font-weight: 600;
+  display: contents;
+}
+
+.container-best-time {
+  height: 18; /* Adjust height as needed */
+  /* bottom: -20px; */
+  width: 200px;
+  right: 75%;
+  top: 20%;
+}
+
+.container-speed {
+  height: 20%;
+  width: 15%;
+    position: absolute;
+    /* display: inline-block; */
+    /* background-color: red; */
+    bottom: 37%;
+    left: 43%;
+}
+
+.reflect{
+  -webkit-box-reflect: below -45px linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,.05) 50%, rgba(0,0,0,0) 100%);
+}
+
+#speed{
+  font-family: "Noto Sans";
+  font-size: 550%;
+  font-weight: 600;
+  color: #dedede;
+  text-shadow: 
+  -1px -1px 0 #000,  
+  1px -1px 0 #000,
+  -1px 1px 0 #000,
+  1px 1px 0 #000; /* Add multiple shadows to create the outline effect */
+}
+
+#mph{
+  font-size: 120%;
+  position: absolute;
+  font-family: "Noto Sans";
+  color: #dedede;
+  left: 93.5%;
+  bottom: 20%;
 }
