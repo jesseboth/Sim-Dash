@@ -84,10 +84,16 @@ body {
 
 #gearmode {
   font-size: 150%;
-  color: #d0c5c3;
+  /* color: #d0c5c3; */
   font-family: "Noto Sans";
   bottom: -10px;
   position: absolute;
+  color: #dedede;
+  text-shadow: 
+  -1px -1px 0 #000,  
+  1px -1px 0 #000,
+  -1px 1px 0 #000,
+  1px 1px 0 #000;
 }
 
 .container-time {
@@ -137,7 +143,7 @@ body {
   -1px -1px 0 #000,  
   1px -1px 0 #000,
   -1px 1px 0 #000,
-  1px 1px 0 #000; /* Add multiple shadows to create the outline effect */
+  1px 1px 0 #000;
 }
 
 #mph{

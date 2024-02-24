@@ -96,7 +96,7 @@ function updateGear(gear) {
     gearElement.textContent = "R"
   }
   else if(gear > 0 && gear < 11){
-    gearElement.style.color = "#d0c5c3"
+    gearElement.style.color = "#dedede"
     gearElement.textContent = gear
   }
   else{
