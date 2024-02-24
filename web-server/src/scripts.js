@@ -10,10 +10,13 @@ test_curtime = 0;
 test_loops = 0;
 test_gear = 0;
 test_speed = 0;
+test_fuel = 100;
+test_distance = 0;
 function testing(){
   test_curtime += .025;
   test_loops++;
   updateTime("time", test_curtime)
+  updateTime("best-time", 145.345)
   if(test_loops % 40 == 0){
     if (test_gear === 12) {
       test_gear = 0;
@@ -23,10 +26,17 @@ function testing(){
   }
   
   if(test_loops % 10 == 0){
-    if(test_speed == 250)[
+    if(test_speed == 250){
       test_speed = 0
-    ]
+    }
+    if(test_fuel == 0){
+      test_fuel = 100;
+    }
     updateSpeed(test_speed++)
+    updateFuel(test_fuel--)
+  }
+  if(test_loops % 5 == 0){
+    updateDistance(test_distance++)
   }
 }
 // TESTING:
@@ -82,7 +92,7 @@ function updateFuel(percentage) {
   var redWidth = Math.min(percentage, 15); // Limit to 15%
   document.getElementById("status-bar-fill").style.width = redWidth + "%";
 
-  if(percentage > 15){
+  if(percentage >= 15){
     var fillWhite = document.getElementById("status-bar-fill-white");
     fillWhite.style.left = redWidth + "%";
     fillWhite.style.width = (percentage - redWidth) + "%";
@@ -108,7 +118,7 @@ function updateGear(gear) {
 
 function updateTime(id, time){
   formattedTime = formatTime(time)
-  if(time != ""){
+  if(time != null){
     document.getElementById(id).style.display = "contents";
     document.getElementById(id).textContent = formattedTime;
   }
@@ -119,6 +129,10 @@ function updateTime(id, time){
 
 function updateSpeed(speed){
   document.getElementById("speed").textContent = speed
+}
+
+function updateDistance(distance){
+  document.getElementById("distance").textContent = String(distance) + " mi"
 }
 
 // HELPERS
@@ -141,8 +155,5 @@ function formatTime(floatSeconds) {
 function padWithZero(num) {
   return (num < 10 ? '0' : '') + String(num);
 }
-
-// updateTime("time", "")
-// updateTime("best-time", "")
 
 // console.log(window.innerWidth/window.innerHeight, 16/9)

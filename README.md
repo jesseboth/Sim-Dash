@@ -23,26 +23,14 @@ Forza Motorsport 7 select the "car dash" format.
 &nbsp;
 
 ## Build
-Compile the application with: `go build -o fdt`  
+Start the add
+* ./docker.sh start 
 
-&nbsp;
+Allow the app to start on boot
+* ./docker.sh daemon
 
-## Run
-### Command line options
-Specify a CSV file to log to: `-c log.csv` (File will be overwritten if it exists)    
-Enable support for Forza Horizon: `-z`    
-Enable JSON server: `-j`   
-Disable realtime terminal output: `-q`   
-Enable debug information: `-d`
-
-&nbsp;
-
-##### Example (Forza Horizon)
-`fdt -z -j -c log.csv`  
-`fdt -z`  
-
-##### Example (Forza Motorsport)
-`fdt -c -j log.csv`  
+Stop the app
+* ./docker.sh stop
 
 &nbsp;
 
@@ -57,5 +45,7 @@ There is a basic example JavaScript dashboard (with rev limiter function) in the
 
 ## Further reading
 - Forza data out format: https://forums.forzamotorsport.net/turn10_postsm926839_Forza-Motorsport-7--Data-Out--feature-details.aspx#post_926839
+
+- Forza Motorsport: https://support.forzamotorsport.net/hc/en-us/articles/21742934024211-Forza-Motorsport-Data-Out-Documentation
 
 - Forza Horizon 4 has some mystery data in the packet, waiting on info from the developers: https://forums.forzamotorsport.net/turn10_postsm1086012_Data-Output.aspx#post_1086012
