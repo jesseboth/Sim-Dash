@@ -1,6 +1,7 @@
 const repeat = setInterval(display_data, 25);
 const another = setInterval(get_telemetryType, 1000*10);
-const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/)[1];
+const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) != null 
+                ? window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/)[1] : "localhost" ;
 get_telemetryType()
 telemetry = null;
 telemetryType = null;
