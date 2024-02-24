@@ -3,14 +3,15 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const { spawn } = require('child_process');
-const port = 3001; // This is the port for the Express server
-const control = 3000;
+const port = 3000; // This is the port for the Express server
 
 telemetry = null;
 telemetryType = ""
 const options = {
     cwd: '../telemetry/', // Set the working directory
 };
+
+dash="/forza-dash";
 
 const EventEmitter = require('events');
 class Emitter extends EventEmitter { };
@@ -38,104 +39,6 @@ const serveFile = async (filePath, contentType, response) => {
   }
 }
 
-const control_server = http.createServer((req, res) => {
-    // console.log(req.url, req.method);
-    myEmitter.emit('log', `${req.url}\t${req.method}`, 'reqLog.txt');
-  
-    const extension = path.extname(req.url);
-  
-    let contentType;
-
-    if (req.url === '/motorsport' && req.method === 'POST') {
-        if(telemetry == null){
-            telemetryType = "motorsport"
-            telemetry = spawn('../telemetry/fdt', ['-j'], options);
-        }
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({}));
-        return;
-    }
-    else if (req.url === '/horizon' && req.method === 'POST') {
-        if(telemetry == null){
-            telemetryType = "horizon"
-            telemetry = spawn('../telemetry/fdt', ['-z', '-j'], options);
-        }
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({}));
-        return;
-    }
-    else if (req.url === '/stop' && req.method === 'POST') {
-        if(telemetry != null){
-            telemetryType = "";
-            telemetry.kill('SIGKILL');
-            telemetry = null
-        }
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({}));
-        return;
-    }
-  
-    switch (extension) {
-        case '.css':
-            contentType = 'text/css';
-            break;
-        case '.js':
-            contentType = 'text/javascript';
-            break;
-        case '.json':
-            contentType = 'application/json';
-            break;
-        case '.jpg':
-            contentType = 'image/jpeg';
-            break;
-        case '.png':
-            contentType = 'image/png';
-            break;
-        case '.txt':
-            contentType = 'text/plain';
-            break;
-        case '.otf':
-            contentType = 'application/x-font-opentype';
-            break;
-        default:
-            contentType = 'text/html';
-    }
-  
-    let filePath =
-        contentType === 'text/html' && req.url === '/'
-            ? path.join(__dirname, 'views', 'control.html')
-            : contentType === 'text/html' && req.url.slice(-1) === '/'
-                ? path.join(__dirname, 'views', req.url, 'control.html')
-                : contentType === 'text/html'
-                    ? path.join(__dirname, 'views', req.url)
-                    : path.join(__dirname, req.url);
-  
-    // makes .html extension not required in the browser
-    if (!extension && req.url.slice(-1) !== '/') filePath += '.html';
-  
-    const fileExists = fs.existsSync(filePath);
-  
-    if (fileExists) {
-        serveFile(filePath, contentType, res);
-    } else {
-        switch (path.parse(filePath).base) {
-            case 'old-page.html':
-                res.writeHead(301, { 'Location': '/new-page.html' });
-                res.end();
-                break;
-            case 'www-page.html':
-                res.writeHead(301, { 'Location': '/' });
-                res.end();
-                break;
-            default:
-                serveFile(path.join(__dirname, 'views', '404.html'), 'text/html', res);
-        }
-    }
-  });
-
 const server = http.createServer((req, res) => {
   // console.log(req.url, req.method);
   myEmitter.emit('log', `${req.url}\t${req.method}`, 'reqLog.txt');
@@ -153,6 +56,40 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(retVal));
     return;
   }
+  else if (req.url === '/motorsport' && req.method === 'POST') {
+        if(telemetry == null){
+            telemetryType = "motorsport"
+            dash = "forza-dash"
+            telemetry = spawn('../telemetry/fdt', ['-j'], options);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({}));
+        return;
+    }
+    else if (req.url === '/horizon' && req.method === 'POST') {
+        if(telemetry == null){
+            telemetryType = "horizon"
+            dash = "forza-dash"
+            telemetry = spawn('../telemetry/fdt', ['-z', '-j'], options);
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({}));
+        return;
+    }
+    else if (req.url === '/stop' && req.method === 'POST') {
+        if(telemetry != null){
+            telemetryType = "";
+            telemetry.kill('SIGKILL');
+            telemetry = null
+            dash = "forza-dash"
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({}));
+        return;
+    }
 
   switch (extension) {
       case '.css':
@@ -194,6 +131,11 @@ const server = http.createServer((req, res) => {
 
   const fileExists = fs.existsSync(filePath);
 
+  if(req.url == "/dash"){
+    serveFile(path.join(__dirname, 'views', dash+'.html'), 'text/html', res);
+    return;
+  }
+
   if (fileExists) {
       serveFile(filePath, contentType, res);
   } else {
@@ -213,4 +155,3 @@ const server = http.createServer((req, res) => {
 });
 const PORT = process.env.PORT || port;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-control_server.listen(control, () => console.log(`Control server running on port ${control}`));

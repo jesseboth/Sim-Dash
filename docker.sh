@@ -2,7 +2,7 @@
 
 IMAGENAME="sim-telemetry"
 CONTAINERNAME="${IMAGENAME}-container"
-PORTS="-p 3000:3000 -p 3001:3001 -p 8888:8888"
+PORTS="-p 3000:3000 -p 8888:8888"
 
 if [ "$1" == "daemon" ]; then
   docker build -t "$IMAGENAME" .
