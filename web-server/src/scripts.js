@@ -14,6 +14,10 @@ test_gear = 0;
 test_speed = 0;
 test_fuel = 100;
 test_distance = 0;
+test_maxRPM = 7200;
+test_rpm = 800;
+test_rpminc = true;
+configureRPM(test_maxRPM)
 function testing(){
   test_curtime += .025;
   test_loops++;
@@ -39,6 +43,20 @@ function testing(){
   }
   if(test_loops % 5 == 0){
     updateDistance(test_distance++)
+    updateRPM(test_rpm, test_maxRPM)
+    if(test_rpminc){
+      test_rpm+=50;
+    }
+    else{
+      test_rpm-=50;
+    }
+    if(test_rpm >= test_maxRPM){
+      test_rpminc = false;
+    }
+    else if(test_rpm <= 800){
+      test_rpminc = true;
+    }
+
   }
 }
 // TESTING:
@@ -135,6 +153,50 @@ function updateSpeed(speed){
 
 function updateDistance(distance){
   document.getElementById("distance").textContent = String(distance) + " mi"
+}
+
+function updateRPM(rpm, maxRPM){
+  totalRPM = (Math.ceil(maxRPM / 1000) + 3) * 1000;
+  percentage = ((1000+rpm)/(totalRPM)) * 100;
+
+  document.getElementById("rpm").style.width = (percentage) + "%";
+  document.getElementById("rpm-indicator").style.left = (percentage-.5) + "%";
+}
+
+function configureRPM(maxRPM){
+  const gridContainer = document.getElementsByClassName("grid-container")[0];
+  const gridElements= document.getElementsByClassName("grid-item");
+  for (let i = gridElements.length - 1; i >= 0; i--) {
+    gridElements[i].remove();
+  }
+
+  rpmboxes = Math.ceil((maxRPM+1) / 1000)+1;
+  for (let i = 0; i < rpmboxes; i++) {
+    // Create a new grid item element
+    const gridItem = document.createElement('div');
+    gridItem.classList.add('grid-item');
+    gridItem.textContent = i; // Set the text content to the current number
+  
+    // Append the grid item to the grid container
+    gridContainer.appendChild(gridItem);
+  }
+
+  for(i = 0; i < rpmboxes; i++){
+    if(i >= rpmboxes-2){
+      document.getElementsByClassName("grid-item")[i].classList.add("rpmRed");
+    }
+    else{
+      document.getElementsByClassName("grid-item")[i].classList.remove("rpmYellow", "rpmRed");
+    }
+  }
+
+
+  if (document.querySelectorAll('.grid-item').length > 10) {
+    document.querySelector('.grid-container').classList.add('over-ten');
+  }
+  else{
+    document.querySelector('.grid-container').classList.remove('over-ten');
+  }
 }
 
 // HELPERS
