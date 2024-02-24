@@ -29,7 +29,7 @@ body {
 .status-bar {
   width: 5%;
   height: 5px; /* Adjust height as needed */
-  background-color: #303030; /* Default background color */
+  background-color: #505050; /* Default background color */
   right: 63.5%; /* Move right by 20% of the total width */
 
   /* transform: translate(-50%, -50%); */
@@ -267,4 +267,50 @@ body {
   height: 100%;
   background-color: rgb(200, 200, 200);
   border:1px solid #000;
+}
+
+.tire-container-container {
+  position: absolute;
+  width: 20%; 
+  height: 20%;
+  bottom: 25%;
+}
+
+.tire-container-container{
+  margin: 20px auto;
+  width:20%;
+  height:20%;
+  display:grid;
+  grid-template-columns: 25% 25%;
+  grid-row: auto auto;
+  grid-column-gap: 20%;
+  grid-row-gap: 20%;
+  top: 28%;
+  left: 6.5%;
+}
+
+.tire-container{
+  background-color: #a7a7a7;
+  border-radius:20%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+
+.tire-bar {
+  position: absolute;
+  width: 3%; 
+  height: 50%;
+  background-color: #505050;
+}
+
+.FL .tire-bar,
+.RL .tire-bar {
+  left: 9%; 
+}
+
+.FR .tire-bar,
+.RR .tire-bar {
+  right: 9%; 
 }
