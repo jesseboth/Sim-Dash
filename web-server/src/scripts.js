@@ -1,10 +1,11 @@
 const repeat = setInterval(display_data, 25);
-const another = setInterval(get_telemetryType, 1000*10);
-const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) != null 
-                ? window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/)[1] : "localhost" ;
+const another = setInterval(get_telemetryType, 1000 * 10);
+const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) != null
+  ? window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/)[1] : "localhost";
 get_telemetryType()
 telemetry = null;
 telemetryType = null;
+yellowRPMPecentage = 0;
 
 // TESTING:
 const testinginterval = setInterval(testing, 25);
@@ -18,42 +19,42 @@ test_maxRPM = 7200;
 test_rpm = 800;
 test_rpminc = true;
 configureRPM(test_maxRPM)
-function testing(){
+function testing() {
   test_curtime += .025;
   test_loops++;
   updateTime("time", test_curtime)
   updateTime("best-time", 145.345)
-  if(test_loops % 40 == 0){
+  if (test_loops % 40 == 0) {
     if (test_gear === 12) {
       test_gear = 0;
     }
 
     updateGear(test_gear++)
   }
-  
-  if(test_loops % 10 == 0){
-    if(test_speed == 250){
+
+  if (test_loops % 10 == 0) {
+    if (test_speed == 250) {
       test_speed = 0
     }
-    if(test_fuel == 0){
+    if (test_fuel == 0) {
       test_fuel = 100;
     }
     updateSpeed(test_speed++)
     updateFuel(test_fuel--)
   }
-  if(test_loops % 5 == 0){
+  if (test_loops % 5 == 0) {
     updateDistance(test_distance++)
     updateRPM(test_rpm, test_maxRPM)
-    if(test_rpminc){
-      test_rpm+=50;
+    if (test_rpminc) {
+      test_rpm += 50;
     }
-    else{
-      test_rpm-=50;
+    else {
+      test_rpm -= 50;
     }
-    if(test_rpm >= test_maxRPM){
+    if (test_rpm >= test_maxRPM) {
       test_rpminc = false;
     }
-    else if(test_rpm <= 800){
+    else if (test_rpm <= 800) {
       test_rpminc = true;
     }
 
@@ -62,39 +63,39 @@ function testing(){
 // TESTING:
 
 function get_data() {
-  if(telemetryType == null){
+  if (telemetryType == null) {
     telemetry = null;
     return;
   }
   fetch('http://' + ipAddress + ':8888/forza')
-  .then(response => {
-    // Check if the response is successful
-    if (!response.ok) {
+    .then(response => {
+      // Check if the response is successful
+      if (!response.ok) {
+        telemetry = null;
+        return;
+      }
+      // Parse the JSON response
+      return response.json();
+    })
+    .then(data => {
+      telemetry = data;
+      return data
+      // Handle the JSON data
+    })
+    .catch(error => {
+      // Handle any errors that occur during the fetch operation
       telemetry = null;
-      return;
-    }
-    // Parse the JSON response
-    return response.json();
-  })
-  .then(data => {
-    telemetry = data;
-    return data
-    // Handle the JSON data
-  })
-  .catch(error => {
-    // Handle any errors that occur during the fetch operation
-    telemetry = null;
-    get_telemetryType()
-  });
+      get_telemetryType()
+    });
 }
 
-function get_telemetryType(){
+function get_telemetryType() {
   fetch('/telemetry')
-  .then(response => response.json())
-  .then(data => {
-    telemetryType = data["type"]
-  })
-  .catch(error => null);
+    .then(response => response.json())
+    .then(data => {
+      telemetryType = data["type"]
+    })
+    .catch(error => null);
 }
 
 async function display_data() {
@@ -112,7 +113,7 @@ function updateFuel(percentage) {
   var redWidth = Math.min(percentage, 15); // Limit to 15%
   document.getElementById("status-bar-fill").style.width = redWidth + "%";
 
-  if(percentage >= 15){
+  if (percentage >= 15) {
     var fillWhite = document.getElementById("status-bar-fill-white");
     fillWhite.style.left = redWidth + "%";
     fillWhite.style.width = (percentage - redWidth) + "%";
@@ -121,71 +122,87 @@ function updateFuel(percentage) {
 
 function updateGear(gear) {
   var gearElement = document.getElementById("gear");
-  if(gear == 0){
+  if (gear == 0) {
     gearElement.style.color = "red"
     gearElement.textContent = "R"
   }
-  else if(gear > 0 && gear < 11){
+  else if (gear > 0 && gear < 11) {
     gearElement.style.color = "#dedede"
     gearElement.textContent = gear
   }
-  else{
+  else {
     gearElement.style.color = "#207dde"
     gearElement.textContent = "N"
     return;
   }
 }
 
-function updateTime(id, time){
+function updateTime(id, time) {
   formattedTime = formatTime(time)
-  if(time != null){
+  if (time != null) {
     document.getElementById(id).style.display = "contents";
     document.getElementById(id).textContent = formattedTime;
   }
-  else{
+  else {
     document.getElementById(id).style.display = "none";
   }
 }
 
-function updateSpeed(speed){
+function updateSpeed(speed) {
   document.getElementById("speed").textContent = speed
 }
 
-function updateDistance(distance){
+function updateDistance(distance) {
   document.getElementById("distance").textContent = String(distance) + " mi"
 }
 
-function updateRPM(rpm, maxRPM){
+function updateRPM(rpm, _maxRPM) {
+  maxRPM = fixMaxRpm(_maxRPM)
   totalRPM = (Math.ceil(maxRPM / 1000) + 3) * 1000;
-  percentage = ((1000+rpm)/(totalRPM)) * 100;
+  percentage = ((1000 + rpm) / (totalRPM)) * 100;
 
-  document.getElementById("rpm").style.width = (percentage) + "%";
-  document.getElementById("rpm-indicator").style.left = (percentage-.5) + "%";
+  var greenWidth = Math.min(percentage, yellowRPMPecentage); // Limit to 15%
+  document.getElementById("rpm").style.width = greenWidth + "%";
+
+  if(percentage >= 15){
+    var fillWhite = document.getElementById("rpm-yellow");
+    fillWhite.style.left = greenWidth + "%";
+    fillWhite.style.width = (percentage - greenWidth) + "%";
+  }
+
+  // document.getElementById("rpm").style.width = (percentage) + "%";
+  document.getElementById("rpm-indicator").style.left = (percentage - .5) + "%";
 }
 
-function configureRPM(maxRPM){
+function configureRPM(_maxRPM) {
+  maxRPM = fixMaxRpm(_maxRPM)
   const gridContainer = document.getElementsByClassName("grid-container")[0];
-  const gridElements= document.getElementsByClassName("grid-item");
+  const gridElements = document.getElementsByClassName("grid-item");
   for (let i = gridElements.length - 1; i >= 0; i--) {
     gridElements[i].remove();
   }
 
-  rpmboxes = Math.ceil((maxRPM+1) / 1000)+1;
+  rpmboxes = Math.ceil((maxRPM) / 1000) + 1;
   for (let i = 0; i < rpmboxes; i++) {
     // Create a new grid item element
     const gridItem = document.createElement('div');
     gridItem.classList.add('grid-item');
-    gridItem.textContent = i; // Set the text content to the current number
-  
+    if(rpmboxes < 12){
+      gridItem.textContent = i;
+    }
+    else if(i != 0 && i != rpmboxes-1){
+      gridItem.textContent = i;
+    }
+
     // Append the grid item to the grid container
     gridContainer.appendChild(gridItem);
   }
 
-  for(i = 0; i < rpmboxes; i++){
-    if(i >= rpmboxes-2){
+  for (i = 0; i < rpmboxes; i++) {
+    if (i >= rpmboxes - 2) {
       document.getElementsByClassName("grid-item")[i].classList.add("rpmRed");
     }
-    else{
+    else {
       document.getElementsByClassName("grid-item")[i].classList.remove("rpmYellow", "rpmRed");
     }
   }
@@ -194,9 +211,16 @@ function configureRPM(maxRPM){
   if (document.querySelectorAll('.grid-item').length > 10) {
     document.querySelector('.grid-container').classList.add('over-ten');
   }
-  else{
+  else {
     document.querySelector('.grid-container').classList.remove('over-ten');
   }
+
+  // yellow start
+  rpm = (rpmboxes - 4) * 1000;
+  totalRPM = (Math.ceil(maxRPM / 1000) + 3) * 1000;
+  percentage = ((1000 + rpm) / (totalRPM)) * 100;
+  yellowRPMPecentage = percentage
+  document.getElementById("rpm-yellow").style.left = percentage + "%"
 }
 
 // HELPERS
@@ -218,6 +242,14 @@ function formatTime(floatSeconds) {
 // Function to pad single-digit numbers with leading zero
 function padWithZero(num) {
   return (num < 10 ? '0' : '') + String(num);
+}
+
+function fixMaxRpm(maxRPM){
+  if(maxRPM % 1000 == 0){
+    return maxRPM+1000
+  }
+  
+  return maxRPM;
 }
 
 // console.log(window.innerWidth/window.innerHeight, 16/9)
