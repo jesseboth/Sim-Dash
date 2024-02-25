@@ -1,4 +1,4 @@
-const repeat = setInterval(display_data, 25);
+const repeat = setInterval(set_display, 25);
 const another = setInterval(get_telemetryType, 1000 * 10);
 const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) != null
   ? window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/)[1] : "localhost";
@@ -10,14 +10,19 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
   const coldTemperature = 180;
   const normalTemperature = 220;
   const hotTemperature = 280
+  set_default()
   
 setTimeout(function() {
     load();
     get_telemetryType()
-  }, 250);
+}, 250);
+
+setTimeout(function() {
+  console.log(telemetry)
+}, 2500);
   
   // TESTING:
-setInterval(testing, 25);
+// setInterval(testing, 25);
 test_curtime = 0;
 test_loops = 0;
 test_gear = 0;
@@ -25,7 +30,7 @@ test_speed = 0;
 test_fuel = 100;
 test_distance = 0;
 test_maxRPM = 7200;
-test_rpm = 800;
+test_rpm = 1200;
 test_rpminc = true;
 test_wear = 100;
 test_temp = coldTemperature-50;
@@ -123,6 +128,25 @@ function get_data() {
     });
 }
 
+function set_default() {
+  updateDistance(0)
+  updateFuel(100)
+  updateGear(11)
+  configureRPM(7200)
+  updateRPM(1200, 7200)
+  updateSpeed(0)
+  updateTime("time", null)
+  updateTime("best-time", null)
+  updateTireTemp("FR", normalTemperature)
+  updateTireTemp("FL", normalTemperature)
+  updateTireTemp("RR", normalTemperature)
+  updateTireTemp("RL", normalTemperature)
+  updateTireWear("FR", 100)
+  updateTireWear("FL", 100)
+  updateTireWear("FR", 100)
+  updateTireWear("RL", 100)
+}
+
 function get_telemetryType() {
   fetch('/telemetry')
     .then(response => response.json())
@@ -132,25 +156,60 @@ function get_telemetryType() {
     .catch(error => null);
 }
 
-async function display_data() {
+gearChangeTicks = 0;
+async function set_display() {
   get_data(); // Wait for the data to be fetched and parsed
 
   data = telemetry
-  if (data == null) {
+  if (data == null || data[0]["IsRaceOn"] != 1) {
+    set_default();
     return;
   }
 
-  console.log(data[2]["CurrentEngineRpm"], data[4]["Gear"])
+  gear = data[4]["Gear"];
+  if(gear == 11){
+    gearChangeTicks++;
+  }
+  else{
+    gearChangeTicks = 0;
+    updateGear(gear)
+  }
+
+  if(gearChangeTicks ){
+    gearChangeTicks = 0;
+    updateGear(gear)
+  }
+
+
+  updateDistance(metersToMiles(data[2]["DistanceTraveled"]))
+  updateFuel(data[2]["Fuel"]*100)
+  configureRPM(data[2]["EngineMaxRpm"])
+  updateRPM(data[2]["CurrentEngineRpm"], data[2]["EngineMaxRpm"])
+  updateSpeed(mpstomph(data[2]["Speed"]))
+  updateTime("time", data[2]["CurrentLap"])
+  updateTime("best-time", data[2]["BestLap"])
+  updateTireTemp("FR", data[2]["TireTempFrontRight"])
+  updateTireTemp("FL", data[2]["TireTempFrontLeft"])
+  updateTireTemp("RR", data[2]["TireTempRearRight"])
+  updateTireTemp("RL", data[2]["TireTempRearLeft"])
+  updateTireWear("FR", 100*(1-data[2]["TireWearFrontRight"]))
+  updateTireWear("FL", 100*(1-data[2]["TireWearFrontLeft"]))
+  updateTireWear("FR", 100*(1-data[2]["TireWearRearRight"]))
+  updateTireWear("RL", 100*(1-data[2]["TireWearRearLeft"]))
+
 }
 
 function updateFuel(percentage) {
   var redWidth = Math.min(percentage, 15); // Limit to 15%
   document.getElementById("status-bar-fill").style.width = redWidth + "%";
+  var fillWhite = document.getElementById("status-bar-fill-white");
 
   if (percentage >= 15) {
-    var fillWhite = document.getElementById("status-bar-fill-white");
     fillWhite.style.left = redWidth + "%";
     fillWhite.style.width = (percentage - redWidth) + "%";
+  }
+  else {
+    fillWhite.style.width = "0%"
   }
 }
 
@@ -173,7 +232,7 @@ function updateGear(gear) {
 
 function updateTime(id, time) {
   formattedTime = formatTime(time)
-  if (time != null) {
+  if (time != null && time != 0) {
     document.getElementById(id).style.display = "contents";
     document.getElementById(id).textContent = formattedTime;
   }
@@ -183,10 +242,11 @@ function updateTime(id, time) {
 }
 
 function updateSpeed(speed) {
-  document.getElementById("speed").textContent = speed
+  document.getElementById("speed").textContent = parseInt(speed)
 }
 
-function updateDistance(distance) {
+function updateDistance(_distance) {
+  distance = Math.max(0, parseInt(_distance))
   document.getElementById("distance").textContent = String(distance) + " mi"
 }
 
@@ -211,11 +271,14 @@ function updateRPM(rpm, _maxRPM) {
 function updateTireWear(tire, percentage) {
   var redWidth = Math.min(percentage, 15); // Limit to 15%
   document.getElementById(tire+"tire-bar-fill-red").style.height = redWidth + "%";
+  var fillWhite = document.getElementById(tire+"tire-bar-fill-white");
 
   if (percentage >= 15) {
-    var fillWhite = document.getElementById(tire+"tire-bar-fill-white");
     fillWhite.style.bottom = redWidth + "%";
     fillWhite.style.height = (percentage - redWidth) + "%";
+  }
+  else{
+    fillWhite.style.height = "0%";
   }
 }
 
@@ -328,4 +391,12 @@ function fixMaxRpm(maxRPM){
 
 function load(){
   document.getElementById("load").style.display = "none"
+}
+
+function mpstomph(mps) {
+  return mps * 2.23694;
+}
+
+function metersToMiles(meters) {
+  return meters * 0.000621371;
 }
