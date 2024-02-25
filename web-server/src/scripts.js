@@ -7,9 +7,9 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
   yellowRPMPecentage = 0;
   
   // Define temperature range (adjust as needed)
-  const coldTemperature = 100;
-  const normalTemperature = 150;
-  const hotTemperature = 250
+  const coldTemperature = 180;
+  const normalTemperature = 220;
+  const hotTemperature = 280
   
 setTimeout(function() {
     load();
@@ -28,7 +28,7 @@ test_maxRPM = 7200;
 test_rpm = 800;
 test_rpminc = true;
 test_wear = 100;
-test_temp = coldTemperature-20;
+test_temp = coldTemperature-50;
 test_tempinc = true;
 configureRPM(test_maxRPM)
 function testing() {
@@ -222,16 +222,29 @@ function updateTireWear(tire, percentage) {
 function updateTireTemp(tire, temp){
   const temperature = parseInt(temp);
   const tireDiv = document.getElementById(tire);
-
+  const r = 167;
+  const g = 167;
+  const b = 167;
   if (temperature <= coldTemperature) {
-    tireDiv.style.backgroundColor = '#4d89b8';
+    const percentage = (temperature - 0) / (coldTemperature - 0);
+    rcolor = 0 + (r - 0) * percentage;
+    gcolor = 100 + (g-100) * percentage;
+    bcolor = 255 + (b-255) * percentage;
+    tireDiv.style.backgroundColor = "rgb("+ rcolor + "," + gcolor  + "," + bcolor + ")";;
 
   } else if (temperature > normalTemperature) {
-    const percentage = (temperature - normalTemperature) / (hotTemperature - normalTemperature);
-    tireDiv.style.backgroundColor = "rgb(255," + String(128*(1-percentage)) + ",0)";
+    const percentage = Math.min(1, (temperature - normalTemperature) / (hotTemperature - normalTemperature));
+    // startValue + (endValue - startValue) * percentage
+    rcolor = r + (255 - r) * percentage;
+    gcolor = g + (0 - g) * percentage;
+    bcolor = b + (0 - b) * percentage;
+    tireDiv.style.backgroundColor = "rgb("+ rcolor + "," + gcolor  + "," + bcolor + ")";;
 
-  } else {
-    tireDiv.style.backgroundColor = "#a7a7a7"
+    // tireDiv.style.backgroundColor = "rgb(255," + String(128*(1-percentage)) + ",0)";
+    
+  } 
+  else {
+    tireDiv.style.backgroundColor = "rgb("+ r + "," + g + "," + b + ")";
   }
 }
 
