@@ -2,13 +2,22 @@ const repeat = setInterval(display_data, 25);
 const another = setInterval(get_telemetryType, 1000 * 10);
 const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) != null
   ? window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/)[1] : "localhost";
-get_telemetryType()
-telemetry = null;
-telemetryType = null;
-yellowRPMPecentage = 0;
-
-// TESTING:
-const testinginterval = setInterval(testing, 25);
+  telemetry = null;
+  telemetryType = null;
+  yellowRPMPecentage = 0;
+  
+  // Define temperature range (adjust as needed)
+  const coldTemperature = 100;
+  const normalTemperature = 150;
+  const hotTemperature = 250
+  
+setTimeout(function() {
+    load();
+    get_telemetryType()
+  }, 250);
+  
+  // TESTING:
+setInterval(testing, 25);
 test_curtime = 0;
 test_loops = 0;
 test_gear = 0;
@@ -18,6 +27,9 @@ test_distance = 0;
 test_maxRPM = 7200;
 test_rpm = 800;
 test_rpminc = true;
+test_wear = 100;
+test_temp = coldTemperature-20;
+test_tempinc = true;
 configureRPM(test_maxRPM)
 function testing() {
   test_curtime += .025;
@@ -38,8 +50,13 @@ function testing() {
     }
     if (test_fuel == 0) {
       test_fuel = 100;
+      test_wear = 100;
     }
     updateSpeed(test_speed++)
+    updateTireWear("FR", test_wear)
+    updateTireWear("FL", test_wear)
+    updateTireWear("RR", test_wear)
+    updateTireWear("RL", test_wear--)
     updateFuel(test_fuel--)
   }
   if (test_loops % 5 == 0) {
@@ -56,6 +73,23 @@ function testing() {
     }
     else if (test_rpm <= 800) {
       test_rpminc = true;
+    }
+
+    updateTireTemp("FR", test_temp)
+    updateTireTemp("FL", test_temp)
+    updateTireTemp("RR", test_temp)
+    updateTireTemp("RL", test_temp)
+    if(test_temp > hotTemperature){
+      test_tempinc = false;
+    }
+    else if(test_temp < coldTemperature-20){
+      test_tempinc = true;
+    }
+    if(test_tempinc){
+      test_temp++;
+    }
+    else{
+      test_temp--;
     }
 
   }
@@ -174,6 +208,33 @@ function updateRPM(rpm, _maxRPM) {
   document.getElementById("rpm-indicator").style.left = (percentage - .5) + "%";
 }
 
+function updateTireWear(tire, percentage) {
+  var redWidth = Math.min(percentage, 15); // Limit to 15%
+  document.getElementById(tire+"tire-bar-fill-red").style.height = redWidth + "%";
+
+  if (percentage >= 15) {
+    var fillWhite = document.getElementById(tire+"tire-bar-fill-white");
+    fillWhite.style.bottom = redWidth + "%";
+    fillWhite.style.height = (percentage - redWidth) + "%";
+  }
+}
+
+function updateTireTemp(tire, temp){
+  const temperature = parseInt(temp);
+  const tireDiv = document.getElementById(tire);
+
+  if (temperature <= coldTemperature) {
+    tireDiv.style.backgroundColor = '#4d89b8';
+
+  } else if (temperature > normalTemperature) {
+    const percentage = (temperature - normalTemperature) / (hotTemperature - normalTemperature);
+    tireDiv.style.backgroundColor = "rgb(255," + String(128*(1-percentage)) + ",0)";
+
+  } else {
+    tireDiv.style.backgroundColor = "#a7a7a7"
+  }
+}
+
 function configureRPM(_maxRPM) {
   maxRPM = fixMaxRpm(_maxRPM)
   const gridContainer = document.getElementsByClassName("grid-container")[0];
@@ -252,4 +313,6 @@ function fixMaxRpm(maxRPM){
   return maxRPM;
 }
 
-// console.log(window.innerWidth/window.innerHeight, 16/9)
+function load(){
+  document.getElementById("load").style.display = "none"
+}

@@ -314,3 +314,37 @@ body {
 .RR .tire-bar {
   right: 9%; 
 }
+
+#FRtire-bar-fill-red,
+#FLtire-bar-fill-red,
+#RRtire-bar-fill-red,
+#RLtire-bar-fill-red {
+  width: 100%;
+  background-color: red; /* Color of the filled portion */
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 1;
+  height: 15%;
+}
+
+#FRtire-bar-fill-white,
+#FLtire-bar-fill-white,
+#RRtire-bar-fill-white,
+#RLtire-bar-fill-white{
+  width: 100%;
+  background-color: white;
+  position: absolute;
+  bottom: 15%; 
+  height: 85%;
+  z-index: 0;
+}
+
+#load{
+  background-color: #09080e;
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  top:0;
+  z-index: 10;
+}
