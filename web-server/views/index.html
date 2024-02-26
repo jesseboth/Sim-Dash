@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
 </head>
 <body style="background-color:#999999">
-  <button id="motorsport" class="large-button">Forza Motorsport</button>
-  <button id="horizon" class="large-button">Forza Horizon</button>
+  <button id="FM" class="large-button">Forza Motorsport</button>
+  <button id="FH5" class="large-button">Forza Horizon 5</button>
+  <button id="FM7" class="large-button">Forza Motorsport 7</button>
+  <button id="FH4" class="large-button">Forza Horizon 4</button>
   <button id="stop" class="large-button" style="position:fixed; bottom: 20px; background-color: red;">Stop</button>
 
 </body>
@@ -23,7 +25,7 @@
 
 .large-button {
   width: 500px;
-  height: 150px;
+  height: 10%;
   padding: 20px 40px; /* Size of the button */
   font-size: 20px; /* Font size */
   cursor: pointer;
@@ -54,8 +56,10 @@
         .catch(error => console.error('Error:', error));
     });
     }
-    createButtonListener("motorsport")
-    createButtonListener("horizon")
+    createButtonListener("FM")
+    createButtonListener("FH5")
+    createButtonListener("FM7")
+    createButtonListener("FH4")
     createButtonListener("stop")
 </script>
 </html>

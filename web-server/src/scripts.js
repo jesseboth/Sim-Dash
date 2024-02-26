@@ -16,10 +16,6 @@ setTimeout(function() {
     load();
     get_telemetryType()
 }, 250);
-
-setTimeout(function() {
-  console.log(telemetry)
-}, 2500);
   
   // TESTING:
 // setInterval(testing, 25);
@@ -106,7 +102,7 @@ function get_data() {
     telemetry = null;
     return;
   }
-  fetch('http://' + ipAddress + ':8888/forza')
+  fetch('http://' + ipAddress + ':8888/telemetry')
     .then(response => {
       // Check if the response is successful
       if (!response.ok) {
@@ -148,7 +144,7 @@ function set_default() {
 }
 
 function get_telemetryType() {
-  fetch('/telemetry')
+  fetch('/telemetrytype')
     .then(response => response.json())
     .then(data => {
       telemetryType = data["type"]
@@ -175,7 +171,7 @@ async function set_display() {
     updateGear(gear)
   }
 
-  if(gearChangeTicks ){
+  if(gearChangeTicks >= 10){
     gearChangeTicks = 0;
     updateGear(gear)
   }
@@ -192,10 +188,18 @@ async function set_display() {
   updateTireTemp("FL", data[2]["TireTempFrontLeft"])
   updateTireTemp("RR", data[2]["TireTempRearRight"])
   updateTireTemp("RL", data[2]["TireTempRearLeft"])
-  updateTireWear("FR", 100*(1-data[2]["TireWearFrontRight"]))
-  updateTireWear("FL", 100*(1-data[2]["TireWearFrontLeft"]))
-  updateTireWear("FR", 100*(1-data[2]["TireWearRearRight"]))
-  updateTireWear("RL", 100*(1-data[2]["TireWearRearLeft"]))
+  if(data[2].hasOwnProperty("TireWearFrontRight")){
+    updateTireWear("FR", 100*(1-data[2]["TireWearFrontRight"]))
+    updateTireWear("FL", 100*(1-data[2]["TireWearFrontLeft"]))
+    updateTireWear("RR", 100*(1-data[2]["TireWearRearRight"]))
+    updateTireWear("RL", 100*(1-data[2]["TireWearRearLeft"]))
+  }
+  else{
+    updateTireWear("FR", null);
+    updateTireWear("FL", null);
+    updateTireWear("RR", null);
+    updateTireWear("RL", null);
+  }
 
 }
 
@@ -269,6 +273,14 @@ function updateRPM(rpm, _maxRPM) {
 }
 
 function updateTireWear(tire, percentage) {
+  if(percentage == null){
+    document.getElementById(tire+"tire-bar").style.display = "none"
+    return;
+  }
+  else{
+    document.getElementById(tire+"tire-bar").style.display = "block"
+  }
+
   var redWidth = Math.min(percentage, 15); // Limit to 15%
   document.getElementById(tire+"tire-bar-fill-red").style.height = redWidth + "%";
   var fillWhite = document.getElementById(tire+"tire-bar-fill-white");

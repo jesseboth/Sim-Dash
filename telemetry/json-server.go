@@ -1,13 +1,12 @@
 package main
 
 import (
-        // "encoding/json"
         "fmt"
         "log"
         "net/http"
 )
 
-const jsonServerPort = ":8888" // Port to serve JSON api on
+const jsonServerPort = ":8888"
 
 
 func responder(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +22,7 @@ func responder(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveJSON() {
-        http.HandleFunc("/forza", responder)
+        http.HandleFunc("/telemetry", responder)
 
         log.Printf("JSON Telemetry Server started at http://localhost%s", jsonServerPort)
         log.Fatal(http.ListenAndServe(jsonServerPort, nil))

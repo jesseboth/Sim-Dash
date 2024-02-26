@@ -47,7 +47,7 @@ const server = http.createServer((req, res) => {
 
   let contentType;
 
-  if(req.url == "/telemetry" && req.method === 'GET'){
+  if(req.url == "/telemetrytype" && req.method === 'GET'){
     retVal = {"type": null}
     if(telemetry != null){
         retVal["type"] = telemetryType;
@@ -56,22 +56,23 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(retVal));
     return;
   }
-  else if (req.url === '/motorsport' && req.method === 'POST') {
+  else if (req.url.startsWith("/FM") && req.method === 'POST') {
         if(telemetry == null){
             telemetryType = "motorsport"
             dash = "forza-dash"
-            telemetry = spawn('../telemetry/fdt', ['-j'], options);
+            telemetry = spawn('../telemetry/fdt', ['-game', req.url.substring(1), '-j'], options);
         }
-
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({}));
         return;
     }
-    else if (req.url === '/horizon' && req.method === 'POST') {
+    else if (req.url.startsWith("/FH") && req.method === 'POST') {
         if(telemetry == null){
             telemetryType = "horizon"
             dash = "forza-dash"
-            telemetry = spawn('../telemetry/fdt', ['-z', '-j'], options);
+            console.log("here", req.url.substring(1))
+            telemetry = spawn('../telemetry/fdt', ['-game', req.url.substring(1), '-j'], options);
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
