@@ -368,3 +368,24 @@ body {
   top:0;
   z-index: 10;
 }
+
+
+.position-container{
+  height: 10%;
+  width: 10%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  left: 45%;
+  top: 69%;
+  /* background-color: #c90000; */
+}
+#position{
+  color: #207dde;
+  position: absolute;
+  font-family: "Noto Sans";
+  font-size: 250%;
+  font-weight: 600;
+  display: none;
+}
+

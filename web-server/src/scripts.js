@@ -31,6 +31,8 @@ test_rpminc = true;
 test_wear = 100;
 test_temp = coldTemperature-50;
 test_tempinc = true;
+test_position = 1;
+test_positoninc = true;
 configureRPM(test_maxRPM)
 function testing() {
   test_curtime += .025;
@@ -43,6 +45,14 @@ function testing() {
     }
 
     updateGear(test_gear++)
+    updatePosition(test_position)
+    test_position = test_positoninc ? test_position+1 : test_position-1;
+    if(test_position == 24){
+      test_positoninc = false;
+    }
+    else if(test_position == 0){
+      test_positoninc = true;
+    }
   }
 
   if (test_loops % 10 == 0) {
@@ -59,6 +69,7 @@ function testing() {
     updateTireWear("RR", test_wear)
     updateTireWear("RL", test_wear--)
     updateFuel(test_fuel--)
+    
   }
   if (test_loops % 5 == 0) {
     updateDistance(test_distance++)
@@ -141,6 +152,7 @@ function set_default() {
   updateTireWear("FL", 100)
   updateTireWear("FR", 100)
   updateTireWear("RL", 100)
+  updatePosition(0)
 }
 
 function get_telemetryType() {
@@ -188,6 +200,7 @@ async function set_display() {
   updateTireTemp("FL", data[2]["TireTempFrontLeft"])
   updateTireTemp("RR", data[2]["TireTempRearRight"])
   updateTireTemp("RL", data[2]["TireTempRearLeft"])
+  updatePosition(data[4]["RacePosition"])
   if(data[2].hasOwnProperty("TireWearFrontRight")){
     updateTireWear("FR", 100*(1-data[2]["TireWearFrontRight"]))
     updateTireWear("FL", 100*(1-data[2]["TireWearFrontLeft"]))
@@ -323,6 +336,15 @@ function updateTireTemp(tire, temp){
   }
 }
 
+function updatePosition(pos){
+  if(pos == 0){
+    document.getElementById("position").style.display = "none"
+    return;
+  }
+  document.getElementById("position").style.display = "block"
+  document.getElementById("position").textContent = getPositionSuffix(pos)
+}
+
 function configureRPM(_maxRPM) {
   maxRPM = fixMaxRpm(_maxRPM)
   const gridContainer = document.getElementsByClassName("grid-container")[0];
@@ -411,4 +433,20 @@ function mpstomph(mps) {
 
 function metersToMiles(meters) {
   return meters * 0.000621371;
+}
+
+function getPositionSuffix(position) {
+  if (position % 100 >= 11 && position % 100 <= 13) {
+    return position + "th";
+  }
+  switch (position % 10) {
+    case 1:
+      return position + "st";
+    case 2:
+      return position + "nd";
+    case 3:
+      return position + "rd";
+    default:
+      return position + "th";
+  }
 }
