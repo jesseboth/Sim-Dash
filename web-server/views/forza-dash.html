@@ -12,90 +12,93 @@
 </head>
 
 <body style="background-color: #09080e;">
-    <div class="centered">
+    <div class="centered size">
+      <div class="content">
+
         <div class="grid-container-container">
-            <div id="rpm"></div>
-            <div id="rpm-yellow"></div>
-            <div class="grid-container">
-                <div class="grid-item">0</div>
-                <div class="grid-item">1</div>
-                <div class="grid-item">2</div>
-                <div class="grid-item">3</div>
-                <div class="grid-item">4</div>
-                <div class="grid-item">5</div>
-                <div class="grid-item">6</div>
-                <div class="grid-item rpmRed">7</div>
-                <div class="grid-item rpmRed">8</div>
-            </div>
-            <div id="rpm-indicator"></div>
+          <div id="rpm"></div>
+          <div id="rpm-yellow"></div>
+          <div class="grid-container">
+            <div class="grid-item">0</div>
+            <div class="grid-item">1</div>
+            <div class="grid-item">2</div>
+            <div class="grid-item">3</div>
+            <div class="grid-item">4</div>
+            <div class="grid-item">5</div>
+            <div class="grid-item">6</div>
+            <div class="grid-item rpmRed">7</div>
+            <div class="grid-item rpmRed">8</div>
+          </div>
+          <div id="rpm-indicator"></div>
         </div>
         <img src="img/dash-background.png" alt="dash">
         <!-- Gas -->
         <div class="status-bar-container">
-            <div class="status-bar">
-                <div id="status-bar-fill"></div>
-                <div id="status-bar-fill-white"></div>
-            </div>
+          <div class="status-bar">
+            <div id="status-bar-fill"></div>
+            <div id="status-bar-fill-white"></div>
+          </div>
         </div>
-
+        
         <!-- Gear -->
         <div class="gear-container">
-            <div id="gear">N</div>
-            <div id="gearmode"> Race</div>
+          <div id="gear">N</div>
+          <div id="gearmode"> Race</div>
         </div>
-
+        
         <!-- time -->
         <div class="container container-time">
-            <div class="time" id="time">00:00:00</div>
+          <div class="time" id="time">00:00:00</div>
         </div>
         <div class="container container-best-time">
-            <div class="time" id="best-time">00:00:00</div>
+          <div class="time" id="best-time">00:00:00</div>
         </div>
-
+        
         <!-- speed -->
         <div class="container container-speed">
-            <div class="reflect">
-                <div id="speed">0</div>
-            </div>
-            <div id="mph">mph</div>
+          <div class="reflect">
+            <div id="speed">0</div>
+          </div>
+          <div id="mph">mph</div>
         </div>
-
+        
         <div class="container container-distance">
-            <div id="distance">0 mi</div>
+          <div id="distance">0 mi</div>
         </div>
         
         <div class="container tire-container-container">
-            <div class="tire-container FL" id="FL">
-              <img src="img/tire.png" class="tire" alt="tireFL">
-              <div id="FLtire-bar" class="tire-bar">
-                <div id="FLtire-bar-fill-red"></div>
-                <div id="FLtire-bar-fill-white"></div>
-              </div>
-            </div>
-            <div class="tire-container FR" id="FR">
-              <img src="img/tire.png" class="tire" alt="tireFR">
-              <div id="FRtire-bar" class="tire-bar">
-                <div id="FRtire-bar-fill-red"></div>
-                <div id="FRtire-bar-fill-white"></div>
-              </div>
-            </div>
-            <div class="tire-container RL" id="RL">
-              <img src="img/tire.png" class="tire" alt="tireRL">
-              <div id="RLtire-bar" class="tire-bar">
-                <div id="RLtire-bar-fill-red"></div>
-                <div id="RLtire-bar-fill-white"></div>
-              </div>
-            </div>
-            <div class="tire-container RR" id="RR">
-              <img src="img/tire.png" class="tire" alt="tireRR">
-              <div id="RRtire-bar" class="tire-bar">
-                <div id="RRtire-bar-fill-red"></div>
-                <div id="RRtire-bar-fill-white"></div>
-              </div>
+          <div class="tire-container FL" id="FL">
+            <img src="img/tire.png" class="tire" alt="tireFL">
+            <div id="FLtire-bar" class="tire-bar">
+              <div id="FLtire-bar-fill-red"></div>
+              <div id="FLtire-bar-fill-white"></div>
             </div>
           </div>
+          <div class="tire-container FR" id="FR">
+            <img src="img/tire.png" class="tire" alt="tireFR">
+            <div id="FRtire-bar" class="tire-bar">
+              <div id="FRtire-bar-fill-red"></div>
+              <div id="FRtire-bar-fill-white"></div>
+            </div>
+          </div>
+          <div class="tire-container RL" id="RL">
+            <img src="img/tire.png" class="tire" alt="tireRL">
+            <div id="RLtire-bar" class="tire-bar">
+              <div id="RLtire-bar-fill-red"></div>
+              <div id="RLtire-bar-fill-white"></div>
+            </div>
+          </div>
+          <div class="tire-container RR" id="RR">
+            <img src="img/tire.png" class="tire" alt="tireRR">
+            <div id="RRtire-bar" class="tire-bar">
+              <div id="RRtire-bar-fill-red"></div>
+              <div id="RRtire-bar-fill-white"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="load"></div>
     </div>
-    <div id="load"></div>
 </body>
 <script src="src/scripts.js"></script>
 

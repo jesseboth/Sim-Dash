@@ -7,6 +7,22 @@
   transform: translate(0, -50%);
 }
 
+.size {
+  width: 100%; /* Set width to fill the parent element */
+  height: 0;
+  padding-bottom: 56.25%; /* 9 divided by 16, multiplied by 100% */
+  position: relative; /* Required for absolute positioning of child elements */
+  overflow: hidden; /* Hide any overflow content */
+}
+
+.content {
+  position: absolute; /* Position content absolutely within the container */
+  top: 0; /* Align content to the top */
+  left: 0; /* Align content to the left */
+  width: 100%; /* Make content fill the container */
+  height: 100%; /* Make content fill the container */
+}
+
 .centered img {
   max-width: 100%; /* Set maximum width of image */
   max-height: 100%; /* Set maximum height of image */
@@ -182,7 +198,7 @@ body {
   margin-left: auto; 
   margin-right: auto; 
   height: 5%;
-  top: 19%;
+  top: 18.5%;
   background-color: #696969;
   z-index: -1;
 }
@@ -214,6 +230,10 @@ body {
   1px -1px 0 #000,
   -1px 1px 0 #000,
   1px 1px 0 #000;
+}
+
+.grid-item::content{
+  top:0
 }
 
 .grid-item:first-child{

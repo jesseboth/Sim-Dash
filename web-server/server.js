@@ -71,7 +71,6 @@ const server = http.createServer((req, res) => {
         if(telemetry == null){
             telemetryType = "horizon"
             dash = "forza-dash"
-            console.log("here", req.url.substring(1))
             telemetry = spawn('../telemetry/fdt', ['-game', req.url.substring(1), '-j'], options);
         }
 
