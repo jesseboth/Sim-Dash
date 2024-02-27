@@ -2,27 +2,41 @@
 
 IMAGENAME="sim-telemetry"
 CONTAINERNAME="${IMAGENAME}-container"
-PORTS="-p 3000:3000 -p 8888:8888"
+PORTS="-p 8888:8888 -p 3000:3000"
 
-if [ "$1" == "daemon" ]; then
-  docker build -t "$IMAGENAME" .
-  docker run -d $PORTS --restart always --name "$CONTAINERNAME" "$IMAGENAME"
-elif [ "$1" == "help" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
+# -v postgres_data:/var/lib/postgresql
+build(){
+  if ! docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
+    echo "Building $CONTAINERNAME"
+    docker build -t "$IMAGENAME" .
+  fi
+}
+
+stop(){
+  docker update --restart=no $CONTAINERNAME
+  docker stop $CONTAINERNAME
+}
+
+start() {
+  docker run -d $PORTS -v postgres_data:/var/lib/postgresql --restart always --name "$CONTAINERNAME" "$IMAGENAME"
+}
+
+if [ "$1" == "help" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
   echo "Build the docker container:"
   echo "./docker.sh: Creates container and starts right now"
-  echo "./docker.sh daemon: Creates container and restarts at boot"
   echo "./docker.sh stop: Stops the container"
   echo "./docker.sh restart: Stops the container"
   echo "./docker.sh help: Display this message"
 elif [ "$1" == "stop" ]; then
-  docker stop "$CONTAINERNAME"
-  docker rm "$CONTAINERNAME"
+  stop
 elif [ "$1" == "restart" ]; then
-  docker stop "$CONTAINERNAME"
-  docker rm "$CONTAINERNAME"
-  docker build -t "$IMAGENAME" .
-  docker run -d $PORTS --name "$CONTAINERNAME" "$IMAGENAME"
+  stop
+  build
+  start
+elif [ "$1" == "remove" ]; then
+  stop
+  docker rm $CONTAINERNAME
 else
-  docker build -t "$IMAGENAME" .
-  docker run -d $PORTS --name "$CONTAINERNAME" "$IMAGENAME"
+  build
+  start
 fi

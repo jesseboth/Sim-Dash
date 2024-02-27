@@ -90,6 +90,38 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({}));
         return;
     }
+    else if (req.url.startsWith("/Odometer") && req.method === 'GET') {
+        retVal = {"type": null}
+        if(telemetry != null){
+            retVal["type"] = telemetryType;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(getCarData(req.url.substring(10))));
+        return;
+    }
+    else if (req.url.startsWith("/Odometer") && req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk) => {
+            body += chunk.toString(); // convert Buffer to string
+        });
+
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const carNumber = data.carNumber;
+                const meters = data.meters;
+                updateCarData(carNumber, meters);
+
+                res.writeHead(200, { 'Content-Type': 'text/plain' });
+                res.end(JSON.stringify({}));
+            } catch (error) {
+                console.error('Error parsing JSON:', error);
+                res.writeHead(400, { 'Content-Type': 'text/plain' });
+                res.end('Invalid JSON');
+            }
+        });
+        return;
+    }
 
   switch (extension) {
       case '.css':
@@ -155,3 +187,47 @@ const server = http.createServer((req, res) => {
 });
 const PORT = process.env.PORT || port;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+
+// Function to update car data in a JSON file
+function updateCarData(carNumber, meters) {
+    const filename = 'odometers.json';
+
+    // Read existing data from JSON file
+    let carData = {};
+    try {
+        const data = fs.readFileSync(filename, 'utf8');
+        carData = JSON.parse(data);
+    } catch (error) {
+        // Handle file read error or empty file
+    }
+
+    carData[carNumber] = meters;
+    // Write updated data back to JSON file
+    try {
+        const jsonData = JSON.stringify(carData, null, 2);
+        fs.writeFileSync(filename, jsonData);
+    } catch (error) {
+    }
+}
+
+function getCarData(carNumber) {
+    let carData = {};
+    try {
+        // Read data from JSON file
+        const data = fs.readFileSync('odometers.json', 'utf8');
+        carData = JSON.parse(data);
+    } catch (err) {
+        return null;
+    }
+
+    carString = carNumber.toString();
+    // Check if the car number exists in the data
+    if (carData.hasOwnProperty(carNumber)) {
+        // Dynamically set the key of the return object
+        return { "carNumber": carString, "meters": carData[carNumber] };
+    } else {
+        // Dynamically set the key of the return object
+        return { "carNumber": carString, "meters": 0 };
+    }
+}

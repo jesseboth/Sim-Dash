@@ -6,6 +6,11 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
   telemetryType = null;
   yellowRPMPecentage = 0;
   
+  OdometerInfo = {
+    carNumber: 0,
+    meters: 0
+  };
+
   // Define temperature range (adjust as needed)
   const coldTemperature = 180;
   const normalTemperature = 220;
@@ -449,4 +454,47 @@ function getPositionSuffix(position) {
     default:
       return position + "th";
   }
+}
+
+function storeOdometer(OdometerInfo){
+  if(OdometerInfo == null || OdometerInfo["carNumber"] == 0){
+    return;
+  }
+  fetch("/Odometer", {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(OdometerInfo)
+  })
+  .then(response => {
+      if (!response.ok) {
+          throw new Error('Network response was not ok');
+      }
+      return response.json();
+  })
+  .then(data => {
+      console.log('Server response:', data);
+  })
+  .catch(error => {
+      console.error('Error sending data to server:', error);
+  });
+}
+
+function getOdometer(carNumber){
+  fetch('/Odometer-' + carNumber, {
+      method: 'GET',
+      headers: {
+          'Content-Type': 'application/json',
+      },
+      // Optionally send data in the body if your command needs it
+  })
+  .then(response => response.json())
+  .then(data => {
+    setTimeout(function() {
+      OdometerInfo["carNumber"] = data.carNumber
+      OdometerInfo["meters"] = data.meters;
+    }, 250);
+  })
+  .catch(error => console.error('Error:', error));
 }
