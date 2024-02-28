@@ -10,12 +10,15 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
     carNumber: 0,
     meters: 0
   };
+  OdometerAdd = 0;
 
   // Define temperature range (adjust as needed)
   const coldTemperature = 180;
   const normalTemperature = 220;
   const hotTemperature = 280
-  set_default()
+  defaultData = false;
+  set_default();
+
   
 setTimeout(function() {
     load();
@@ -141,23 +144,26 @@ function get_data() {
 }
 
 function set_default() {
-  updateDistance(0)
-  updateFuel(100)
-  updateGear(11)
-  configureRPM(7200)
-  updateRPM(1200, 7200)
-  updateSpeed(0)
-  updateTime("time", null)
-  updateTime("best-time", null)
-  updateTireTemp("FR", normalTemperature)
-  updateTireTemp("FL", normalTemperature)
-  updateTireTemp("RR", normalTemperature)
-  updateTireTemp("RL", normalTemperature)
-  updateTireWear("FR", 100)
-  updateTireWear("FL", 100)
-  updateTireWear("FR", 100)
-  updateTireWear("RL", 100)
-  updatePosition(0)
+  if(!defaultData){
+    defaultData = true;
+    updateDistance(0)
+    updateFuel(100)
+    updateGear(11)
+    configureRPM(7200)
+    updateRPM(1200, 7200)
+    updateSpeed(0)
+    updateTime("time", null)
+    updateTime("best-time", null)
+    updateTireTemp("FR", normalTemperature)
+    updateTireTemp("FL", normalTemperature)
+    updateTireTemp("RR", normalTemperature)
+    updateTireTemp("RL", normalTemperature)
+    updateTireWear("FR", 100)
+    updateTireWear("FL", 100)
+    updateTireWear("FR", 100)
+    updateTireWear("RL", 100)
+    updatePosition(0)
+  }
 }
 
 function get_telemetryType() {
@@ -178,6 +184,9 @@ async function set_display() {
     set_default();
     return;
   }
+  else if(defaultData){
+    defaultData = false;
+  }
 
   gear = data[4]["Gear"];
   if(gear == 11){
@@ -193,8 +202,7 @@ async function set_display() {
     updateGear(gear)
   }
 
-
-  updateDistance(metersToMiles(data[2]["DistanceTraveled"]))
+  updateDistance(data[2]["DistanceTraveled"]+1)
   updateFuel(data[2]["Fuel"]*100)
   configureRPM(data[2]["EngineMaxRpm"])
   updateRPM(data[2]["CurrentEngineRpm"], data[2]["EngineMaxRpm"])
@@ -217,6 +225,11 @@ async function set_display() {
     updateTireWear("FL", null);
     updateTireWear("RR", null);
     updateTireWear("RL", null);
+  }
+
+  if(OdometerInfo.carNumber == 0){
+    OdometerInfo.carNumber = data[0]["CarOrdinal"]
+    getOdometer(OdometerInfo.carNumber)
   }
 
 }
@@ -268,8 +281,24 @@ function updateSpeed(speed) {
 }
 
 function updateDistance(_distance) {
-  distance = Math.max(0, parseInt(_distance))
-  document.getElementById("distance").textContent = String(distance) + " mi"
+  distance = Math.max(0, parseInt(_distance));
+  if(distance == 0){
+    document.getElementById("distance").textContent = "- mi"
+  }
+  else {
+    document.getElementById("distance").textContent = String(metersToMiles(OdometerInfo.meters+distance)) + " mi"
+    OdometerAdd = distance;
+  }
+
+ if(distance == 0 && OdometerInfo.carNumber != 0){
+    OdometerInfo.meters+=OdometerAdd;
+    storeOdometer(OdometerInfo);
+
+    // clear Odometer
+    OdometerInfo.carNumber = 0;
+    OdometerInfo.meters = 0;
+    OdometerAdd = 0;
+  }
 }
 
 function updateRPM(rpm, _maxRPM) {
@@ -437,7 +466,7 @@ function mpstomph(mps) {
 }
 
 function metersToMiles(meters) {
-  return meters * 0.000621371;
+  return (meters * 0.000621371).toFixed(0);
 }
 
 function getPositionSuffix(position) {
@@ -474,7 +503,6 @@ function storeOdometer(OdometerInfo){
       return response.json();
   })
   .then(data => {
-      console.log('Server response:', data);
   })
   .catch(error => {
       console.error('Error sending data to server:', error);
@@ -491,10 +519,9 @@ function getOdometer(carNumber){
   })
   .then(response => response.json())
   .then(data => {
-    setTimeout(function() {
-      OdometerInfo["carNumber"] = data.carNumber
-      OdometerInfo["meters"] = data.meters;
-    }, 250);
+    if(data != null){
+      OdometerInfo["meters"] += data.meters;
+    }
   })
   .catch(error => console.error('Error:', error));
 }
