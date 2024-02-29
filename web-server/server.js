@@ -195,7 +195,7 @@ server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 
 // Function to update car data in a JSON file
-function updateCarData(carNumber, meters) {
+function updateCarData(carNumber, meters, offset=0) {
     const filename = 'odometers.json';
 
     // Read existing data from JSON file
@@ -208,7 +208,7 @@ function updateCarData(carNumber, meters) {
     }
 
     if(meters > 0 && carNumber > 0){
-        newMeters = carData[carNumber] + meters;
+        newMeters = carData[carNumber] + (meters - offset);
         carData[carNumber] = newMeters;
     }
     // Write updated data back to JSON file
@@ -217,6 +217,12 @@ function updateCarData(carNumber, meters) {
         fs.writeFileSync(filename, jsonData);
     } catch (error) {
     }
+}
+
+OdometerInfo = {
+    carNumber: 0,
+    meters: 0,
+    offset: 0
 }
 
 function getCarData(carNumber) {
@@ -230,21 +236,21 @@ function getCarData(carNumber) {
     }
 
     carString = carNumber.toString();
+    offset = 0;
+    if(OdometerInfo.carNumber == carNumber){
+        offset = OdometerInfo.offset;
+    }
     // Check if the car number exists in the data
     if (carData.hasOwnProperty(carNumber)) {
         // Dynamically set the key of the return object
-        return { "carNumber": carString, "meters": carData[carNumber] };
+        return { "carNumber": carString, "meters": (carData[carNumber]-offset) };
     } else {
         // Dynamically set the key of the return object
         return { "carNumber": carString, "meters": 0 };
     }
 }
 
-OdometerInfo = {
-    carNumber: 0,
-    meters: 0,
-}
-
+dataSaved = false;
 let interval = setInterval(updateOdometer, 1000); 
 function updateOdometer(){
     if (telemetryType == "") {
@@ -272,26 +278,35 @@ function updateOdometer(){
             return;
         }
         jsonData = JSON.parse(data);
-        newCarNumber = data[0]["CarOrdinal"]
-        newMeters = data[2]["DistanceTraveled"]
+        newCarNumber = jsonData[0]["CarOrdinal"]
+        newMeters = jsonData[2]["DistanceTraveled"]
 
-        // Ignore when in menus
-        if(newCarNumber == 0){
+        // when in menus
+        if(!dataSaved && newCarNumber == 0 && OdometerInfo.carNumber != 0){
+            dataSaved = true;
+            updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
+            OdometerInfo.offset = OdometerInfo.meters;
             return;
         }
 
         // Starting new race
-        if(newCarNumber == OdometerInfo.carNumber && newMeters != OdometerInfo.meters &&  newMeters == 0){
-            updateCarData(OdometerInfo.carNumber, OdometerInfo.meters)
+        else if(newCarNumber == OdometerInfo.carNumber && newMeters != OdometerInfo.meters &&  newMeters == 0){
+            updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
+            offset = 0;
 
         }
         // New car
-        else if(OdometerInfo.carNumber != newCarNumber){
-            updateCarData(OdometerInfo.carNumber, OdometerInfo.meters)
+        else if(newCarNumber != 0 && OdometerInfo.carNumber != newCarNumber){
+            updateCarData(3, OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
+            offset = 0;
         }
-        
-        OdometerInfo.carNumber = newCarNumber;
-        OdometerInfo.meters = newMeters;
+        if(newCarNumber != 0){
+            dataSaved = false;
+        }
+        if(newCarNumber != 0){
+            OdometerInfo.carNumber = newCarNumber;
+            OdometerInfo.meters = newMeters;
+        }
 
 
         // Optionally return data if needed
