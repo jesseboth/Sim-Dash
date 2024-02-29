@@ -10,7 +10,6 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
     carNumber: 0,
     meters: 0
   };
-  OdometerAdd = 0;
 
   // Define temperature range (adjust as needed)
   const coldTemperature = 180;
@@ -203,11 +202,10 @@ async function set_display() {
   }
 
   if(OdometerInfo.carNumber == 0){
-    getOdometer(OdometerInfo.carNumber = data[0]["CarOrdinal"],
-                data[2]["DistanceTraveled"])
+    getOdometer(OdometerInfo.carNumber = data[0]["CarOrdinal"])
   }
 
-  updateDistance(data[2]["DistanceTraveled"]+1)
+  updateDistance(parseInt(data[2]["DistanceTraveled"])+1)
   updateFuel(data[2]["Fuel"]*100)
   configureRPM(data[2]["EngineMaxRpm"])
   updateRPM(data[2]["CurrentEngineRpm"], data[2]["EngineMaxRpm"])
@@ -287,17 +285,6 @@ function updateDistance(_distance) {
   }
   else {
     document.getElementById("distance").textContent = String(metersToMiles(OdometerInfo.meters+distance)) + " mi"
-    OdometerAdd = distance;
-  }
-
- if(distance == 0 && OdometerInfo.carNumber != 0){
-    OdometerInfo.meters+=OdometerAdd;
-    storeOdometer(OdometerInfo);
-
-    // clear Odometer
-    OdometerInfo.carNumber = 0;
-    OdometerInfo.meters = 0;
-    OdometerAdd = 0;
   }
 }
 
@@ -482,30 +469,6 @@ function getPositionSuffix(position) {
   }
 }
 
-function storeOdometer(OdometerInfo){
-  if(OdometerInfo == null || OdometerInfo["carNumber"] == 0){
-    return;
-  }
-  fetch("/Odometer", {
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(OdometerInfo)
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    })
-    .then(data => {
-  })
-  .catch(error => {
-      console.error('Error sending data to server:', error);
-  });
-}
-
 function getOdometer(carNumber, offset=0){
   if(carNumber == 0){
     return 0;
@@ -533,9 +496,3 @@ function getOdometer(carNumber, offset=0){
       console.error('Error sending data to server:', error);
   });
 }
-
-getOdometer("3533")
-
-setTimeout(function() {
-  storeOdometer(OdometerInfo)
-}, 500);

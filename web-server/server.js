@@ -57,25 +57,29 @@ const server = http.createServer((req, res) => {
     return;
   }
   else if (req.url.startsWith("/FM") && req.method === 'POST') {
+        retVal = {succss: false}
         if(telemetry == null){
             telemetryType = "motorsport"
             dash = "forza-dash"
             telemetry = spawn('../telemetry/fdt', ['-game', req.url.substring(1), '-j'], options);
+            retVal.success = true;
         }
         
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({}));
+        res.end(JSON.stringify(retVal));
         return;
     }
     else if (req.url.startsWith("/FH") && req.method === 'POST') {
+        retVal = {succss: false}
         if(telemetry == null){
             telemetryType = "horizon"
             dash = "forza-dash"
             telemetry = spawn('../telemetry/fdt', ['-game', req.url.substring(1), '-j'], options);
+            retVal.success = true;
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({}));
+        res.end(JSON.stringify(retVal));
         return;
     }
     else if (req.url === '/stop' && req.method === 'POST') {
@@ -86,8 +90,10 @@ const server = http.createServer((req, res) => {
             dash = "forza-dash"
         }
 
+        retVal = {success: true}
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({}));
+        res.end(JSON.stringify(retVal));
         return;
     }
     else if (req.url == "/Odometer" && req.method === 'POST') {
@@ -106,10 +112,10 @@ const server = http.createServer((req, res) => {
                 if(meters == null){
                     retJson = getCarData(carNumber)
                 }
-                else {
-                    updateCarData(carNumber, meters);
+                // else {
+                //     updateCarData(carNumber, meters);
                     
-                }
+                // }
                 res.writeHead(200, { 'Content-Type': 'text/plain' });
                 res.end(JSON.stringify(retJson));
 
@@ -201,9 +207,9 @@ function updateCarData(carNumber, meters) {
         // Handle file read error or empty file
     }
 
-    // only store if meters are increasing
-    if(carData[carNumber] < meters){
-        carData[carNumber] = meters;
+    if(meters > 0 && carNumber > 0){
+        newMeters = carData[carNumber] + meters;
+        carData[carNumber] = newMeters;
     }
     // Write updated data back to JSON file
     try {
@@ -232,4 +238,68 @@ function getCarData(carNumber) {
         // Dynamically set the key of the return object
         return { "carNumber": carString, "meters": 0 };
     }
+}
+
+OdometerInfo = {
+    carNumber: 0,
+    meters: 0,
+}
+
+let interval = setInterval(updateOdometer, 1000); 
+function updateOdometer(){
+    if (telemetryType == "") {
+        return;
+    }
+    
+    const options = {
+        hostname: "localhost",
+        port: 8888,
+        path: '/telemetry',
+        method: 'GET'
+    };
+    
+    const req = http.request(options, (res) => {
+        let data = '';
+    
+        // A chunk of data has been received
+        res.on('data', (chunk) => {
+        data += chunk;
+        });
+    
+        // The whole response has been received
+        res.on('end', () => {
+        if (res.statusCode !== 200) {
+            return;
+        }
+        jsonData = JSON.parse(data);
+        newCarNumber = data[0]["CarOrdinal"]
+        newMeters = data[2]["DistanceTraveled"]
+
+        // Ignore when in menus
+        if(newCarNumber == 0){
+            return;
+        }
+
+        // Starting new race
+        if(newCarNumber == OdometerInfo.carNumber && newMeters != OdometerInfo.meters &&  newMeters == 0){
+            updateCarData(OdometerInfo.carNumber, OdometerInfo.meters)
+
+        }
+        // New car
+        else if(OdometerInfo.carNumber != newCarNumber){
+            updateCarData(OdometerInfo.carNumber, OdometerInfo.meters)
+        }
+        
+        OdometerInfo.carNumber = newCarNumber;
+        OdometerInfo.meters = newMeters;
+
+
+        // Optionally return data if needed
+        });
+    });
+    
+    req.on('error', (error) => {
+    });
+    
+    req.end();
 }

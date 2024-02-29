@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
 </head>
 <body style="background-color:#999999">
+  <div id="myModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <div class="container"></div>
+      <div class="text">Are you sure you want to proceed?</div>
+      <div class="text">Doing so will kill the current process</div>
+      <button id="yesBtn" class="modalButton">Yes</button>
+      <button id="noBtn" class="modalButton">No</button>
+    </div>
+  </div>
+  
   <button id="FM" class="large-button">Forza Motorsport</button>
   <button id="FH5" class="large-button">Forza Horizon 5</button>
   <button id="FM7" class="large-button">Forza Motorsport 7</button>
@@ -60,20 +71,108 @@
 .redirect:hover {
   background-color: #0056b3; /* Change color on hover */
 }
+
+/* The Modal */
+.modal {
+  display: none; /* Hidden by default */
+  position: fixed; /* Stay in place */
+  z-index: 1; /* Sit on top */
+  left: 0;
+  top: 0;
+  width: 100%; /* Full width */
+  height: 100%; /* Full height */
+  overflow: auto; /* Enable scroll if needed */
+  background-color: rgb(0,0,0); /* Fallback color */
+  background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+}
+
+/* Modal Content */
+.modal-content {
+  background-color: #999999;
+  margin: 15% auto; /* 15% from the top and centered */
+  padding: 20px;
+  border: 1px solid #888;
+  width: 75%; /* Could be more or less, depending on screen size */
+  height: 40%;
+  border-radius: 10px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* The Close Button */
+.close {
+  color: red;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+  color: #000;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.modalButton {
+  width: 40%;
+  height: 25%;
+  padding: 20px 40px; /* Size of the button */
+  font-size: 20px; /* Font size */
+  cursor: pointer;
+  color: black; /* Text color */
+  border-radius: 10px; /* Rounded corners */
+  position: relative;
+  bottom: -30%;
+  left: 10%;
+  transition: background-color 0.3s, color 0.3s; /* Smooth transition for hover effect */
+}
+
+#noBtn {
+  background-color: red;
+}
+
+#yesBtn {
+  background-color: #007bff;
+}
+.text {
+  font-size: larger;
+  position: relative;
+  left: 0;
+  right: 0;
+  width: 100%;
+  padding-bottom: 2%;
+  overflow: hidden;
+}
+
+
 </style>
 
 <script>
-    function createButtonListener(name){
-      document.getElementById(name).addEventListener('click', function() {
-        fetch('/' + name, {
+    lastPressed = ""
+    function post(name){
+      fetch('/' + name, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            // Optionally send data in the body if your command needs it
         })
         .then(response => response.json())
+        .then(data => {
+            if(data == null){
+              return;
+            }
+
+            if(!data.success){
+              lastPressed = name;
+              document.getElementById("myModal").style.display = "block";
+            }
+        })
         .catch(error => console.error('Error:', error));
+    }
+
+    function createButtonListener(name){
+      document.getElementById(name).addEventListener('click', function() {
+        post(name);
     });
     }
 
@@ -88,5 +187,38 @@
     createButtonListener("FH4")
     createButtonListener("stop")
     createRedirect("dash")
+
+
+    const modal = document.getElementById("myModal")
+    // Get the close button
+    var closeBtn = document.getElementsByClassName("close")[0];
+
+    // When the user clicks on the close button, close the modal
+    closeBtn.onclick = function() {
+      modal.style.display = "none";
+      lastPressed = ""
+    }
+
+    // Get the Yes and No buttons
+    var yesBtn = document.getElementById("yesBtn");
+    var noBtn = document.getElementById("noBtn");
+
+    // Add event listeners to Yes and No buttons
+    yesBtn.addEventListener("click", function() {
+      if(lastPressed == ""){
+        modal.style.display = "none";
+        return;
+      }
+      post("stop")
+      setTimeout(function() {
+          post(lastPressed)
+      }, 1000);
+      modal.style.display = "none";
+    });
+
+    noBtn.addEventListener("click", function() {
+      lastPressed = ""
+      modal.style.display = "none";
+    });
 </script>
 </html>
