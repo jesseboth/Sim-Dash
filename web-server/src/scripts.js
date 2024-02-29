@@ -202,6 +202,11 @@ async function set_display() {
     updateGear(gear)
   }
 
+  if(OdometerInfo.carNumber == 0){
+    getOdometer(OdometerInfo.carNumber = data[0]["CarOrdinal"],
+                data[2]["DistanceTraveled"])
+  }
+
   updateDistance(data[2]["DistanceTraveled"]+1)
   updateFuel(data[2]["Fuel"]*100)
   configureRPM(data[2]["EngineMaxRpm"])
@@ -225,11 +230,6 @@ async function set_display() {
     updateTireWear("FL", null);
     updateTireWear("RR", null);
     updateTireWear("RL", null);
-  }
-
-  if(OdometerInfo.carNumber == 0){
-    OdometerInfo.carNumber = data[0]["CarOrdinal"]
-    getOdometer(OdometerInfo.carNumber)
   }
 
 }
@@ -361,9 +361,6 @@ function updateTireTemp(tire, temp){
     gcolor = g + (0 - g) * percentage;
     bcolor = b + (0 - b) * percentage;
     tireDiv.style.backgroundColor = "rgb("+ rcolor + "," + gcolor  + "," + bcolor + ")";;
-
-    // tireDiv.style.backgroundColor = "rgb(255," + String(128*(1-percentage)) + ",0)";
-    
   } 
   else {
     tireDiv.style.backgroundColor = "rgb("+ r + "," + g + "," + b + ")";
@@ -495,33 +492,50 @@ function storeOdometer(OdometerInfo){
           'Content-Type': 'application/json'
       },
       body: JSON.stringify(OdometerInfo)
-  })
-  .then(response => {
+    })
+    .then(response => {
       if (!response.ok) {
-          throw new Error('Network response was not ok');
+        throw new Error('Network response was not ok');
       }
       return response.json();
-  })
-  .then(data => {
+    })
+    .then(data => {
   })
   .catch(error => {
       console.error('Error sending data to server:', error);
   });
 }
 
-function getOdometer(carNumber){
-  fetch('/Odometer-' + carNumber, {
-      method: 'GET',
+function getOdometer(carNumber, offset=0){
+  if(carNumber == 0){
+    return 0;
+  }
+
+  fetch("/Odometer", {
+      method: 'POST',
       headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
       },
-      // Optionally send data in the body if your command needs it
+      body: JSON.stringify({carNumber: carNumber, meters: null})
   })
-  .then(response => response.json())
+  .then(response => {
+      if (response.ok) {
+          return response.json();
+      }
+  })
   .then(data => {
     if(data != null){
-      OdometerInfo["meters"] += data.meters;
+      OdometerInfo.carNumber = carNumber
+      OdometerInfo.meters += (data.meters - parseInt(offset));
     }
   })
-  .catch(error => console.error('Error:', error));
+  .catch(error => {
+      console.error('Error sending data to server:', error);
+  });
 }
+
+getOdometer("3533")
+
+setTimeout(function() {
+  storeOdometer(OdometerInfo)
+}, 500);

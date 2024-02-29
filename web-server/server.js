@@ -90,16 +90,7 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({}));
         return;
     }
-    else if (req.url.startsWith("/Odometer") && req.method === 'GET') {
-        retVal = {"type": null}
-        if(telemetry != null){
-            retVal["type"] = telemetryType;
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(getCarData(req.url.substring(10))));
-        return;
-    }
-    else if (req.url.startsWith("/Odometer") && req.method === 'POST') {
+    else if (req.url == "/Odometer" && req.method === 'POST') {
         let body = '';
         req.on('data', (chunk) => {
             body += chunk.toString(); // convert Buffer to string
@@ -107,13 +98,21 @@ const server = http.createServer((req, res) => {
 
         req.on('end', () => {
             try {
+                retJson = {}
                 const data = JSON.parse(body);
                 const carNumber = data.carNumber;
                 const meters = data.meters;
-                updateCarData(carNumber, meters);
 
+                if(meters == null){
+                    retJson = getCarData(carNumber)
+                }
+                else {
+                    updateCarData(carNumber, meters);
+                    
+                }
                 res.writeHead(200, { 'Content-Type': 'text/plain' });
-                res.end(JSON.stringify({}));
+                res.end(JSON.stringify(retJson));
+
             } catch (error) {
                 console.error('Error parsing JSON:', error);
                 res.writeHead(400, { 'Content-Type': 'text/plain' });
@@ -202,7 +201,10 @@ function updateCarData(carNumber, meters) {
         // Handle file read error or empty file
     }
 
-    carData[carNumber] = meters;
+    // only store if meters are increasing
+    if(carData[carNumber] < meters){
+        carData[carNumber] = meters;
+    }
     // Write updated data back to JSON file
     try {
         const jsonData = JSON.stringify(carData, null, 2);
