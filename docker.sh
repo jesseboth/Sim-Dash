@@ -2,11 +2,12 @@
 
 IMAGENAME="sim-telemetry"
 CONTAINERNAME="${IMAGENAME}-container"
-PORTS="-p 8888:8888 -p 3000:3000"
+PORTS="-p 8888:8888 -p 3000:3000 -p 9999:9999"
+# PORTS='--network="host"'
 
 # -v postgres_data:/var/lib/postgresql
 build(){
-  if ! docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
+  if ! docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINERNAME}$"; then
     echo "Building $CONTAINERNAME"
     docker build -t "$IMAGENAME" .
   fi
@@ -18,7 +19,7 @@ stop(){
 }
 
 start() {
-  docker run -d $PORTS -v postgres_data:/var/lib/postgresql --restart always --name "$CONTAINERNAME" "$IMAGENAME"
+  docker run -d $PORTS --network host --restart always --name "$CONTAINERNAME" "$IMAGENAME"
 }
 
 if [ "$1" == "help" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
@@ -36,6 +37,8 @@ elif [ "$1" == "restart" ]; then
 elif [ "$1" == "remove" ]; then
   stop
   docker rm $CONTAINERNAME
+elif [ "$1" == "enter" ]; then
+  docker exec -it $CONTAINERNAME bash
 else
   build
   start

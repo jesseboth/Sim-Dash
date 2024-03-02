@@ -27,7 +27,7 @@ WORKDIR /usr/src/app/web-server
 RUN npm install
 
 EXPOSE 3000
-EXPOSE 3001
 EXPOSE 8888
+EXPOSE 9999
 
 CMD ["node", "server.js"]
