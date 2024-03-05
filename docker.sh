@@ -3,9 +3,11 @@
 IMAGENAME="sim-telemetry"
 CONTAINERNAME="${IMAGENAME}-container"
 PORTS="-p 8888:8888 -p 3000:3000 -p 9999:9999"
-# PORTS='--network="host"'
 
-# -v postgres_data:/var/lib/postgresql
+SCRIPT_DIR=$(realpath $(dirname "$0"))
+VOLUMES="-v ${SCRIPT_DIR}/web-server/odometers.json:/usr/src/app/web-server/odometers.json"
+touch ${SCRIPT_DIR}/web-server/odometers.json
+
 build(){
   if ! docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINERNAME}$"; then
     echo "Building $CONTAINERNAME"
@@ -19,7 +21,7 @@ stop(){
 }
 
 start() {
-  docker run -d $PORTS --network host --restart always --name "$CONTAINERNAME" "$IMAGENAME"
+  docker run -d $PORTS $VOLUMES --network host --restart always --name "$CONTAINERNAME" "$IMAGENAME"
 }
 
 if [ "$1" == "help" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ]; then

@@ -10,7 +10,8 @@
 .size {
   width: 100%; /* Set width to fill the parent element */
   height: 0;
-  padding-bottom: 56.25%; /* 9 divided by 16, multiplied by 100% */
+  top: 75px;
+  padding-bottom: 56.25%; 
   position: relative; /* Required for absolute positioning of child elements */
   overflow: hidden; /* Hide any overflow content */
 }

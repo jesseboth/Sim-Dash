@@ -264,57 +264,61 @@ function updateOdometer(){
         method: 'GET'
     };
     
-    const req = http.request(options, (res) => {
-        let data = '';
-    
-        // A chunk of data has been received
-        res.on('data', (chunk) => {
-        data += chunk;
+    try{
+
+        const req = http.request(options, (res) => {
+            let data = '';
+            
+            // A chunk of data has been received
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+            
+            // The whole response has been received
+            res.on('end', () => {
+                if (res.statusCode !== 200) {
+                    return;
+                }
+                jsonData = JSON.parse(data);
+                newCarNumber = jsonData[0]["CarOrdinal"]
+                newMeters = jsonData[2]["DistanceTraveled"]
+                
+                // when in menus
+                if(!dataSaved && newCarNumber == 0 && OdometerInfo.carNumber != 0){
+                    dataSaved = true;
+                    updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
+                    OdometerInfo.offset = OdometerInfo.meters;
+                    return;
+                }
+                
+                // Starting new race
+                else if(newCarNumber == OdometerInfo.carNumber && newMeters != OdometerInfo.meters &&  newMeters == 0){
+                    updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
+                    offset = 0;
+                    
+                }
+                // New car
+                else if(newCarNumber != 0 && OdometerInfo.carNumber != newCarNumber){
+                    updateCarData(3, OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
+                    offset = 0;
+                }
+                if(newCarNumber != 0){
+                    dataSaved = false;
+                }
+                if(newCarNumber != 0){
+                    OdometerInfo.carNumber = newCarNumber;
+                    OdometerInfo.meters = newMeters;
+                }
+                
+                
+                // Optionally return data if needed
+            });
         });
-    
-        // The whole response has been received
-        res.on('end', () => {
-        if (res.statusCode !== 200) {
-            return;
-        }
-        jsonData = JSON.parse(data);
-        newCarNumber = jsonData[0]["CarOrdinal"]
-        newMeters = jsonData[2]["DistanceTraveled"]
-
-        // when in menus
-        if(!dataSaved && newCarNumber == 0 && OdometerInfo.carNumber != 0){
-            dataSaved = true;
-            updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
-            OdometerInfo.offset = OdometerInfo.meters;
-            return;
-        }
-
-        // Starting new race
-        else if(newCarNumber == OdometerInfo.carNumber && newMeters != OdometerInfo.meters &&  newMeters == 0){
-            updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
-            offset = 0;
-
-        }
-        // New car
-        else if(newCarNumber != 0 && OdometerInfo.carNumber != newCarNumber){
-            updateCarData(3, OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
-            offset = 0;
-        }
-        if(newCarNumber != 0){
-            dataSaved = false;
-        }
-        if(newCarNumber != 0){
-            OdometerInfo.carNumber = newCarNumber;
-            OdometerInfo.meters = newMeters;
-        }
-
-
-        // Optionally return data if needed
+        
+        req.on('error', (error) => {
         });
-    });
-    
-    req.on('error', (error) => {
-    });
-    
-    req.end();
+        
+        req.end();
+    }
+    catch{}
 }
