@@ -110,7 +110,7 @@ const server = http.createServer((req, res) => {
                 const meters = data.meters;
 
                 if(meters == null){
-                    retJson = getCarData(carNumber)
+                    retJson = readOdometer(carNumber)
                 }
                 // else {
                 //     updateCarData(carNumber, meters);
@@ -195,7 +195,7 @@ server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 
 // Function to update car data in a JSON file
-function updateCarData(carNumber, meters, offset=0) {
+function updateCarData() {
     const filename = 'odometers.json';
 
     // Read existing data from JSON file
@@ -207,9 +207,14 @@ function updateCarData(carNumber, meters, offset=0) {
         // Handle file read error or empty file
     }
 
-    if(meters > 0 && carNumber > 0){
-        newMeters = carData[carNumber] + (meters - offset);
-        carData[carNumber] = newMeters;
+    if(OdometerInfo.carNumber > 0 && !carData.hasOwnProperty(OdometerInfo.carNumber)){
+        carData[OdometerInfo.carNumber] = OdometerInfo.stored;
+    }
+    else if(OdometerInfo.carNumber > 0 && OdometerInfo.stored > carData[OdometerInfo.carNumber]){
+        carData[OdometerInfo.carNumber] = OdometerInfo.stored;
+    }
+    else {
+        return;
     }
     // Write updated data back to JSON file
     try {
@@ -226,28 +231,21 @@ OdometerInfo = {
     stored: 0,
 }
 
-function getCarData(carNumber) {
-    let carData = {};
+function getCarData(carNumber){
     try {
-        // Read data from JSON file
         const data = fs.readFileSync('odometers.json', 'utf8');
         carData = JSON.parse(data);
     } catch (err) {
-        return null;
+        return;
     }
 
     carString = carNumber.toString();
-    offset = 0;
-    if(OdometerInfo.carNumber == carNumber){
-        offset = OdometerInfo.offset;
-    }
+
     // Check if the car number exists in the data
     if (carData.hasOwnProperty(carNumber)) {
-        // Dynamically set the key of the return object
-        return { "carNumber": carString, "meters": (carData[carNumber]-offset) };
+        OdometerInfo.stored = (carData[carNumber])
     } else {
-        // Dynamically set the key of the return object
-        return { "carNumber": carString, "meters": 0 };
+        OdometerInfo.stored = 0;
     }
 }
 
@@ -295,34 +293,22 @@ function updateOdometer(){
                 newMeters = OdometerInfo.meters+(velocity*.025)
             }
 
-            // when in menus
-            if(!dataSaved && newCarNumber == 0 && OdometerInfo.carNumber != 0){
-                dataSaved = true;
-                updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
-                OdometerInfo.offset = OdometerInfo.meters;
-                return;
+            if(newCarNumber != OdometerInfo.carNumber){
+                updateCarData()
+                getCarData(newCarNumber);
             }
-            
-            // // Starting new race
-            // else if(newCarNumber == OdometerInfo.carNumber && newMeters < OdometerInfo.meters && newMeters == 0){
-            //     updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
-            //     OdometerInfo.offset = 0;
-            // }
-            // // New car
-            // else if(newCarNumber != 0 && OdometerInfo.carNumber != newCarNumber){
-            //     updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
-            //     OdometerInfo.offset = 0;
-            // }
 
             if(newCarNumber != 0){
                 dataSaved = false;
             }
 
+            OdometerInfo.carNumber = newCarNumber;
             if(newCarNumber != 0){
-                OdometerInfo.carNumber = newCarNumber;
+                OdometerInfo.offset = OdometerInfo.meters;
                 OdometerInfo.meters = newMeters;
+                OdometerInfo.stored += (OdometerInfo.meters-OdometerInfo.offset)
             }
-            // Optionally return data if needed
+
         });
     });
     
@@ -330,4 +316,14 @@ function updateOdometer(){
     });
     
     req.end();
+}
+
+function readOdometer(carNumber) {
+    console.log(carNumber, OdometerInfo)
+    carString = carNumber.toString();
+    if (OdometerInfo.carNumber == carNumber) {
+        return { "carNumber": carString, "meters": OdometerInfo.stored };
+    } else {
+        return { "carNumber": carString, "meters": 0 };
+    }
 }

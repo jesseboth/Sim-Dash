@@ -204,7 +204,6 @@ async function set_display() {
   }
 
   if(OdometerInfo.carNumber == 0 || data[0]["CarOrdinal"] != OdometerInfo.carNumber){
-    getOdometer(data[0]["CarOrdinal"], data[2]["DistanceTraveled"])
     mphDistance = 0;
   }
 
@@ -215,12 +214,15 @@ async function set_display() {
     distance = mphDistance;
   }
 
-  updateDistance(parseInt(distance+1))
+  getOdometer(data[0]["CarOrdinal"])
+  updateDistance(OdometerInfo.meters)
   updateFuel(data[2]["Fuel"]*100)
   configureRPM(data[2]["EngineMaxRpm"])
   updateRPM(data[2]["CurrentEngineRpm"], data[2]["EngineMaxRpm"])
   updateSpeed(mpstomph(velocity))
-  updateTime("time", data[2]["CurrentLap"])
+  if(distance > 0){
+    updateTime("time", data[2]["CurrentLap"])
+  }
   updateTime("best-time", data[2]["BestLap"])
   updateTireTemp("FR", data[2]["TireTempFrontRight"])
   updateTireTemp("FL", data[2]["TireTempFrontLeft"])
@@ -294,7 +296,7 @@ function updateDistance(_distance) {
     document.getElementById("distance").textContent = "- mi"
   }
   else {
-    document.getElementById("distance").textContent = String(metersToMiles(OdometerInfo.meters+distance)) + " mi"
+    document.getElementById("distance").textContent = String(metersToMiles(distance)) + " mi"
   }
 }
 
@@ -501,12 +503,7 @@ function getOdometer(carNumber, offset=0){
   .then(data => {
     if(data != null){
       OdometerInfo.carNumber = carNumber
-      if(offset >= 0){
-        OdometerInfo.meters = (data.meters - parseInt(offset));
-      }
-      else {
-        OdometerInfo.meters = data.meters;
-      }
+      OdometerInfo.meters = data.meters;
     }
   })
   .catch(error => {
