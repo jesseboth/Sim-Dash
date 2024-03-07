@@ -34,6 +34,7 @@ elif [ "$1" == "stop" ]; then
   stop
 elif [ "$1" == "restart" ]; then
   stop
+  docker rm $CONTAINERNAME
   build
   start
 elif [ "$1" == "remove" ]; then

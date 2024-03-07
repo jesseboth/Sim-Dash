@@ -5,6 +5,7 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
   telemetry = null;
   telemetryType = null;
   yellowRPMPecentage = 0;
+  mphDistance = 0;
   
   OdometerInfo = {
     carNumber: 0,
@@ -159,9 +160,10 @@ function set_default() {
     updateTireTemp("RL", normalTemperature)
     updateTireWear("FR", 100)
     updateTireWear("FL", 100)
-    updateTireWear("FR", 100)
+    updateTireWear("RR", 100)
     updateTireWear("RL", 100)
     updatePosition(0)
+    getOdometer(0);
   }
 }
 
@@ -201,15 +203,23 @@ async function set_display() {
     updateGear(gear)
   }
 
-  if(OdometerInfo.carNumber == 0){
-    getOdometer(OdometerInfo.carNumber = data[0]["CarOrdinal"])
+  if(OdometerInfo.carNumber == 0 || data[0]["CarOrdinal"] != OdometerInfo.carNumber){
+    getOdometer(data[0]["CarOrdinal"], data[2]["DistanceTraveled"])
+    mphDistance = 0;
   }
 
-  updateDistance(parseInt(data[2]["DistanceTraveled"])+1)
+  distance = data[2]["DistanceTraveled"];
+  velocity = data[2]["Speed"];
+  if(distance == 0 && velocity > 5){
+    mphDistance += velocity*.025
+    distance = mphDistance;
+  }
+
+  updateDistance(parseInt(distance+1))
   updateFuel(data[2]["Fuel"]*100)
   configureRPM(data[2]["EngineMaxRpm"])
   updateRPM(data[2]["CurrentEngineRpm"], data[2]["EngineMaxRpm"])
-  updateSpeed(mpstomph(data[2]["Speed"]))
+  updateSpeed(mpstomph(velocity))
   updateTime("time", data[2]["CurrentLap"])
   updateTime("best-time", data[2]["BestLap"])
   updateTireTemp("FR", data[2]["TireTempFrontRight"])
@@ -280,7 +290,7 @@ function updateSpeed(speed) {
 
 function updateDistance(_distance) {
   distance = Math.max(0, parseInt(_distance));
-  if(distance == 0){
+  if(_distance == 0.0){
     document.getElementById("distance").textContent = "- mi"
   }
   else {
@@ -471,6 +481,8 @@ function getPositionSuffix(position) {
 
 function getOdometer(carNumber, offset=0){
   if(carNumber == 0){
+    OdometerInfo.meters = 0;
+    OdometerInfo.carNumber = carNumber;
     return 0;
   }
 
@@ -489,7 +501,12 @@ function getOdometer(carNumber, offset=0){
   .then(data => {
     if(data != null){
       OdometerInfo.carNumber = carNumber
-      OdometerInfo.meters += (data.meters - parseInt(offset));
+      if(offset >= 0){
+        OdometerInfo.meters = (data.meters - parseInt(offset));
+      }
+      else {
+        OdometerInfo.meters = data.meters;
+      }
     }
   })
   .catch(error => {

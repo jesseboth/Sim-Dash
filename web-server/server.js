@@ -222,7 +222,8 @@ function updateCarData(carNumber, meters, offset=0) {
 OdometerInfo = {
     carNumber: 0,
     meters: 0,
-    offset: 0
+    offset: 0,
+    stored: 0,
 }
 
 function getCarData(carNumber) {
@@ -251,7 +252,7 @@ function getCarData(carNumber) {
 }
 
 dataSaved = false;
-let interval = setInterval(updateOdometer, 1000); 
+let interval = setInterval(updateOdometer, 25); 
 function updateOdometer(){
     if (telemetryType == "") {
         return;
@@ -263,62 +264,70 @@ function updateOdometer(){
         path: '/telemetry',
         method: 'GET'
     };
-    
-    try{
 
-        const req = http.request(options, (res) => {
-            let data = '';
-            
-            // A chunk of data has been received
-            res.on('data', (chunk) => {
-                data += chunk;
-            });
-            
-            // The whole response has been received
-            res.on('end', () => {
-                if (res.statusCode !== 200) {
-                    return;
-                }
+    const req = http.request(options, (res) => {
+        let data = '';
+        
+        // A chunk of data has been received
+        res.on('data', (chunk) => {
+            data += chunk;
+        });
+        
+        // The whole response has been received
+        res.on('end', () => {
+            if (res.statusCode !== 200) {
+                return;
+            }
+            if(data == null){
+                return;
+            }
+            try {
                 jsonData = JSON.parse(data);
-                newCarNumber = jsonData[0]["CarOrdinal"]
-                newMeters = jsonData[2]["DistanceTraveled"]
-                
-                // when in menus
-                if(!dataSaved && newCarNumber == 0 && OdometerInfo.carNumber != 0){
-                    dataSaved = true;
-                    updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
-                    OdometerInfo.offset = OdometerInfo.meters;
-                    return;
-                }
-                
-                // Starting new race
-                else if(newCarNumber == OdometerInfo.carNumber && newMeters != OdometerInfo.meters &&  newMeters == 0){
-                    updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
-                    offset = 0;
-                    
-                }
-                // New car
-                else if(newCarNumber != 0 && OdometerInfo.carNumber != newCarNumber){
-                    updateCarData(3, OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
-                    offset = 0;
-                }
-                if(newCarNumber != 0){
-                    dataSaved = false;
-                }
-                if(newCarNumber != 0){
-                    OdometerInfo.carNumber = newCarNumber;
-                    OdometerInfo.meters = newMeters;
-                }
-                
-                
-                // Optionally return data if needed
-            });
+            }
+            catch{
+                return;
+            }
+
+            newCarNumber = jsonData[0]["CarOrdinal"]
+            newMeters = jsonData[2]["DistanceTraveled"];
+            velocity = jsonData[2]["Speed"];
+            if(newMeters == 0 && velocity > 5){
+                newMeters = OdometerInfo.meters+(velocity*.025)
+            }
+
+            // when in menus
+            if(!dataSaved && newCarNumber == 0 && OdometerInfo.carNumber != 0){
+                dataSaved = true;
+                updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
+                OdometerInfo.offset = OdometerInfo.meters;
+                return;
+            }
+            
+            // // Starting new race
+            // else if(newCarNumber == OdometerInfo.carNumber && newMeters < OdometerInfo.meters && newMeters == 0){
+            //     updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
+            //     OdometerInfo.offset = 0;
+            // }
+            // // New car
+            // else if(newCarNumber != 0 && OdometerInfo.carNumber != newCarNumber){
+            //     updateCarData(OdometerInfo.carNumber, OdometerInfo.meters, OdometerInfo.offset)
+            //     OdometerInfo.offset = 0;
+            // }
+
+            if(newCarNumber != 0){
+                dataSaved = false;
+            }
+
+            if(newCarNumber != 0){
+                OdometerInfo.carNumber = newCarNumber;
+                OdometerInfo.meters = newMeters;
+            }
+            // Optionally return data if needed
         });
-        
-        req.on('error', (error) => {
-        });
-        
-        req.end();
-    }
-    catch{}
+    });
+    
+    req.on('error', (error) => {
+    });
+    
+    req.end();
 }
