@@ -5,7 +5,8 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
   telemetry = null;
   telemetryType = null;
   yellowRPMPecentage = 0;
-  mphDistance = 0;
+  dirty = false;
+  tractionBlink = 0;
   
   OdometerInfo = {
     carNumber: 0,
@@ -162,6 +163,7 @@ function set_default() {
     updateTireWear("FL", 100)
     updateTireWear("RR", 100)
     updateTireWear("RL", 100)
+    updateTraction(0, 0);
     updatePosition(0)
     getOdometer(0);
   }
@@ -177,18 +179,25 @@ function get_telemetryType() {
 }
 
 gearChangeTicks = 0;
+defaultTicks = 0;
 async function set_display() {
   get_data(); // Wait for the data to be fetched and parsed
 
   data = telemetry
   if (data == null || data[0]["IsRaceOn"] != 1) {
-    set_default();
+    // wait 2 minutes to set default
+    if(!defaultData && defaultTicks >= 4800){
+      set_default();
+    }
+    else if(!defaultData){
+      defaultTicks++;
+    }
     return;
   }
   else if(defaultData){
     defaultData = false;
   }
-
+  defaultTicks = 0;
   gear = data[4]["Gear"];
   if(gear == 11){
     gearChangeTicks++;
@@ -203,32 +212,28 @@ async function set_display() {
     updateGear(gear)
   }
 
-  if(OdometerInfo.carNumber == 0 || data[0]["CarOrdinal"] != OdometerInfo.carNumber){
-    mphDistance = 0;
-  }
-
-  distance = data[2]["DistanceTraveled"];
-  velocity = data[2]["Speed"];
-  if(distance == 0 && velocity > 5){
-    mphDistance += velocity*.025
-    distance = mphDistance;
-  }
-
   getOdometer(data[0]["CarOrdinal"])
   updateDistance(OdometerInfo.meters)
   updateFuel(data[2]["Fuel"]*100)
   configureRPM(data[2]["EngineMaxRpm"])
   updateRPM(data[2]["CurrentEngineRpm"], data[2]["EngineMaxRpm"])
-  updateSpeed(mpstomph(velocity))
+  updateSpeed(mpstomph(data[2]["Speed"]))
   if(distance > 0){
     updateTime("time", data[2]["CurrentLap"])
   }
+  updateDirtyLap(data[2]["SurfaceRumbleFrontRight"],
+                  data[2]["SurfaceRumbleFrontLeft"],
+                  data[2]["SurfaceRumbleRearRight"],
+                  data[2]["SurfaceRumbleRearLeft"],
+                  data[2]["CurrentLap"])
   updateTime("best-time", data[2]["BestLap"])
   updateTireTemp("FR", data[2]["TireTempFrontRight"])
   updateTireTemp("FL", data[2]["TireTempFrontLeft"])
   updateTireTemp("RR", data[2]["TireTempRearRight"])
   updateTireTemp("RL", data[2]["TireTempRearLeft"])
   updatePosition(data[4]["RacePosition"])
+  updateTraction(data[2]["TireCombinedSlipFrontRight"] + data[2]["TireCombinedSlipFrontLeft"], 
+                  data[2]["TireCombinedSlipRearRight"] + data[2]["TireCombinedSlipRearLeft"])
   if(data[2].hasOwnProperty("TireWearFrontRight")){
     updateTireWear("FR", 100*(1-data[2]["TireWearFrontRight"]))
     updateTireWear("FL", 100*(1-data[2]["TireWearFrontLeft"]))
@@ -278,11 +283,11 @@ function updateGear(gear) {
 function updateTime(id, time) {
   formattedTime = formatTime(time)
   if (time != null && time != 0) {
-    document.getElementById(id).style.display = "contents";
+    document.getElementById("container-"+id).style.display = "inline-block";
     document.getElementById(id).textContent = formattedTime;
   }
   else {
-    document.getElementById(id).style.display = "none";
+    document.getElementById("container-"+id).style.display = "none";
   }
 }
 
@@ -373,6 +378,42 @@ function updatePosition(pos){
   }
   document.getElementById("position").style.display = "block"
   document.getElementById("position").textContent = getPositionSuffix(pos)
+}
+
+function updateDirtyLap(FR, FL, RR, RL, time){
+  if(dirty && time < 1.0){
+    document.getElementById("caution-time").style.display = "none"
+    dirty = false;
+  }
+
+  if(!dirty && FR > 1 && FL > 1 && RR > 1 && RL > 1){
+    document.getElementById("caution-time").style.display = "inline-block"
+    dirty = true;
+  }
+}
+
+function updateTraction(tireSlipFront, tireSlipRear){
+  tractionLost = false;
+  if(tireSlipFront < tireSlipRear && tireSlipFront+tireSlipRear > 2){
+    tractionLost = true;
+  }
+
+  if(tractionLost){
+    tractionBlink++;
+    if(tractionBlink <= 15){
+      document.getElementById("traction").style.display = "inline-block";
+    }
+    else if(tractionBlink <= 30){
+      document.getElementById("traction").style.display = "none";
+    }
+    else{
+      tractionBlink = 0;
+    }
+  }
+  else{
+    tractionBlink = 0;
+    document.getElementById("traction").style.display = "none";
+  }
 }
 
 function configureRPM(_maxRPM) {

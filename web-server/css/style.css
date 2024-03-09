@@ -113,12 +113,14 @@ body {
   1px 1px 0 #000;
 }
 
-.container-time {
+
+#container-time {
   height: 18; /* Adjust height as needed */
   /* bottom: -20px; */
   width: 200px;
   left: 77.5%;
   top: 20%;
+  display: none;
 }
 
 .time {
@@ -129,16 +131,13 @@ body {
   display: contents;
 }
 
-#best-time{
-  display: none;
-}
-
-.container-best-time {
+#container-best-time {
   height: 18; /* Adjust height as needed */
   /* bottom: -20px; */
   width: 200px;
   right: 75%;
   top: 20%;
+  display: none;
 }
 
 .container-speed {
@@ -390,3 +389,26 @@ body {
   display: none;
 }
 
+.caution {
+  width: 15%;
+  padding-left: 3%;
+  padding-right: 3%;
+  top: 3px;
+  position: relative;
+}
+
+#caution-best-time{
+  display: none;
+}
+
+#caution-time{
+  display: none;
+}
+
+#traction{
+  position: absolute;
+  width: 3%;
+  bottom: 30%;
+  right: 2.5%;
+  display: none;
+}

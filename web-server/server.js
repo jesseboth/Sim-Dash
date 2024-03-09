@@ -87,6 +87,7 @@ const server = http.createServer((req, res) => {
             telemetryType = "";
             telemetry.kill('SIGKILL');
             telemetry = null
+            resetOdometer()
             dash = "forza-dash"
         }
 
@@ -304,7 +305,12 @@ function updateOdometer(){
 
             OdometerInfo.carNumber = newCarNumber;
             if(newCarNumber != 0){
-                OdometerInfo.offset = OdometerInfo.meters;
+                if(newMeters <= 0){
+                    OdometerInfo.offset = newMeters
+                }
+                else{
+                    OdometerInfo.offset = OdometerInfo.meters;
+                }
                 OdometerInfo.meters = newMeters;
                 OdometerInfo.stored += (OdometerInfo.meters-OdometerInfo.offset)
             }
@@ -319,11 +325,19 @@ function updateOdometer(){
 }
 
 function readOdometer(carNumber) {
-    console.log(carNumber, OdometerInfo)
     carString = carNumber.toString();
     if (OdometerInfo.carNumber == carNumber) {
         return { "carNumber": carString, "meters": OdometerInfo.stored };
     } else {
         return { "carNumber": carString, "meters": 0 };
     }
+}
+
+function resetOdometer(){
+    updateCarData()
+
+    OdometerInfo.carNumber = 0;
+    OdometerInfo.meters = 0;
+    OdometerInfo.offset = 0;
+    OdometerInfo.store = 0;
 }
