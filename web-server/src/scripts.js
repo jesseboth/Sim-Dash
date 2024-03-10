@@ -382,28 +382,25 @@ function updatePosition(pos){
 
 function updateDirtyLap(FR, FL, RR, RL, time){
   if(dirty && time < 1.0){
-    document.getElementById("caution-time").style.display = "none"
+    document.getElementById("caution").style.display = "none"
     dirty = false;
   }
 
   if(!dirty && FR > 1 && FL > 1 && RR > 1 && RL > 1){
-    document.getElementById("caution-time").style.display = "inline-block"
+    document.getElementById("caution").style.display = "inline-block"
     dirty = true;
   }
 }
 
 function updateTraction(tireSlipFront, tireSlipRear){
-  tractionLost = false;
-  if(tireSlipFront < tireSlipRear && tireSlipFront+tireSlipRear > 2){
-    tractionLost = true;
-  }
-
-  if(tractionLost){
+  const Blinkon = 20;
+  const Blinkoff = 40;
+  if(tireSlipFront > 2 || tireSlipRear > 2){
     tractionBlink++;
-    if(tractionBlink <= 15){
+    if(tractionBlink <= Blinkon){
       document.getElementById("traction").style.display = "inline-block";
     }
-    else if(tractionBlink <= 30){
+    else if(tractionBlink <= Blinkoff){
       document.getElementById("traction").style.display = "none";
     }
     else{
@@ -411,8 +408,18 @@ function updateTraction(tireSlipFront, tireSlipRear){
     }
   }
   else{
-    tractionBlink = 0;
-    document.getElementById("traction").style.display = "none";
+    if(tractionBlink > 0 && tractionBlink <= Blinkon){
+      tractionBlink++;
+      document.getElementById("traction").style.display = "inline-block";
+    }
+    else if (tractionBlink > Blinkon && tractionBlink <= Blinkoff){
+      tractionBlink++;
+      document.getElementById("traction").style.display = "none";
+    }
+    else{
+      document.getElementById("traction").style.display = "none";
+      tractionBlink = 0;
+    }
   }
 }
 

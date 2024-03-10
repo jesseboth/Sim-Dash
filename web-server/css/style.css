@@ -118,7 +118,7 @@ body {
   height: 18; /* Adjust height as needed */
   /* bottom: -20px; */
   width: 200px;
-  left: 77.5%;
+  left: 75.5%;
   top: 20%;
   display: none;
 }
@@ -397,11 +397,7 @@ body {
   position: relative;
 }
 
-#caution-best-time{
-  display: none;
-}
-
-#caution-time{
+#caution{
   display: none;
 }
 
