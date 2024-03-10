@@ -192,7 +192,7 @@ function updateGear(gear) {
 function updateTime(id, time) {
   formattedTime = formatTime(time)
   if (time != null && time != 0) {
-    document.getElementById("container-"+id).style.display = "inline-block";
+    document.getElementById("container-"+id).style.display = "inline-flex";
     document.getElementById(id).textContent = formattedTime;
   }
   else {

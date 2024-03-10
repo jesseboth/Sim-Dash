@@ -111,13 +111,13 @@ body {
 #container-time {
   height: 18;
   width: 200px;
-  left: 75.5%;
+  left: 77.5%;
   top: 20%;
   display: none;
 }
 
 .time {
-  font-size: 200%;
+  font-size: 225%;
   color: #d0c5c3;
   font-family: "Noto Sans";
   font-weight: 600;
