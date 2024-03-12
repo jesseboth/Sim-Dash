@@ -7,6 +7,10 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
   yellowRPMPecentage = 0;
   dirty = false;
   tractionBlink = 0;
+  launchControl = false;
+  launchControlTime = 0.0;
+  launchControlBlink = 0;
+  launchControlComplete = false;
   
   OdometerInfo = {
     carNumber: 0,
@@ -95,17 +99,21 @@ async function set_display() {
   data = telemetry
   if (data == null || data[0]["IsRaceOn"] != 1) {
     // wait 2 minutes to set default
-    if(!defaultData && defaultTicks >= 4800){
+    if(!defaultData && defaultTicks >= 1200){
       set_default();
     }
     else if(!defaultData){
       defaultTicks++;
+    }
+    else if(defaultData){
+      updateTime("time", null)
     }
     return;
   }
   else if(defaultData){
     defaultData = false;
   }
+
   defaultTicks = 0;
   gear = data[4]["Gear"];
   if(gear == 11){
@@ -127,15 +135,28 @@ async function set_display() {
   configureRPM(data[2]["EngineMaxRpm"])
   updateRPM(data[2]["CurrentEngineRpm"], data[2]["EngineMaxRpm"])
   updateSpeed(mpstomph(data[2]["Speed"]))
-  if(distance > 0){
+  if(data[2]["DistanceTraveled"] > 0){
     updateTime("time", data[2]["CurrentLap"])
+  }
+  else if(data[2]["DistanceTraveled"] == 0 && data[2]["CurrentLap"] == 0){
+    updateTime("time", null);
   }
   updateDirtyLap(data[2]["SurfaceRumbleFrontRight"],
                   data[2]["SurfaceRumbleFrontLeft"],
                   data[2]["SurfaceRumbleRearRight"],
                   data[2]["SurfaceRumbleRearLeft"],
                   data[2]["CurrentLap"])
-  updateTime("best-time", data[2]["BestLap"])
+
+  if(data[2]["BestLap"] == 0 && data[2]["Speed"] < .01 && data[2]["EngineMaxRpm"] > 2100 && 
+      (data[4]["Clutch"] == 255 || data[4]["HandBrake"] == 255)){
+    launchControl = true;
+  }
+
+  if(launchControl){
+    updateLaunchControl(mpstomph(data[2]["Speed"]))
+  } else {
+    updateTime("best-time", data[2]["BestLap"])
+  }
   updateTireTemp("FR", data[2]["TireTempFrontRight"])
   updateTireTemp("FL", data[2]["TireTempFrontLeft"])
   updateTireTemp("RR", data[2]["TireTempRearRight"])
@@ -196,7 +217,13 @@ function updateTime(id, time) {
     document.getElementById(id).textContent = formattedTime;
   }
   else {
-    document.getElementById("container-"+id).style.display = "none";
+    if(id == "time" && time == null){
+      document.getElementById("container-"+id).style.display = "inline-flex";
+      document.getElementById(id).textContent = getCurrentTime();
+    }
+    else {
+      document.getElementById("container-"+id).style.display = "none";
+    }
   }
 }
 
@@ -332,6 +359,35 @@ function updateTraction(tireSlipFront, tireSlipRear){
   }
 }
 
+
+function updateLaunchControl(speed){
+  if(!launchControlComplete && speed > .1 && speed < 60){
+    launchControlTime += .025;
+    updateTime("best-time", launchControlTime);
+  }
+  else if(!launchControlComplete && speed >= 60){
+    launchControlComplete = true;
+  }
+
+  else if(launchControlComplete && launchControlBlink < 330){
+    launchControlBlink++;
+    if(launchControlBlink % 30 == 0){
+      updateTime("best-time", null)
+    }
+    else if(launchControlBlink % 15 == 0){
+      updateTime("best-time", launchControlTime)
+    }
+
+  }
+  else if(launchControlComplete && launchControlBlink == 330){
+    updateTime("best-time", null)
+    launchControl = false;
+    launchControlBlink = 0;
+    launchControlTime = 0.0;
+    launchControlComplete = false;
+  }
+}
+
 function configureRPM(_maxRPM) {
   maxRPM = fixMaxRpm(_maxRPM)
   const gridContainer = document.getElementsByClassName("grid-container")[0];
@@ -436,6 +492,13 @@ function getPositionSuffix(position) {
     default:
       return position + "th";
   }
+}
+
+function getCurrentTime() {
+  const now = new Date();
+  const hours = String(now.getHours()) % 12 || 12;
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
 
 function getOdometer(carNumber, offset=0){
