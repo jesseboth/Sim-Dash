@@ -11,6 +11,7 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
   launchControlTime = 0.0;
   launchControlBlink = 0;
   launchControlComplete = false;
+  launchControlSpeed = 0;
   
   OdometerInfo = {
     carNumber: 0,
@@ -138,7 +139,10 @@ async function set_display() {
   if(data[2]["DistanceTraveled"] > 0){
     updateTime("time", data[2]["CurrentLap"])
   }
-  else if(data[2]["DistanceTraveled"] == 0 && data[2]["CurrentLap"] == 0){
+  else if(data[2]["DistanceTraveled"] < 0){
+    updateTime("time", 0);
+  }
+  else if(data[2]["DistanceTraveled"] == 0){
     updateTime("time", null);
   }
   updateDirtyLap(data[2]["SurfaceRumbleFrontRight"],
@@ -147,9 +151,12 @@ async function set_display() {
                   data[2]["SurfaceRumbleRearLeft"],
                   data[2]["CurrentLap"])
 
-  if(data[2]["BestLap"] == 0 && data[2]["Speed"] < .01 && data[2]["EngineMaxRpm"] > 2100 && 
-      (data[4]["Clutch"] == 255 || data[4]["HandBrake"] == 255)){
+  if(data[2]["BestLap"] == 0 && data[2]["Speed"] < .01 && data[2]["CurrentEngineRpm"] > 2100 && 
+      (data[4]["Clutch"] == 255 || data[4]["HandBrake"] == 255 || data[4]["Accel"] > 128)){
     launchControl = true;
+  }
+  else if(launchControl && data[2]["CurrentEngineRpm"] - 10 < data[2]["EngineIdleRpm"]){
+    launchControl = false;
   }
 
   if(launchControl){
@@ -368,8 +375,7 @@ function updateLaunchControl(speed){
   else if(!launchControlComplete && speed >= 60){
     launchControlComplete = true;
   }
-
-  else if(launchControlComplete && launchControlBlink < 330){
+  else if(launchControlComplete && launchControlBlink < 300){
     launchControlBlink++;
     if(launchControlBlink % 30 == 0){
       updateTime("best-time", null)
@@ -379,12 +385,13 @@ function updateLaunchControl(speed){
     }
 
   }
-  else if(launchControlComplete && launchControlBlink == 330){
+  else if ((speed < .1 && launchControlTime > 0) || (launchControlComplete && launchControlBlink == 300)){
     updateTime("best-time", null)
     launchControl = false;
     launchControlBlink = 0;
     launchControlTime = 0.0;
     launchControlComplete = false;
+    launchControlSpeed = 0.0;
   }
 }
 
