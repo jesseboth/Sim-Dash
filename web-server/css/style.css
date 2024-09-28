@@ -9,7 +9,7 @@
 .size {
   width: 100%;
   height: 0;
-  top: 75px;
+  top: 60px;
   padding-bottom: 56.25%; 
   position: relative;
   overflow: hidden;
@@ -17,10 +17,10 @@
 
 .content {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 10%;
+  left: 5%;
+  width: 90%;
+  height: 90%;
 }
 
 .centered img {
@@ -88,7 +88,7 @@ body {
 }
 
 #gear {
-  font-size: 600%;
+  font-size: 550%;
   color: #207dde;
   font-family: "Noto Sans";
   font-weight: 600;
@@ -117,7 +117,7 @@ body {
 }
 
 .time {
-  font-size: 225%;
+  font-size: 200%;
   color: #d0c5c3;
   font-family: "Noto Sans";
   font-weight: 600;

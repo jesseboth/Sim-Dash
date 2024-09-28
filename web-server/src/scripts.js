@@ -68,6 +68,7 @@ function set_default() {
     updateRPM(1200, 7200)
     updateSpeed(0)
     updateTime("time", null)
+    updateDirtyLap(false);
     updateTime("best-time", null)
     updateTireTemp("FR", normalTemperature)
     updateTireTemp("FL", normalTemperature)
@@ -79,7 +80,11 @@ function set_default() {
     updateTireWear("RL", 100)
     updateTraction(0, 0);
     updatePosition(0)
-    getOdometer(0);
+    GOLF_R = 3533;
+    getOdometer(GOLF_R);
+    setTimeout(() => {
+      updateDistance(OdometerInfo.meters)
+    }, 250);
   }
 }
 
@@ -145,11 +150,13 @@ async function set_display() {
   else if(data[2]["DistanceTraveled"] == 0){
     updateTime("time", null);
   }
-  updateDirtyLap(data[2]["SurfaceRumbleFrontRight"],
+  checkDirtyLap(data[2]["SurfaceRumbleFrontRight"],
                   data[2]["SurfaceRumbleFrontLeft"],
                   data[2]["SurfaceRumbleRearRight"],
                   data[2]["SurfaceRumbleRearLeft"],
                   data[2]["CurrentLap"])
+
+  updateDirtyLap(dirty);
 
   if(data[2]["BestLap"] == 0 && data[2]["Speed"] < .01 && data[2]["CurrentEngineRpm"] > 2100 && 
       (data[4]["Clutch"] == 255 || data[4]["HandBrake"] == 255 || data[4]["Accel"] > 128)){
@@ -323,15 +330,12 @@ function updatePosition(pos){
   document.getElementById("position").textContent = getPositionSuffix(pos)
 }
 
-function updateDirtyLap(FR, FL, RR, RL, time){
-  if(dirty && time < 1.0){
-    document.getElementById("caution").style.display = "none"
-    dirty = false;
-  }
-
-  if(!dirty && FR > 1 && FL > 1 && RR > 1 && RL > 1){
+function updateDirtyLap(showdirty){
+  if(showdirty){
     document.getElementById("caution").style.display = "inline-block"
-    dirty = true;
+  }
+  else{
+    document.getElementById("caution").style.display = "none"
   }
 }
 
@@ -536,4 +540,14 @@ function getOdometer(carNumber, offset=0){
   .catch(error => {
       console.error('Error sending data to server:', error);
   });
+}
+
+function checkDirtyLap(FR, FL, RR, RL, time){
+  if(dirty && time < 1.0){
+    dirty = false;
+  }
+
+  if(!dirty && FR > 1 && FL > 1 && RR > 1 && RL > 1){
+    dirty = true
+  }
 }

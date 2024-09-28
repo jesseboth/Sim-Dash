@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const { spawn } = require('child_process');
-const port = 3000; // This is the port for the Express server
+const port = 3001; // This is the port for the Express server
 
 telemetry = null;
 telemetryType = ""
@@ -113,10 +113,6 @@ const server = http.createServer((req, res) => {
                 if(meters == null){
                     retJson = readOdometer(carNumber)
                 }
-                // else {
-                //     updateCarData(carNumber, meters);
-                    
-                // }
                 res.writeHead(200, { 'Content-Type': 'text/plain' });
                 res.end(JSON.stringify(retJson));
 
@@ -250,6 +246,24 @@ function getCarData(carNumber){
     }
 }
 
+function getStoredDistance(carNumber){
+    try {
+        const data = fs.readFileSync('odometers.json', 'utf8');
+        carData = JSON.parse(data);
+    } catch (err) {
+        return;
+    }
+
+    carString = carNumber.toString();
+
+    // Check if the car number exists in the data
+    if (carData.hasOwnProperty(carNumber)) {
+        return carData[carNumber];
+    } else {
+        return 0;
+    }
+}
+
 dataSaved = false;
 let interval = setInterval(updateOdometer, 25); 
 function updateOdometer(){
@@ -329,7 +343,7 @@ function readOdometer(carNumber) {
     if (OdometerInfo.carNumber == carNumber) {
         return { "carNumber": carString, "meters": OdometerInfo.stored };
     } else {
-        return { "carNumber": carString, "meters": 0 };
+        return { "carNumber": carString, "meters": getStoredDistance(carNumber) };
     }
 }
 
