@@ -15,6 +15,17 @@
     </div>
   </div>
   
+  <!-- New YouTube Link Input Modal -->
+  <div id="linkModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <div class="text">Enter YouTube Link</div>
+      <input type="text" id="youtubeLink" style="width: 96%; padding: 10px; margin-bottom: 20px;" placeholder="YouTube Link"/>
+      <div id="ytSuccess" class="text">placeholder</div>
+      <button id="submitLink" class="modalButton" style="background-color: #007bff; color: white;">Submit</button>
+    </div>
+  </div>
+
   <button id="FM" class="large-button">Forza Motorsport</button>
   <button id="FH5" class="large-button">Forza Horizon 5</button>
   <button id="FM7" class="large-button">Forza Motorsport 7</button>
@@ -24,8 +35,12 @@
           Stop
   </button>
 
+  <!-- New Button to Open the YouTube Link Input Modal -->
+  <button id="addVideoButton" class="large-button" style="background-color: green; border: 2px solid green;">Add YouTube Video</button>
+
   <button id="dash" class="redirect"></button>
 </body>
+
 <style>
   body {
   display: flex;
@@ -127,6 +142,11 @@
   transition: background-color 0.3s, color 0.3s;
 }
 
+#submitLink {
+  left: 30%;
+  margin-top: -15%;
+}
+
 #noBtn {
   background-color: red;
 }
@@ -143,8 +163,6 @@
   padding-bottom: 2%;
   overflow: hidden;
 }
-
-
 </style>
 
 <script>
@@ -188,22 +206,21 @@
     createButtonListener("stop")
     createRedirect("dash")
 
-
     const modal = document.getElementById("myModal")
-    // Get the close button
-    var closeBtn = document.getElementsByClassName("close")[0];
+    var closeBtn = document.getElementsByClassName("close");
 
-    // When the user clicks on the close button, close the modal
-    closeBtn.onclick = function() {
-      modal.style.display = "none";
-      lastPressed = ""
-    }
+    // Close buttons for both modals
+    Array.from(closeBtn).forEach(btn => {
+      btn.onclick = function() {
+        document.getElementById("myModal").style.display = "none";
+        document.getElementById("linkModal").style.display = "none";
+        lastPressed = "";
+      }
+    });
 
-    // Get the Yes and No buttons
     var yesBtn = document.getElementById("yesBtn");
     var noBtn = document.getElementById("noBtn");
 
-    // Add event listeners to Yes and No buttons
     yesBtn.addEventListener("click", function() {
       if(lastPressed == ""){
         modal.style.display = "none";
@@ -220,5 +237,72 @@
       lastPressed = ""
       modal.style.display = "none";
     });
+
+    // New Modal for YouTube Link
+    const linkModal = document.getElementById("linkModal");
+    const addVideoButton = document.getElementById("addVideoButton");
+    const submitLinkButton = document.getElementById("submitLink");
+
+    addVideoButton.onclick = function() {
+      document.getElementById("ytSuccess").style.display = "none";
+      linkModal.style.display = "block";
+    }
+
+    submitLinkButton.onclick = async function() {
+      const youtubeLink = document.getElementById("youtubeLink").value;
+      if (youtubeLink) {
+        fetch("/add-video", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url: youtubeLink }),
+        })
+          .then((response) => {
+            if (response.ok) {
+              return response.json();
+            }
+          })
+          .then((data) => {
+            if (data != null) {
+              document.getElementById("ytSuccess").style.display = "block";
+              if(data.success){
+                document.getElementById("ytSuccess").innerHTML = "Video added successfully!";
+              } else {
+                document.getElementById("ytSuccess").innerHTML = data.message;
+              }
+            }
+          })
+          .catch((error) => {
+            console.error('Error sending data to server:', error);
+          });
+
+        document.getElementById("youtubeLink").value = "";
+      }
+    }
+
+    async function addVideo(url){
+    fetch("/add-video", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({url: url})
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json();
+        }
+    })
+    .then(data => {
+      if(data != null){
+        console.log(data);
+        return data;
+      }
+    })
+    .catch(error => {
+        console.error('Error sending data to server:', error);
+    });
+  }
 </script>
 </html>

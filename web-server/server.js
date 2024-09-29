@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const { spawn } = require('child_process');
-const port = 3001; // This is the port for the Express server
+const port = 3000; // This is the port for the Express server
 
 telemetry = null;
 telemetryType = ""
@@ -12,6 +12,7 @@ const options = {
 };
 
 dash="/forza-dash";
+videos=[];
 
 const EventEmitter = require('events');
 class Emitter extends EventEmitter { };
@@ -124,6 +125,64 @@ const server = http.createServer((req, res) => {
         });
         return;
     }
+    else if(req.url == "/next-video" && req.method === 'GET'){
+        retVal = {"type": null}
+
+        videos.shift()
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(retVal));
+        return;
+    }
+    else if(req.url == "/current-video" && req.method === 'GET'){
+        retVal = {"type": null}
+
+        if(videos.length > 0){
+            retVal["type"] = videos[0]
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(retVal));
+        return;
+    }
+    else if (req.url == "/add-video" && req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk) => {
+            body += chunk.toString(); // convert Buffer to string
+        });
+
+        req.on('end', () => {
+            try {
+                retJson = {"success": false, "message": ""}
+                const data = JSON.parse(body);
+                const video = extractYouTubeID(data.url)
+                
+                if(video == null){
+                    retJson["message"] = "Invalid URL"
+                }
+                else if(videos.includes(video)){
+                    retJson["message"] = "Video already in list"
+                }
+                else if(videos.length > 10){
+                    retJson["message"] = "Video list full"
+                }
+                else{
+                    retJson["success"] = true
+                    videos.push(video)
+                }
+
+                res.writeHead(200, { 'Content-Type': 'text/plain' });
+                res.end(JSON.stringify(retJson));
+
+            } catch (error) {
+                console.error('Error parsing JSON:', error);
+                res.writeHead(400, { 'Content-Type': 'text/plain' });
+                res.end('Invalid JSON');
+            }
+        });
+        return;
+    }
+
 
   switch (extension) {
       case '.css':
@@ -355,3 +414,9 @@ function resetOdometer(){
     OdometerInfo.offset = 0;
     OdometerInfo.store = 0;
 }
+
+function extractYouTubeID(url) {
+    const regex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+  }
