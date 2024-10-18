@@ -13,6 +13,17 @@ const options = {
 
 dash="/forza-dash";
 
+splitData = {
+    newSplit: false,
+    splitCoords: [],
+    splitTimes: [],
+    bestLap: 0,
+    currentSplit: -1,
+    i: 0,
+}
+
+newSplit = 0;
+
 const EventEmitter = require('events');
 class Emitter extends EventEmitter { };
 const myEmitter = new Emitter();
@@ -124,6 +135,67 @@ const server = http.createServer((req, res) => {
         });
         return;
     }
+    else if (req.url == "/Split" && req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk) => {
+            body += chunk.toString(); // convert Buffer to string
+        });
+
+        req.on('end', () => {
+            try {
+                retJson = {
+                    coords: null,
+                    times: null,
+                }
+
+                const data = JSON.parse(body);
+                if(data.type == "get"){
+                    splits = getCarSplits(data.carID, data.trackID)
+                    markers = getTrackMarkers(data.trackID)
+
+                    retJson.coords = markers;
+                    retJson.times = splits;
+                }
+                else if(data.type == "set"){
+                    if(Date.now() - newSplit > 10000){
+                        newSplit = Date.now();
+                        console.log("New split", data.times)
+                        setCarSplits(data.carID, data.trackID, data.times)
+                    }
+                }
+                else if(data.type == "new"){
+                    console.log("New split", data.splits)
+                    setTrackMakers(data.trackID, data.splits)
+                }
+
+                    
+
+                    //     const d = calculateDistance(data.coords, splitData.splitCoords[splitData.i])
+                    //     console.log("d: ", d)
+                    //     if(d <= 10){
+                    //         splitData.currentSplit = data.time - splitData.splitTimes[splitData.i]
+                    //         console.log(splitData.currentSplit)
+                    //         splitData.i += 1
+                    //     }
+                        
+                    //     if(data.time > splitData.bestLap){
+                    //         splitData.bestLap = data.time;
+                    //     }
+                        
+                    //     retJson.split = splitData.currentSplit;
+                    // }
+                
+                res.writeHead(200, { 'Content-Type': 'text/plain' });
+                res.end(JSON.stringify(retJson));
+
+            } catch (error) {
+                console.error('Error parsing JSON:', error);
+                res.writeHead(400, { 'Content-Type': 'text/plain' });
+                res.end('Invalid JSON');
+            }
+        });
+        return;
+    }
 
   switch (extension) {
       case '.css':
@@ -193,7 +265,7 @@ server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 // Function to update car data in a JSON file
 function updateCarData() {
-    const filename = 'odometers.json';
+    const filename = 'data/odometers.json';
 
     // Read existing data from JSON file
     let carData = {};
@@ -230,14 +302,13 @@ OdometerInfo = {
 
 function getCarData(carNumber){
     try {
-        const data = fs.readFileSync('odometers.json', 'utf8');
+        const data = fs.readFileSync('data/odometers.json', 'utf8');
         carData = JSON.parse(data);
     } catch (err) {
         return;
     }
 
     carString = carNumber.toString();
-
     // Check if the car number exists in the data
     if (carData.hasOwnProperty(carNumber)) {
         OdometerInfo.stored = (carData[carNumber])
@@ -248,9 +319,10 @@ function getCarData(carNumber){
 
 function getStoredDistance(carNumber){
     try {
-        const data = fs.readFileSync('odometers.json', 'utf8');
+        const data = fs.readFileSync('data/odometers.json', 'utf8');
         carData = JSON.parse(data);
     } catch (err) {
+        console.log(err)
         return;
     }
 
@@ -354,4 +426,82 @@ function resetOdometer(){
     OdometerInfo.meters = 0;
     OdometerInfo.offset = 0;
     OdometerInfo.store = 0;
+}
+
+/*
+    key = carID:trackID
+    data = {
+        coords: [[x,y,z], [x,y,z]],
+        times: [time1, time2, time3],
+        best: time
+    }
+*/
+function getCarSplits(carNumber, trackID){
+    try {
+        const data = fs.readFileSync('data/splits.json', 'utf8');
+        data = JSON.parse(data)[carNumber+":"+trackID];
+    } catch (err) {
+        data = null;
+    }
+    return data;
+}
+
+function getTrackMarkers(trackID){
+    try {
+        const data = fs.readFileSync('data/track-markers.json', 'utf8');
+        data = JSON.parse(data)[trackID];
+    } catch (err) {
+        data = null;
+    }
+    return data;
+}
+
+function setTrackMakers(trackID, markers){
+    try {
+        // Read and parse the existing data
+        let fileData = fs.readFileSync('data/track-markers.json', 'utf8');
+        const jsonData = JSON.parse(fileData);
+
+        if(jsonData.hasOwnProperty(trackID)){
+            console.error("Track already exists in the data.");
+            return;
+        }
+
+        // Create or update the specific car and track data
+        jsonData[`${trackID}`] = markers;
+
+        // Write the updated data back to the file
+        fs.writeFileSync('data/track-markers.json', JSON.stringify(jsonData, null, 2));
+    } catch (err) {
+        console.error("Error writing splits:", err);
+    }
+}
+
+function setCarSplits(carNumber, trackID, times){
+    try {
+        // Read and parse the existing data
+        let fileData = fs.readFileSync('data/splits.json', 'utf8');
+        const jsonData = JSON.parse(fileData);
+
+        // Create or update the specific car and track data
+        jsonData[`${carNumber}:${trackID}`] = times;
+
+        // Write the updated data back to the file
+        fs.writeFileSync('data/splits.json', JSON.stringify(jsonData, null, 2));
+        console.log("Splits saved successfully.");
+    } catch (err) {
+        console.error("Error writing splits:", err);
+    }
+}
+
+// Function to calculate distance between two 3D points
+function calculateDistance(point1, point2) {
+    if(point1 == null || point2 == null || point1.length != 3 || point2.length != 3){
+        return Infinity;
+    }
+    return Math.sqrt(
+        Math.pow(parseFloat(point1[0]) - parseFloat(point2[0]), 2) + 
+        Math.pow(parseFloat(point1[1]) - parseFloat(point2[1]), 2) + 
+        Math.pow(parseFloat(point1[2]) - parseFloat(point2[2]), 2)
+    );
 }
