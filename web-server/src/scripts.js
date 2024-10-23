@@ -18,16 +18,15 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
     meters: 0
   };
 
-  SplitInfoReset = {
-    coords: [],
-    times: [],
-
-    currentLap: [],
-    bestLap: [],
-    i: 0,
-    newTrack: false,
-    lapError: false
+  splitData = {
+    bestSplits: [],
+    sessionSplits: [],
+    splits: [],
+    startMeters: 0,
+    splitTry: 0,
   }
+
+  lastTime = -1;
 
   SplitInfo = SplitInfoReset;
 
@@ -152,31 +151,13 @@ async function set_display() {
   getOdometer(data[0]["CarOrdinal"])
   updateDistance(OdometerInfo.meters)
   getSplit(data[0]["CarOrdinal"], data[0]["TrackLocation"])
-  updateSplit([data[2]["PositionX"], data[2]["PositionY"], data[2]["PositionZ"]], data[2]["CurrentLap"]);
-  configureLapTime(data[0]["CarOrdinal"], data[0]["TrackOrdinal"], data[2]["CurrentLap"], data[2]["LastLap"], data[2]["BestLap"]);
-  // if(SplitInfo.newTrack && data[2]["BestLap"] != 0){
-  //     SplitInfo.newTrack = false;
-  //     SplitInfo.coords.shift();
-  //     newTrack(data[0]["TrackOrdinal"]);
-  //     // setSplit(data[0]["CarOrdinal"], data[0]["TrackOrdinal"]);
-  // }
 
-  // if(data[2]["CurrentLap"] < .5 && SplitInfo.currentLap.length > 0){
-  //   if(!SplitInfo.lapError){
-  //     if(data[2]["LastLap"] == data[2]["BestLap"]) {
-  //       SplitInfo.currentLap.push(data[2]["LastLap"])
-  //       SplitInfo.bestLap = SplitInfo.currentLap;
-  //     }
+  if(data[2]["LastLap"] != lastTime){
+    SplitInfo.startMeters = data[2]["DistanceTraveled"];
+    configureLapTime(data[0]["CarOrdinal"], data[0]["TrackOrdinal"], data[2]["CurrentLap"], data[2]["LastLap"], data[2]["BestLap"]);
+  }
 
-  //     if( data[2]["BestLap"] <= SplitInfo.times[SplitInfo.i+1]){
-  //       SplitInfo.times = SplitInfo.bestLap;
-  //       setSplit(data[0]["CarOrdinal"], data[0]["TrackOrdinal"]);
-  //     }
-  //   }
-  //   SplitInfo.i = 0;
-  //   SplitInfo.currentLap = [];
-  //   SplitInfo.lapError = false;
-  // }
+  updateSplit(data[2]["DistanceTraveled"], data[2]["CurrentLap"]);
 
   updateFuel(data[2]["Fuel"]*100)
   configureRPM(data[2]["EngineMaxRpm"])
@@ -440,85 +421,62 @@ function updateLaunchControl(speed){
   }
 }
 
-function updateSplit(coords, time){
-  if(SplitInfo.coords.length == 0){
-    if(coords != null || coords != []){
-      SplitInfo.coords.push(coords); // store if new track
-    }
+const splitDistance = 100;
+function updateSplit(distance, time){
+  traveled = distance - splitData.startMeters;
+  if(distance == 0 || traveled < splitDistance){
     document.getElementById("split").style.display = "none"
     return;
   }
-
-  let timeSplit = -1;
-  const MAXDist = 150
-  const tolerance = 15;
-
-  const d = calculateDistance(coords, SplitInfo.coords[SplitInfo.i])
-  if(SplitInfo.newTrack){
-    if(d >= MAXDist){
-      SplitInfo.coords.push(coords);
-      console.log(coords)
-      SplitInfo.times.push(time);
-      SplitInfo.i++;
-    }
-  }
-  else if(d < tolerance){
-    timeSplit = time - SplitInfo.times[SplitInfo.i];
-    SplitInfo.currentLap.push(time);
-    console.log(time, timeSplit, d, SplitInfo.i)
-    SplitInfo.i++;
-  }
-  else if(d > MAXDist+tolerance*2){
-    // something went wrong - find the closest point
-    lapError = true;
-    for(let i = 0; i < SplitInfo.coords.length; i++){
-      const test = calculateDistance(coords, SplitInfo.coords[i])
-      if(test < MAXDist){
-        console.log("here")
-        SplitInfo.i = i;
-        break;
-      }
-    }
+  
+  let index = Math.floor(traveled / 100) - 1;
+  if(index == -1 || index <= splitData.splits.length){
+    return;
+  } 
+  else if(index == splitData.splits.length){
+    SplitInfo.splits.push(time);
+    console.log(time)
   }
 
-  if(timeSplit != -1){
-    if(timeSplit < 0){
-      document.getElementById("split").style.color = "green"
-      document.getElementById("split").textContent = "- " + formatTime(-1*timeSplit)
-    }
-    else {
-      document.getElementById("split").style.color = "red"
-      document.getElementById("split").textContent = "+ " + formatTime(timeSplit)
-    }
-    document.getElementById("split").style.display = "block"
+  bestIndex = -1;
+  if(SplitInfo.bestSplits.length == 0){
+    return;
   }
+  else if(SplitInfo.bestSplits.length > index){
+    bestIndex = index;
+  }
+  else {
+    bestIndex = SplitInfo.bestSplits.length - 1;
+  }
+
+  timeSplit = SplitInfo.splits[index] - SplitInfo.bestSplits[bestIndex];
+
+  if(timeSplit < 0){
+    document.getElementById("split").style.color = "green"
+    document.getElementById("split").textContent = "- " + formatTime(-1*timeSplit)
+  }
+  else {
+    document.getElementById("split").style.color = "red"
+    document.getElementById("split").textContent = "+ " + formatTime(timeSplit)
+  }
+  document.getElementById("split").style.display = "block"
 
 }
 
 function configureLapTime(car, track, current, last, best){
-  if(SplitInfo.newTrack && data[2]["BestLap"] != 0){
-    SplitInfo.newTrack = false;
-    SplitInfo.coords.shift();
-    newTrack(data[0]["TrackOrdinal"]);
-    setSplit(car, track);
-  }
-
-  if(current < .5 && SplitInfo.currentLap.length > 0){
-    if(!SplitInfo.lapError){
+  if(current < .5 && last > 0 && SplitInfo.currentLap.length > 1){
       if(last == best) {
         SplitInfo.currentLap.push(last)
-        SplitInfo.bestLap = SplitInfo.currentLap;
-      }
-
-      if( best <= SplitInfo.times[SplitInfo.i+1]){
-        SplitInfo.times = SplitInfo.bestLap;
-        setSplit(car, track);
+        SplitInfo.sessionSplits = SplitInfo.splits;
+        // setSplit(car, track);
+        
+        if(SplitInfo.bestSplits.length == 0 || best < SplitInfo.bestSplits[SplitInto.bestSplits-1]){
+          SplitInfo.bestSplits = SplitInfo.splits;
+          setSplit(car, track);
+        }
       }
     }
-    SplitInfo.i = 0;
     SplitInfo.currentLap = [];
-    SplitInfo.lapError = false;
-  }
 }
 
 function configureRPM(_maxRPM) {
@@ -713,7 +671,8 @@ function setSplit(carID, trackID){
 }
 
 function getSplit(carID, trackID){
-  if(!SplitInfo.coords.length == 0 || SplitInfo.newTrack){
+  SplitInfo.splitTry++;
+  if(SplitInfo.bestSplits != [] || SplitInfo.splitTry > 5){
     return;
   }
 
@@ -732,13 +691,13 @@ function getSplit(carID, trackID){
   .then(data => {
     if(data != null){
       if(data.coords == null){
-        SplitInfo.coords = [];
-        SplitInfo.times = [];
-        SplitInfo.newTrack = true;
+        SplitInfo.bestSplits = null;
       }
       else{
-        SplitInfo.coords = data.coords;
-        SplitInfo.times = data.times;
+        SplitInfo.bestSplits = data.splits;
+        if(SplitInfo.bestSplits.length > 0){
+          SplitInfo.splitTry = 0;
+        }
       }
     }
   })
@@ -755,16 +714,4 @@ function checkDirtyLap(FR, FL, RR, RL, time){
   if(!dirty && FR > 1 && FL > 1 && RR > 1 && RL > 1){
     dirty = true
   }
-}
-
-// Function to calculate distance between two 3D points
-function calculateDistance(point1, point2) {
-  if(point1 == null || point2 == null || point1.length != 3 || point2.length != 3){
-      return Infinity;
-  }
-  return Math.sqrt(
-      Math.pow(parseFloat(point1[0]) - parseFloat(point2[0]), 2) + 
-      Math.pow(parseFloat(point1[1]) - parseFloat(point2[1]), 2) + 
-      Math.pow(parseFloat(point1[2]) - parseFloat(point2[2]), 2)
-  );
 }

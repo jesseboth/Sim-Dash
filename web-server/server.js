@@ -13,17 +13,6 @@ const options = {
 
 dash="/forza-dash";
 
-splitData = {
-    newSplit: false,
-    splitCoords: [],
-    splitTimes: [],
-    bestLap: 0,
-    currentSplit: -1,
-    i: 0,
-}
-
-newSplit = 0;
-
 const EventEmitter = require('events');
 class Emitter extends EventEmitter { };
 const myEmitter = new Emitter();
@@ -151,9 +140,6 @@ const server = http.createServer((req, res) => {
                 const data = JSON.parse(body);
                 if(data.type == "get"){
                     splits = getCarSplits(data.carID, data.trackID)
-                    markers = getTrackMarkers(data.trackID)
-
-                    retJson.coords = markers;
                     retJson.times = splits;
                 }
                 else if(data.type == "set"){
@@ -163,10 +149,7 @@ const server = http.createServer((req, res) => {
                         setCarSplits(data.carID, data.trackID, data.times)
                     }
                 }
-                else if(data.type == "new"){
-                    console.log("New split", data.splits)
-                    setTrackMakers(data.trackID, data.splits)
-                }
+
 
                     
 
@@ -446,37 +429,6 @@ function getCarSplits(carNumber, trackID){
     return data;
 }
 
-function getTrackMarkers(trackID){
-    try {
-        const data = fs.readFileSync('data/track-markers.json', 'utf8');
-        data = JSON.parse(data)[trackID];
-    } catch (err) {
-        data = null;
-    }
-    return data;
-}
-
-function setTrackMakers(trackID, markers){
-    try {
-        // Read and parse the existing data
-        let fileData = fs.readFileSync('data/track-markers.json', 'utf8');
-        const jsonData = JSON.parse(fileData);
-
-        if(jsonData.hasOwnProperty(trackID)){
-            console.error("Track already exists in the data.");
-            return;
-        }
-
-        // Create or update the specific car and track data
-        jsonData[`${trackID}`] = markers;
-
-        // Write the updated data back to the file
-        fs.writeFileSync('data/track-markers.json', JSON.stringify(jsonData, null, 2));
-    } catch (err) {
-        console.error("Error writing splits:", err);
-    }
-}
-
 function setCarSplits(carNumber, trackID, times){
     try {
         // Read and parse the existing data
@@ -492,16 +444,4 @@ function setCarSplits(carNumber, trackID, times){
     } catch (err) {
         console.error("Error writing splits:", err);
     }
-}
-
-// Function to calculate distance between two 3D points
-function calculateDistance(point1, point2) {
-    if(point1 == null || point2 == null || point1.length != 3 || point2.length != 3){
-        return Infinity;
-    }
-    return Math.sqrt(
-        Math.pow(parseFloat(point1[0]) - parseFloat(point2[0]), 2) + 
-        Math.pow(parseFloat(point1[1]) - parseFloat(point2[1]), 2) + 
-        Math.pow(parseFloat(point1[2]) - parseFloat(point2[2]), 2)
-    );
 }
