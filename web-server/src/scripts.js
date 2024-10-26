@@ -18,17 +18,18 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
     meters: 0
   };
 
-  splitData = {
+  SplitInfoReset = {
     bestSplits: [],
     sessionSplits: [],
     splits: [],
-    startMeters: 0,
-    splitTry: 0,
+    startMeters: Infinity,
+    splitTry: 25,
+    dirty: false,
   }
+  SplitInfo = structuredClone(SplitInfoReset);
 
-  lastTime = -1;
+  LapNumber = -1;
 
-  SplitInfo = SplitInfoReset;
 
   // Define temperature range (adjust as needed)
   const coldTemperature = 180;
@@ -97,7 +98,8 @@ function set_default() {
     setTimeout(() => {
       updateDistance(OdometerInfo.meters)
     }, 250);
-    SplitInfo = SplitInfoReset;
+    SplitInfo = structuredClone(SplitInfoReset);
+    LapNumber = -1;
   }
 }
 
@@ -150,11 +152,23 @@ async function set_display() {
 
   getOdometer(data[0]["CarOrdinal"])
   updateDistance(OdometerInfo.meters)
-  getSplit(data[0]["CarOrdinal"], data[0]["TrackLocation"])
+  getSplit(data[0]["CarOrdinal"], data[0]["TrackOrdinal"])
 
-  if(data[2]["LastLap"] != lastTime){
-    SplitInfo.startMeters = data[2]["DistanceTraveled"];
+  if(data[3]["LapNumber"] == LapNumber+1){
+    LapNumber = data[3]["LapNumber"];
+    if((LapNumber == 0 && data[2]["DistanceTraveled"] < 100) || LapNumber > 0){
+      SplitInfo.startMeters = data[2]["DistanceTraveled"];
+      SplitInfo.dirty = false;
+    }
     configureLapTime(data[0]["CarOrdinal"], data[0]["TrackOrdinal"], data[2]["CurrentLap"], data[2]["LastLap"], data[2]["BestLap"]);
+  }
+  else if(data[2]["DistanceTraveled"] < 0){
+    LapNumber = data[3]["LapNumber"];
+    SplitInfo.startMeters = 0;
+    SplitInfo.dirty = false;
+  }
+  else {
+    LapNumber = data[3]["LapNumber"];
   }
 
   updateSplit(data[2]["DistanceTraveled"], data[2]["CurrentLap"]);
@@ -421,21 +435,33 @@ function updateLaunchControl(speed){
   }
 }
 
-const splitDistance = 100;
+const splitDistance = 50;
 function updateSplit(distance, time){
-  traveled = distance - splitData.startMeters;
-  if(distance == 0 || traveled < splitDistance){
+  traveled = distance - SplitInfo.startMeters;
+  if(distance == 0){
     document.getElementById("split").style.display = "none"
     return;
   }
-  
-  let index = Math.floor(traveled / 100) - 1;
-  if(index == -1 || index <= splitData.splits.length){
+  let index = Math.floor(traveled / splitDistance) - 1;
+  if(index < 0){
+    if(index < -1){
+      document.getElementById("split").style.display = "none"
+    }
+    
+    SplitInfo.splits = [];
+    return;
+  }
+  else if(index < SplitInfo.splits.length){
+    SplitInfo.dirty = true;
+    SplitInfo.splits[index] = time;
     return;
   } 
-  else if(index == splitData.splits.length){
+  else if(index == SplitInfo.splits.length){
     SplitInfo.splits.push(time);
-    console.log(time)
+  }
+  else {
+    console.log("Error: Split index out of range")
+    return;
   }
 
   bestIndex = -1;
@@ -450,33 +476,37 @@ function updateSplit(distance, time){
   }
 
   timeSplit = SplitInfo.splits[index] - SplitInfo.bestSplits[bestIndex];
+  let ShowMinutes = (timeSplit > 60 || timeSplit < -60) ? true :  false;
 
   if(timeSplit < 0){
     document.getElementById("split").style.color = "green"
-    document.getElementById("split").textContent = "- " + formatTime(-1*timeSplit)
+    document.getElementById("split").textContent = "-" + formatTime(-1*timeSplit, ShowMinutes)
   }
   else {
     document.getElementById("split").style.color = "red"
-    document.getElementById("split").textContent = "+ " + formatTime(timeSplit)
+    document.getElementById("split").textContent = "+" + formatTime(timeSplit, ShowMinutes)
   }
-  document.getElementById("split").style.display = "block"
+  document.getElementById("split").style.display = "contents"
 
 }
 
 function configureLapTime(car, track, current, last, best){
-  if(current < .5 && last > 0 && SplitInfo.currentLap.length > 1){
+  if(SplitInfo.splits.length > 1 && !SplitInfo.dirty){
       if(last == best) {
-        SplitInfo.currentLap.push(last)
+        SplitInfo.splits.push(last)
         SplitInfo.sessionSplits = SplitInfo.splits;
         // setSplit(car, track);
         
-        if(SplitInfo.bestSplits.length == 0 || best < SplitInfo.bestSplits[SplitInto.bestSplits-1]){
+        if(SplitInfo.bestSplits.length == 0 || best < SplitInfo.bestSplits[SplitInfo.bestSplits.length-1]){
           SplitInfo.bestSplits = SplitInfo.splits;
           setSplit(car, track);
         }
+        if(SplitInfo.sessionSplits.length == 0 || best < SplitInfo.sessionSplits[SplitInfo.sessionSplits.length-1]){
+          SplitInfo.sessionSplits = SplitInfo.splits;
+        }
       }
     }
-    SplitInfo.currentLap = [];
+    SplitInfo.splits = [];
 }
 
 function configureRPM(_maxRPM) {
@@ -529,17 +559,21 @@ function configureRPM(_maxRPM) {
 }
 
 // HELPERS
-function formatTime(floatSeconds) {
+function formatTime(floatSeconds, showMinutes = true) {
   // Convert float seconds to integer milliseconds
+  var formatTime = "";
   var totalMilliseconds = Math.floor(floatSeconds * 1000);
 
   // Calculate minutes, seconds, and milliseconds
-  var minutes = Math.floor(totalMilliseconds / (60 * 1000));
+  if(showMinutes) {
+    var minutes = Math.floor(totalMilliseconds / (60 * 1000));
+    formatTime = padWithZero(minutes) + ":";
+  }
   var seconds = Math.floor((totalMilliseconds % (60 * 1000)) / 1000);
   var milliseconds = Math.floor((totalMilliseconds % 1000) / 10); // Truncate milliseconds to two digits
 
   // Format the time
-  var formattedTime = padWithZero(minutes) + ":" + padWithZero(seconds) + ":" + padWithZero(milliseconds);
+  var formattedTime = formatTime + padWithZero(seconds) + ":" + padWithZero(milliseconds);
 
   return formattedTime;
 }
@@ -647,7 +681,7 @@ function newTrack(trackID){
 }
 
 function setSplit(carID, trackID){
-  if(!SplitInfo.coords.length < 3){
+  if(SplitInfo.splits.length < 3){
     return;
   }
 
@@ -656,7 +690,7 @@ function setSplit(carID, trackID){
       headers: {
           'Content-Type': 'application/json'
       },
-      body: JSON.stringify({type: "set", carID: carID, trackID: trackID, splits: SplitInfo.times})
+      body: JSON.stringify({type: "set", carID: carID, trackID: trackID, splits: SplitInfo.bestSplits})
   })
   .then(response => {
       if (response.ok) {
@@ -672,8 +706,11 @@ function setSplit(carID, trackID){
 
 function getSplit(carID, trackID){
   SplitInfo.splitTry++;
-  if(SplitInfo.bestSplits != [] || SplitInfo.splitTry > 5){
+  if(SplitInfo.bestSplits.length != 0 || SplitInfo.splitTry < 25){
     return;
+  }
+  else {
+    SplitInfo.splitTry = 0;
   }
 
   fetch("/Split", {
@@ -690,14 +727,11 @@ function getSplit(carID, trackID){
   })
   .then(data => {
     if(data != null){
-      if(data.coords == null){
-        SplitInfo.bestSplits = null;
+      if(data.splits == null){
+        SplitInfo.bestSplits = [];
       }
       else{
         SplitInfo.bestSplits = data.splits;
-        if(SplitInfo.bestSplits.length > 0){
-          SplitInfo.splitTry = 0;
-        }
       }
     }
   })

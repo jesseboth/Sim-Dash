@@ -3,13 +3,15 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const { spawn } = require('child_process');
-const port = 3001; // This is the port for the Express server
+const port = 3000; // This is the port for the Express server
 
 telemetry = null;
 telemetryType = ""
 const options = {
     cwd: '../telemetry/', // Set the working directory
 };
+
+let newSplit = Date.now();
 
 dash="/forza-dash";
 
@@ -133,41 +135,21 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 retJson = {
-                    coords: null,
-                    times: null,
+                    splits: null,
                 }
 
                 const data = JSON.parse(body);
                 if(data.type == "get"){
                     splits = getCarSplits(data.carID, data.trackID)
-                    retJson.times = splits;
+                    retJson.splits = splits;
                 }
                 else if(data.type == "set"){
                     if(Date.now() - newSplit > 10000){
                         newSplit = Date.now();
-                        console.log("New split", data.times)
-                        setCarSplits(data.carID, data.trackID, data.times)
+                        setCarSplits(data.carID, data.trackID, data.splits)
                     }
                 }
 
-
-                    
-
-                    //     const d = calculateDistance(data.coords, splitData.splitCoords[splitData.i])
-                    //     console.log("d: ", d)
-                    //     if(d <= 10){
-                    //         splitData.currentSplit = data.time - splitData.splitTimes[splitData.i]
-                    //         console.log(splitData.currentSplit)
-                    //         splitData.i += 1
-                    //     }
-                        
-                    //     if(data.time > splitData.bestLap){
-                    //         splitData.bestLap = data.time;
-                    //     }
-                        
-                    //     retJson.split = splitData.currentSplit;
-                    // }
-                
                 res.writeHead(200, { 'Content-Type': 'text/plain' });
                 res.end(JSON.stringify(retJson));
 
@@ -421,9 +403,10 @@ function resetOdometer(){
 */
 function getCarSplits(carNumber, trackID){
     try {
-        const data = fs.readFileSync('data/splits.json', 'utf8');
-        data = JSON.parse(data)[carNumber+":"+trackID];
+        const file = fs.readFileSync('data/splits.json', 'utf8');
+        data = JSON.parse(file)[carNumber+":"+trackID];
     } catch (err) {
+        console.error(err)
         data = null;
     }
     return data;
@@ -440,7 +423,6 @@ function setCarSplits(carNumber, trackID, times){
 
         // Write the updated data back to the file
         fs.writeFileSync('data/splits.json', JSON.stringify(jsonData, null, 2));
-        console.log("Splits saved successfully.");
     } catch (err) {
         console.error("Error writing splits:", err);
     }
