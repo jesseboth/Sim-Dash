@@ -23,8 +23,7 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
     sessionSplits: [],
     splits: [],
     startMeters: Infinity,
-    splitTry: 25,
-    dirty: false,
+    splitTry: 25
   }
   SplitInfo = structuredClone(SplitInfoReset);
 
@@ -158,14 +157,13 @@ async function set_display() {
     LapNumber = data[3]["LapNumber"];
     if((LapNumber == 0 && data[2]["DistanceTraveled"] < 100) || LapNumber > 0){
       SplitInfo.startMeters = data[2]["DistanceTraveled"];
-      SplitInfo.dirty = false;
     }
+ 
     configureLapTime(data[0]["CarOrdinal"], data[0]["TrackOrdinal"], data[2]["CurrentLap"], data[2]["LastLap"], data[2]["BestLap"]);
   }
   else if(data[2]["DistanceTraveled"] < 0){
     LapNumber = data[3]["LapNumber"];
     SplitInfo.startMeters = 0;
-    SplitInfo.dirty = false;
   }
   else {
     LapNumber = data[3]["LapNumber"];
@@ -451,9 +449,11 @@ function updateSplit(distance, time){
     SplitInfo.splits = [];
     return;
   }
+  else if(index+1 < SplitInfo.splits.length){
+    SplitInfo.splits[0] = null;
+    return;
+  }
   else if(index < SplitInfo.splits.length){
-    SplitInfo.dirty = true;
-    SplitInfo.splits[index] = time;
     return;
   } 
   else if(index == SplitInfo.splits.length){
@@ -491,7 +491,7 @@ function updateSplit(distance, time){
 }
 
 function configureLapTime(car, track, current, last, best){
-  if(SplitInfo.splits.length > 1 && !SplitInfo.dirty){
+  if(SplitInfo.splits.length > 1 && SplitInfo.splits[0] != null){
       if(last == best) {
         SplitInfo.splits.push(last)
         SplitInfo.sessionSplits = SplitInfo.splits;
