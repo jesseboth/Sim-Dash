@@ -451,6 +451,8 @@ function updateSplit(distance, time){
     return;
   }
   else if(index+1 < SplitInfo.splits.length){
+    SplitInfo.splits.splice(index)
+    SplitInfo.splits[index] = time;
     SplitInfo.splits[0] = null;
     return;
   }
