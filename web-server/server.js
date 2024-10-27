@@ -338,9 +338,9 @@ function updateOdometer(){
                 return;
             }
 
-            newCarNumber = jsonData[0]["CarOrdinal"]
-            newMeters = jsonData[2]["DistanceTraveled"];
-            velocity = jsonData[2]["Speed"];
+            newCarNumber = jsonData["CarOrdinal"]
+            newMeters = jsonData["DistanceTraveled"];
+            velocity = jsonData["Speed"];
             if(newMeters == 0 && velocity > 5){
                 newMeters = OdometerInfo.meters+(velocity*.025)
             }
