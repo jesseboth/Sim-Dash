@@ -418,11 +418,18 @@ function setCarSplits(carNumber, trackID, times){
         let fileData = fs.readFileSync('data/splits.json', 'utf8');
         const jsonData = JSON.parse(fileData);
 
-        // Create or update the specific car and track data
         jsonData[`${carNumber}:${trackID}`] = times;
 
+        // Custom formatting: Write each key-value pair, ensuring arrays are single-line
+        let formattedOutput = '{\n' + 
+        Object.entries(jsonData).map(([key, value]) => {
+        // Format array values on one line
+        const arrayString = Array.isArray(value) ? `[${value.join(', ')}]` : JSON.stringify(value);
+        return `  "${key}": ${arrayString}`;
+        }).join(',\n') + '\n}';
+
         // Write the updated data back to the file
-        fs.writeFileSync('data/splits.json', JSON.stringify(jsonData, null, 2));
+        fs.writeFileSync('data/splits.json', formattedOutput);
     } catch (err) {
         console.error("Error writing splits:", err);
     }

@@ -5,8 +5,9 @@ CONTAINERNAME="${IMAGENAME}-container"
 PORTS="-p 8888:8888 -p 3000:3000 -p 9999:9999"
 
 SCRIPT_DIR=$(realpath $(dirname "$0"))
-VOLUMES="-v ${SCRIPT_DIR}/web-server/odometers.json:/usr/src/app/web-server/odometers.json"
-touch ${SCRIPT_DIR}/web-server/odometers.json
+VOLUMES="-v ${SCRIPT_DIR}/web-server/data:/usr/src/app/web-server/data"
+newJsonFile web-server/data/odometers.json
+newJsonFile web-server/data/splits.json
 
 build(){
   if ! docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINERNAME}$"; then
@@ -22,6 +23,15 @@ stop(){
 
 start() {
   docker run -d $PORTS $VOLUMES --network host --restart always --name "$CONTAINERNAME" "$IMAGENAME"
+}
+
+newJsonFile() {
+  if [ -f ${SCRIPT_DIR}/$1 ]; then
+    return
+  fi
+
+  touch ${SCRIPT_DIR}/$1
+  echo "{}" > $1
 }
 
 if [ "$1" == "help" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ]; then

@@ -92,6 +92,7 @@ function set_default() {
     updateTireWear("RL", 100)
     updateTraction(0, 0);
     updatePosition(0)
+    updateSplit(0)
     GOLF_R = 3533;
     getOdometer(GOLF_R);
     setTimeout(() => {
@@ -457,10 +458,10 @@ function updateSplit(distance, time){
     return;
   } 
   else if(index == SplitInfo.splits.length){
-    SplitInfo.splits.push(time);
+    SplitInfo.splits[index] = time;
   }
   else {
-    console.log("Error: Split index out of range")
+    console.error("Error: Split index out of range")
     return;
   }
 
@@ -475,17 +476,22 @@ function updateSplit(distance, time){
     bestIndex = SplitInfo.bestSplits.length - 1;
   }
 
+  if(SplitInfo.bestSplits[bestIndex] == null){
+    return;
+  }
+
   timeSplit = SplitInfo.splits[index] - SplitInfo.bestSplits[bestIndex];
   let ShowMinutes = (timeSplit > 60 || timeSplit < -60) ? true :  false;
 
   if(timeSplit < 0){
-    document.getElementById("split").style.color = "green"
+    document.getElementById("split").style.color = "#00c721"
     document.getElementById("split").textContent = "-" + formatTime(-1*timeSplit, ShowMinutes)
   }
   else {
-    document.getElementById("split").style.color = "red"
+    document.getElementById("split").style.color = "#c90000"
     document.getElementById("split").textContent = "+" + formatTime(timeSplit, ShowMinutes)
   }
+  document.getElementById("container-split").style.left = ShowMinutes ? "80%" : "81%"
   document.getElementById("split").style.display = "contents"
 
 }
