@@ -453,7 +453,7 @@ function updateSplit(distance, time){
   else if(index+1 < SplitInfo.splits.length){
     SplitInfo.splits.splice(index)
     SplitInfo.splits[index] = time;
-    SplitInfo.splits[0] = null;
+    SplitInfo.splits[0] = null; // invalidate the lap due to rewind
     return;
   }
   else if(index < SplitInfo.splits.length){
@@ -503,8 +503,7 @@ function configureLapTime(car, track, current, last, best){
       if(last == best) {
         SplitInfo.splits.push(last)
         SplitInfo.sessionSplits = SplitInfo.splits;
-        // setSplit(car, track);
-        
+
         if(SplitInfo.bestSplits.length == 0 || best < SplitInfo.bestSplits[SplitInfo.bestSplits.length-1]){
           SplitInfo.bestSplits = SplitInfo.splits;
           setSplit(car, track);

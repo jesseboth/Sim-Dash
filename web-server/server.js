@@ -393,14 +393,6 @@ function resetOdometer(){
     OdometerInfo.store = 0;
 }
 
-/*
-    key = carID:trackID
-    data = {
-        coords: [[x,y,z], [x,y,z]],
-        times: [time1, time2, time3],
-        best: time
-    }
-*/
 function getCarSplits(carNumber, trackID){
     try {
         const file = fs.readFileSync('data/splits.json', 'utf8');

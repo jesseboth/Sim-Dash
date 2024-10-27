@@ -5,4 +5,5 @@ fdt
 */node_modules
 web-server/odometers.json
 web-server/data/odometers.json
+web-server/data/splits.json
 
