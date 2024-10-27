@@ -17,7 +17,7 @@
 
 .content {
   position: absolute;
-  top: 10%;
+  top: 0%;
   left: 5%;
   width: 90%;
   height: 90%;
@@ -390,4 +390,18 @@ body {
   bottom: 30%;
   right: 2.5%;
   display: none;
+}
+
+#container-split {
+  height: 18;
+  width: 200px;
+  left: 81%;
+  top: 26%;
+  display: inline-flex;
+}
+
+.split {
+  font-size: 150%;
+  display: none;
+  width: 100%;
 }
