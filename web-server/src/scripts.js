@@ -118,7 +118,7 @@ async function set_display() {
   get_data(); // Wait for the data to be fetched and parsed
 
   data = telemetry
-  if (data == null || data[0]["IsRaceOn"] != 1) {
+  if (data == null || data["IsRaceOn"] != 1) {
     // wait 2 minutes to set default
     if(!defaultData && defaultTicks >= 1200){
       set_default();
@@ -136,7 +136,7 @@ async function set_display() {
   }
 
   defaultTicks = 0;
-  gear = data[4]["Gear"];
+  gear = data["Gear"];
   if(gear == 11){
     gearChangeTicks++;
   }
@@ -150,74 +150,74 @@ async function set_display() {
     updateGear(gear)
   }
 
-  getOdometer(data[0]["CarOrdinal"])
+  getOdometer(data["CarOrdinal"])
   updateDistance(OdometerInfo.meters)
-  getSplit(data[0]["CarOrdinal"], data[0]["TrackOrdinal"])
+  getSplit(data["CarOrdinal"], data["TrackOrdinal"])
 
-  if(data[3]["LapNumber"] == LapNumber+1){
-    LapNumber = data[3]["LapNumber"];
-    if((LapNumber == 0 && data[2]["DistanceTraveled"] < 100) || LapNumber > 0){
-      SplitInfo.startMeters = data[2]["DistanceTraveled"];
+  if(data["LapNumber"] == LapNumber+1){
+    LapNumber = data["LapNumber"];
+    if((LapNumber == 0 && data["DistanceTraveled"] < 100) || LapNumber > 0){
+      SplitInfo.startMeters = data["DistanceTraveled"];
     }
  
-    configureLapTime(data[0]["CarOrdinal"], data[0]["TrackOrdinal"], data[2]["CurrentLap"], data[2]["LastLap"], data[2]["BestLap"]);
+    configureLapTime(data["CarOrdinal"], data["TrackOrdinal"], data["CurrentLap"], data["LastLap"], data["BestLap"]);
   }
-  else if(data[2]["DistanceTraveled"] < 0){
-    LapNumber = data[3]["LapNumber"];
+  else if(data["DistanceTraveled"] < 0){
+    LapNumber = data["LapNumber"];
     SplitInfo.startMeters = 0;
   }
   else {
-    LapNumber = data[3]["LapNumber"];
+    LapNumber = data["LapNumber"];
   }
 
-  updateSplit(data[2]["DistanceTraveled"], data[2]["CurrentLap"]);
+  updateSplit(data["DistanceTraveled"], data["CurrentLap"]);
 
-  updateFuel(data[2]["Fuel"]*100)
-  configureRPM(data[2]["EngineMaxRpm"])
-  updateRPM(data[2]["CurrentEngineRpm"], data[2]["EngineMaxRpm"])
-  updateSpeed(mpstomph(data[2]["Speed"]))
-  if(data[2]["DistanceTraveled"] > 0){
-    updateTime("time", data[2]["CurrentLap"])
+  updateFuel(data["Fuel"]*100)
+  configureRPM(data["EngineMaxRpm"])
+  updateRPM(data["CurrentEngineRpm"], data["EngineMaxRpm"])
+  updateSpeed(mpstomph(data["Speed"]))
+  if(data["DistanceTraveled"] > 0){
+    updateTime("time", data["CurrentLap"])
   }
-  else if(data[2]["DistanceTraveled"] < 0){
+  else if(data["DistanceTraveled"] < 0){
     updateTime("time", 0);
   }
-  else if(data[2]["DistanceTraveled"] == 0){
+  else if(data["DistanceTraveled"] == 0){
     updateTime("time", null);
   }
-  checkDirtyLap(data[2]["SurfaceRumbleFrontRight"],
-                  data[2]["SurfaceRumbleFrontLeft"],
-                  data[2]["SurfaceRumbleRearRight"],
-                  data[2]["SurfaceRumbleRearLeft"],
-                  data[2]["CurrentLap"])
+  checkDirtyLap(data["SurfaceRumbleFrontRight"],
+                  data["SurfaceRumbleFrontLeft"],
+                  data["SurfaceRumbleRearRight"],
+                  data["SurfaceRumbleRearLeft"],
+                  data["CurrentLap"])
 
   updateDirtyLap(dirty);
 
-  if(data[2]["BestLap"] == 0 && data[2]["Speed"] < .01 && data[2]["CurrentEngineRpm"] > 2100 && 
-      (data[4]["Clutch"] == 255 || data[4]["HandBrake"] == 255 || data[4]["Accel"] > 128)){
+  if(data["BestLap"] == 0 && data["Speed"] < .01 && data["CurrentEngineRpm"] > 2100 && 
+      (data["Clutch"] == 255 || data["HandBrake"] == 255 || data["Accel"] > 128)){
     launchControl = true;
   }
-  else if(launchControl && data[2]["CurrentEngineRpm"] - 10 < data[2]["EngineIdleRpm"]){
+  else if(launchControl && data["CurrentEngineRpm"] - 10 < data["EngineIdleRpm"]){
     launchControl = false;
   }
 
   if(launchControl){
-    updateLaunchControl(mpstomph(data[2]["Speed"]))
+    updateLaunchControl(mpstomph(data["Speed"]))
   } else {
-    updateTime("best-time", data[2]["BestLap"])
+    updateTime("best-time", data["BestLap"])
   }
-  updateTireTemp("FR", data[2]["TireTempFrontRight"])
-  updateTireTemp("FL", data[2]["TireTempFrontLeft"])
-  updateTireTemp("RR", data[2]["TireTempRearRight"])
-  updateTireTemp("RL", data[2]["TireTempRearLeft"])
-  updatePosition(data[4]["RacePosition"])
-  updateTraction(data[2]["TireCombinedSlipFrontRight"] + data[2]["TireCombinedSlipFrontLeft"], 
-                  data[2]["TireCombinedSlipRearRight"] + data[2]["TireCombinedSlipRearLeft"])
-  if(data[2].hasOwnProperty("TireWearFrontRight")){
-    updateTireWear("FR", 100*(1-data[2]["TireWearFrontRight"]))
-    updateTireWear("FL", 100*(1-data[2]["TireWearFrontLeft"]))
-    updateTireWear("RR", 100*(1-data[2]["TireWearRearRight"]))
-    updateTireWear("RL", 100*(1-data[2]["TireWearRearLeft"]))
+  updateTireTemp("FR", data["TireTempFrontRight"])
+  updateTireTemp("FL", data["TireTempFrontLeft"])
+  updateTireTemp("RR", data["TireTempRearRight"])
+  updateTireTemp("RL", data["TireTempRearLeft"])
+  updatePosition(data["RacePosition"])
+  updateTraction(data["TireCombinedSlipFrontRight"] + data["TireCombinedSlipFrontLeft"], 
+                  data["TireCombinedSlipRearRight"] + data["TireCombinedSlipRearLeft"])
+  if(data.hasOwnProperty("TireWearFrontRight")){
+    updateTireWear("FR", 100*(1-data["TireWearFrontRight"]))
+    updateTireWear("FL", 100*(1-data["TireWearFrontLeft"]))
+    updateTireWear("RR", 100*(1-data["TireWearRearRight"]))
+    updateTireWear("RL", 100*(1-data["TireWearRearLeft"]))
   }
   else{
     updateTireWear("FR", null);

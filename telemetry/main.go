@@ -84,63 +84,43 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry) {
 	}
 
 	if isFlagPassed("d") == true {
-		totalSlipRear := int(f32map["TireCombinedSlipRearLeft"] + f32map["TireCombinedSlipRearRight"])
-		totalSlipFront := int(f32map["TireCombinedSlipFrontLeft"] + f32map["TireCombinedSlipFrontRight"])
-		carAttitude := CheckAttitude(totalSlipFront, totalSlipRear)
 
-		log.Printf("RPM: %.0f \t Gear: %d \t BHP: %.0f \t Speed: %.0f \t Total slip: %.0f \t Attitude: %s", f32map["CurrentEngineRpm"], u8map["Gear"], (f32map["Power"] / 745.7), (f32map["Speed"] * 2.237), (f32map["TireCombinedSlipRearLeft"] + f32map["TireCombinedSlipRearRight"]), carAttitude)
-
-		log.Printf("TireSlipRatioFrontLeft: %.0f TireSlipRatioFrontRight %.0f", f32map["TireSlipRatioFrontLeft"], f32map["TireSlipRatioFrontRight"])
-		log.Printf("TireSlipAngleFrontLeft: %.0f TireSlipAngleFrontRight %.0f", f32map["TireSlipAngleFrontLeft"], f32map["TireSlipAngleFrontRight"])
-		log.Printf("TireCombinedSlipFrontLeft: %.0f TireCombinedSlipFrontRight %.0f", f32map["TireCombinedSlipFrontLeft"], f32map["TireCombinedSlipFrontRight"])
-
-		log.Printf("TireSlipRatioRearLeft: %.0f TireSlipRatioRearRight %.0f", f32map["TireSlipRatioRearLeft"], f32map["TireSlipRatioRearRight"])
-		log.Printf("TireSlipAngleRearLeft: %.0f TireSlipAngleRearRight %.0f", f32map["TireSlipAngleRearLeft"], f32map["TireSlipAngleRearRight"])
-		log.Printf("TireCombinedSlipRearLeft: %.0f TireCombinedSlipRearRight %.0f", f32map["TireCombinedSlipRearLeft"], f32map["TireCombinedSlipRearRight"])
-
-		log.Printf("AccelerationX: %.0f", f32map["AccelerationX"])
-		log.Printf("AccelerationZ: %.0f", f32map["AccelerationZ"])
+		log.Printf("RPM: %.0f \t Gear: %d \t BHP: %.0f \t Speed: %.0f \t Total slip: %.0f \t Attitude: %s", f32map["CurrentEngineRpm"], u8map["Gear"], (f32map["Power"] / 745.7), (f32map["Speed"] * 2.237))
 		log.Printf("DistanceTraveled: %.0f", f32map["DistanceTraveled"])
-
-		if (totalSlipRear+totalSlipFront) > 2 && carAttitude == "Oversteer" { // Basic traction control detection testing where we allow slip up to a certain amount
-			log.Printf("TRACTION LOST!")
-		}
 	}
 
 	if isFlagPassed("j") == true {
-		var jsonArray [][]byte
-
-		s32json, _ := json.Marshal(s32map)
-		jsonArray = append(jsonArray, s32json)
-
-		u32json, _ := json.Marshal(u32map)
-		jsonArray = append(jsonArray, u32json)
-
-		f32json, _ := json.Marshal(f32map)
-		jsonArray = append(jsonArray, f32json)
-
-		u16json, _ := json.Marshal(u16map)
-		jsonArray = append(jsonArray, u16json)
-
-		u8json, _ := json.Marshal(u8map)
-		jsonArray = append(jsonArray, u8json)
-
-		s8json, _ := json.Marshal(s8map)
-		jsonArray = append(jsonArray, s8json)
-
-		var jd []string
-		for i, j := range jsonArray {
-			if i == 0 {
-				jd = append(jd, string(j))
-			} else {
-				jd = append(jd, ", "+string(j))
-			}
-
+		// Create a single map to hold all combined data
+		combinedMap := make(map[string]interface{})
+	
+		// Add each original map's contents to the combined map
+		for k, v := range s32map {
+			combinedMap[k] = v
 		}
-
-		jsonData = fmt.Sprintf("%s", jd)
-
-	} 
+		for k, v := range u32map {
+			combinedMap[k] = v
+		}
+		for k, v := range f32map {
+			combinedMap[k] = v
+		}
+		for k, v := range u16map {
+			combinedMap[k] = v
+		}
+		for k, v := range u8map {
+			combinedMap[k] = v
+		}
+		for k, v := range s8map {
+			combinedMap[k] = v
+		}
+	
+		// Marshal the combined map into a single JSON object
+		finalJSON, err := json.Marshal(combinedMap)
+		if err != nil {
+			log.Fatalf("Error marshalling combined JSON: %v", err)
+		}
+	
+		jsonData = fmt.Sprintf("%s", finalJSON)
+	}
 }
 
 func main() {
