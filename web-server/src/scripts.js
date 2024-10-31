@@ -155,7 +155,7 @@ async function set_display() {
 
   getOdometer(data["CarOrdinal"])
   updateDistance(OdometerInfo.meters)
-  getSplit(data["CarOrdinal"], data["TrackOrdinal"])
+  getSplit(data["CarClass"], data["CarOrdinal"], data["TrackOrdinal"])
 
   if(data["LapNumber"] == LapNumber+1){
     LapNumber = data["LapNumber"];
@@ -163,7 +163,7 @@ async function set_display() {
       SplitInfo.startMeters = data["DistanceTraveled"];
     }
  
-    configureLapTime(data["CarOrdinal"], data["TrackOrdinal"], data["CurrentLap"], data["LastLap"], data["BestLap"]);
+    configureLapTime(data["CarOrdinal"], data["TrackOrdinal"], data["CarClass"], data["CurrentLap"], data["LastLap"], data["BestLap"]);
   }
   else if(data["DistanceTraveled"] < 0){
     LapNumber = data["LapNumber"];
@@ -525,7 +525,7 @@ function updateSplit(distance, time){
   showSplit(index, bestIndex);
 }
 
-function configureLapTime(car, track, current, last, best){
+function configureLapTime(car, track, carClass, current, last, best){
   if(SplitInfo.splits.length > 1 ) {
     SplitInfo.splits.push(last.toFixed(3));
       showSplit(SplitInfo.splits.length-1, SplitInfo.bestSplits.length-1);
@@ -534,7 +534,7 @@ function configureLapTime(car, track, current, last, best){
         if(SplitInfo.bestSplits.length == 0 || best < SplitInfo.bestSplits[SplitInfo.bestSplits.length-1]){
           SplitInfo.bestSplits = SplitInfo.splits;
           SplitInfo.sessionSplits = SplitInfo.splits;
-          setSplit(car, track);
+          setSplit(car, track, carClass);
         }
         if(SplitInfo.sessionSplits.length == 0 || best < SplitInfo.sessionSplits[SplitInfo.sessionSplits.length-1]){
           SplitInfo.sessionSplits = SplitInfo.splits;
@@ -715,7 +715,7 @@ function newTrack(trackID){
   });
 }
 
-function setSplit(carID, trackID){
+function setSplit(carID, trackID, Class){
   if(SplitInfo.splits.length < 3){
     return;
   }
@@ -725,7 +725,7 @@ function setSplit(carID, trackID){
       headers: {
           'Content-Type': 'application/json'
       },
-      body: JSON.stringify({type: "set", carID: carID, trackID: trackID, splits: SplitInfo.bestSplits})
+      body: JSON.stringify({type: "set", carID: carID, trackID: trackID, carClass: Class, splits: SplitInfo.bestSplits})
   })
   .then(response => {
       if (response.ok) {
@@ -739,7 +739,7 @@ function setSplit(carID, trackID){
   });
 }
 
-function getSplit(carID, trackID){
+function getSplit(Class, carID, trackID){
   SplitInfo.splitTry++;
   if(SplitInfo.bestSplits.length != 0 || SplitInfo.splitTry < 25){
     return;
@@ -753,7 +753,7 @@ function getSplit(carID, trackID){
       headers: {
           'Content-Type': 'application/json'
       },
-      body: JSON.stringify({type: "get", carID: carID, trackID: trackID})
+      body: JSON.stringify({type: "get", carID: carID, trackID: trackID, carClass: Class})
   })
   .then(response => {
       if (response.ok) {

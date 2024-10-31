@@ -140,13 +140,13 @@ const server = http.createServer((req, res) => {
 
                 const data = JSON.parse(body);
                 if(data.type == "get"){
-                    splits = getCarSplits(data.carID, data.trackID)
+                    splits = getCarSplits(data.carClass, data.carID, data.trackID)
                     retJson.splits = splits;
                 }
                 else if(data.type == "set"){
                     if(Date.now() - newSplit > 10000){
                         newSplit = Date.now();
-                        setCarSplits(data.carID, data.trackID, data.splits)
+                        setCarSplits(data.carClass, data.carID, data.trackID, data.splits)
                     }
                 }
 
@@ -393,10 +393,10 @@ function resetOdometer(){
     OdometerInfo.store = 0;
 }
 
-function getCarSplits(carNumber, trackID){
+function getCarSplits(Class, carNumber, trackID){
     try {
         const file = fs.readFileSync('data/splits.json', 'utf8');
-        data = JSON.parse(file)[carNumber+":"+trackID];
+        data = JSON.parse(file)[Class+":"+carNumber+":"+trackID];
     } catch (err) {
         console.error(err)
         data = null;
@@ -404,13 +404,13 @@ function getCarSplits(carNumber, trackID){
     return data;
 }
 
-function setCarSplits(carNumber, trackID, times){
+function setCarSplits(Class, carNumber, trackID, times){
     try {
         // Read and parse the existing data
         let fileData = fs.readFileSync('data/splits.json', 'utf8');
         const jsonData = JSON.parse(fileData);
 
-        jsonData[`${carNumber}:${trackID}`] = times;
+        jsonData[`${Class}:${carNumber}:${trackID}`] = times;
 
         // Custom formatting: Write each key-value pair, ensuring arrays are single-line
         let formattedOutput = '{\n' + 
