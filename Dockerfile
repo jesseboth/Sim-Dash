@@ -18,6 +18,8 @@ RUN wget -O go.tgz https://golang.org/dl/go1.17.7.linux-amd64.tar.gz && \
 ENV PATH="$PATH:/usr/local/go/bin"
 ENV GOPATH="/go"
 ENV GOBIN="/go/bin"
+
+# TODO: go get -u github.com/lib/pq
 # Navigate to the telemetry directory and run the build script
 WORKDIR /usr/src/app/telemetry
 RUN ./build
