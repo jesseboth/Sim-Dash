@@ -15,8 +15,8 @@ import (
     "syscall"
 
     "encoding/json"
-    "database/sql"
-    _ "github.com/lib/pq" // PostgreSQL driver
+    "io/ioutil"
+    "path/filepath"
 )
 
 const hostname = "0.0.0.0"            // Address to listen on (0.0.0.0 = all interfaces)
@@ -24,6 +24,7 @@ const port = "9999"                   // UDP Port number to listen on
 const service = hostname + ":" + port // Combined hostname+port
 
 var jsonData string // Stores the JSON data to be sent out via the web server if enabled
+var SelectedGame string
 
 // Telemetry struct represents a piece of telemetry as defined in the Forza data format (see the .dat files)
 type Telemetry struct {
@@ -34,11 +35,6 @@ type Telemetry struct {
     endOffset   int
 }
 
-type Split struct {
-    SplitTime      float32 // Time as a float in seconds, e.g., 15.123
-    SplitIndex     int
-}
-
 type CarDescription struct {
     CarNumber     int
     TrackNumber   int
@@ -47,9 +43,9 @@ type CarDescription struct {
 
 type TimingData struct {
     Car           CarDescription
-    TimingSplits  []Split // Current lap splits
-    BestSplits    []Split // Best splits for comparison
-    SessionSplits []Split // Best splits for the current session
+    TimingSplits  []float32 // Current lap splits
+    BestSplits    []float32 // Best splits for comparison
+    SessionSplits []float32 // Best splits for the current session
 
     startMeters   float32
 }
@@ -57,11 +53,10 @@ type TimingData struct {
 var timingData TimingData
 const splitDistance float32 = 12.0  // Distance per split, adjust as necessary
 
-var g_db *sql.DB;
 const maxFloat = 9999999999.0
 
 // readForzaData processes recieved UDP packets
-func readForzaData(conn *net.UDPConn, telemArray []Telemetry, game string) {
+func readForzaData(conn *net.UDPConn, telemArray []Telemetry) {
     buffer := make([]byte, 1500)
 
     n, addr, err := conn.ReadFromUDP(buffer)
@@ -118,8 +113,8 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, game string) {
     }
 
     timingData.Car.CarNumber = int(s32map["CarOrdinal"])
-    if(strings.HasPrefix(game, "FM")) {
-        timingData.Car.TrackNumber = int(s32map["TrackOridnal"])
+    if(strings.HasPrefix(SelectedGame, "FM")) {
+        timingData.Car.TrackNumber = int(s32map["TrackOrdinal"])
     } else {
         timingData.Car.TrackNumber = -1
     }
@@ -165,87 +160,64 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, game string) {
     }
 }
 
-func storeTimingData(data TimingData) error {
-    if g_db == nil {
-        return fmt.Errorf("database connection is not initialized")
+
+func setTimingSplits(data TimingData) error {
+    if(!strings.HasPrefix(SelectedGame, "FM")) {
+        fmt.Errorf("Storing splits not allowed for game")
+        return nil
     }
 
-    tx, err := g_db.Begin()
+    // Create the directory path based on car class, car number, and track number
+    dirPath := fmt.Sprintf("data/splits/%d/%d/%d", data.Car.CarClass, data.Car.CarNumber, data.Car.TrackNumber)
+
+    // Create the directories (including parent directories if needed)
+    err := os.MkdirAll(dirPath, 0755)
     if err != nil {
-        return err
+        return fmt.Errorf("failed to create directory: %v", err)
     }
-    defer tx.Rollback()
 
-    var carID, trackID int
+    // Create the full path for the JSON file
+    filePath := filepath.Join(dirPath, "splits.json")
 
-    // Insert or update car and track based on CarDescription details
-    err = tx.QueryRow(`INSERT INTO cars (car_number) VALUES ($1)
-                       ON CONFLICT (car_number) DO UPDATE SET car_number = EXCLUDED.car_number
-                       RETURNING car_id`, data.Car.CarNumber).Scan(&carID)
+    // Open the file for writing (create or truncate if it already exists)
+    file, err := os.Create(filePath)
     if err != nil {
-        return err
+        return fmt.Errorf("failed to create JSON file: %v", err)
     }
+    defer file.Close()
 
-    err = tx.QueryRow(`INSERT INTO tracks (track_number) VALUES ($1)
-                       ON CONFLICT (track_number) DO UPDATE SET track_number = EXCLUDED.track_number
-                       RETURNING track_id`, data.Car.TrackNumber).Scan(&trackID)
+    // Encode TimingSplits to JSON and write to the file
+    encoder := json.NewEncoder(file)
+    encoder.SetIndent("", "  ") // Pretty-print JSON with indentation
+    err = encoder.Encode(data.TimingSplits)
     if err != nil {
-        return err
+        return fmt.Errorf("failed to write JSON data: %v", err)
     }
 
-    // Delete existing timing splits for this car, track, and car class
-    _, err = tx.Exec(`DELETE FROM timing_splits WHERE car_id = $1 AND track_id = $2 AND car_class = $3`,
-        carID, trackID, data.Car.CarClass)
-    if err != nil {
-        return err
-    }
-
-    // Insert new timing splits
-    for _, split := range data.TimingSplits {
-        _, err = tx.Exec(`INSERT INTO timing_splits (car_id, track_id, car_class, split_time, split_index)
-                          VALUES ($1, $2, $3, $4, $5)
-                          ON CONFLICT (car_id, track_id, car_class, split_index) DO UPDATE
-                          SET split_time = EXCLUDED.split_time`,
-            carID, trackID, data.Car.CarClass, split.SplitTime, split.SplitIndex)
-        if err != nil {
-            return err
-        }
-    }
-
-    return tx.Commit()
+    fmt.Printf("Timing data successfully written to %s\n", filePath)
+    return nil
 }
 
-func getTimingSplits(car CarDescription) ([]Split, error) {
-    if g_db == nil {
-        return nil, fmt.Errorf("database connection is not initialized")
+func getTimingSplits(car CarDescription) ([]float32, error) {
+    // Construct the path to the JSON file
+    filePath := filepath.Join("data", "splits", fmt.Sprintf("%d", car.CarClass), fmt.Sprintf("%d", car.CarNumber), fmt.Sprintf("%d", car.TrackNumber), "splits.json")
+
+    // Check if the file exists
+    if _, err := os.Stat(filePath); os.IsNotExist(err) {
+        return nil, fmt.Errorf("file %s does not exist", filePath)
     }
 
-    query := `
-        SELECT ts.split_time, ts.split_index
-        FROM timing_splits ts
-        JOIN cars c ON ts.car_id = c.car_id
-        JOIN tracks t ON ts.track_id = t.track_id
-        WHERE c.car_number = $1 AND t.track_number = $2 AND ts.car_class = $3
-        ORDER BY ts.split_index;
-    `
-
-    rows, err := g_db.Query(query, car.CarNumber, car.TrackNumber, car.CarClass)
+    // Read the file contents
+    fileData, err := ioutil.ReadFile(filePath)
     if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
-
-    var splits []Split
-    for rows.Next() {
-        var split Split
-        if err := rows.Scan(&split.SplitTime, &split.SplitIndex); err != nil {
-            return nil, err
-        }
-        splits = append(splits, split)
+        return nil, fmt.Errorf("failed to read file: %v", err)
     }
 
-    if err := rows.Err(); err != nil {
-        return nil, err
+    // Decode the JSON data into a []float32
+    var splits []float32
+    err = json.Unmarshal(fileData, &splits)
+    if err != nil {
+        return nil, fmt.Errorf("failed to decode JSON data: %v", err)
     }
 
     return splits, nil
@@ -257,15 +229,15 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
     // Round time to 2 decimal places
     time = float32(math.Round(float64(time*100)) / 100)
 
-    // skip lap handling if distance is negative
-    if(distance < 0) {
+    // Skip lap handling if distance is negative
+    if distance < 0 {
         g_lap = -1
         return maxFloat
     }
 
     // Check if a new lap should be configured (distance reset to zero)
     if g_lap < int(lap) {
-        g_lap = int(lap);
+        g_lap = int(lap)
         g_valid = true
 
         if time > .2 {
@@ -274,46 +246,41 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
         }
 
         if g_lap == 0 {
-            // Reset timing data for new session
-            timingData.BestSplits = []Split{}
-            timingData.SessionSplits = []Split{}
+            // Reset timing data for a new session
+            timingData.BestSplits = []float32{}
+            timingData.SessionSplits = []float32{}
 
-            // get lap splits from database
-            var err error;
+            // Get lap splits from storage
+            var err error
             timingData.BestSplits, err = getTimingSplits(timingData.Car)
-            if(err != nil) {
-                println("Error getting timing splits: ", err)
+            if err != nil {
+                fmt.Println("Error getting timing splits:", err)
             }
         }
 
         if len(timingData.TimingSplits) > 1 {
-            timingData.TimingSplits = append(timingData.TimingSplits, Split{
-                SplitTime: float32(math.Round(float64(last*1000)) / 1000),
-                SplitIndex: len(timingData.TimingSplits),
-            })
+            timingData.TimingSplits = append(timingData.TimingSplits, float32(math.Round(float64(last*1000)) / 1000))
 
             // Update best and session splits if last time matches best
-            if timingData.TimingSplits[0].SplitTime != -1 && last == best {
-                if len(timingData.BestSplits) == 0 || best < timingData.BestSplits[len(timingData.BestSplits)-1].SplitTime {
-                    timingData.BestSplits = append([]Split(nil), timingData.TimingSplits...) // Copy splits to BestSplits
-                    println("Best lap time: ", timingData.BestSplits[len(timingData.BestSplits)-1].SplitTime )
-                    if(timingData.Car.TrackNumber != -1) {
-                        err := storeTimingData(*timingData)
-                        if(err != nil) {
-                            println("Error storing timing data: ", err)
+            if timingData.TimingSplits[0] != -1 && last > 0 && last == best {
+                if len(timingData.BestSplits) == 0 || best < timingData.BestSplits[len(timingData.BestSplits)-1] {
+                    timingData.BestSplits = append([]float32(nil), timingData.TimingSplits...) // Copy splits to BestSplits
+                    if timingData.Car.TrackNumber != -1 {
+                        err := setTimingSplits(*timingData)
+                        if err != nil {
+                            fmt.Println("Error storing timing data:", err)
                         }
                     }
                 }
 
-                if len(timingData.SessionSplits) == 0 || best < timingData.SessionSplits[len(timingData.SessionSplits)-1].SplitTime {
-                    timingData.SessionSplits = append([]Split(nil), timingData.TimingSplits...); // Copy splits to SessionSplits
+                if len(timingData.SessionSplits) == 0 || best < timingData.SessionSplits[len(timingData.SessionSplits)-1] {
+                    timingData.SessionSplits = append([]float32(nil), timingData.TimingSplits...) // Copy splits to SessionSplits
                 }
             }
         }
         // Reset current lap splits for the next lap
-        timingData.TimingSplits = []Split{};
-        timingData.startMeters = distance;
-        println("timeData.startMeters: ", timingData.startMeters)
+        timingData.TimingSplits = []float32{}
+        timingData.startMeters = distance
     }
 
     if !g_valid {
@@ -327,18 +294,18 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
     if index < 0 {
         return maxFloat
     } else if index+1 < len(timingData.TimingSplits) {
-        timingData.TimingSplits[index] = Split{SplitTime: time, SplitIndex: index}
+        timingData.TimingSplits = timingData.TimingSplits[:index]
+        timingData.TimingSplits = append(timingData.TimingSplits, time)
 
-        // Invalidate lap if rewounnd to previous split
-        if len(timingData.TimingSplits) > 0 {
-            timingData.TimingSplits[0].SplitTime = -1
-        }
+        // Invalidate lap if rewound to previous split
+        timingData.TimingSplits[0] = -1
     } else if index == len(timingData.TimingSplits) {
         // Add a new split in sequence
-        timingData.TimingSplits = append(timingData.TimingSplits, Split{SplitTime: time, SplitIndex: index})
+        timingData.TimingSplits = append(timingData.TimingSplits, time)
     } else if index < len(timingData.TimingSplits) {
+        // Do nothing if the index is within range but not needing updates
     } else {
-        fmt.Println("Error: Split index out of range ", index, len(timingData.TimingSplits))
+        fmt.Println("Error: Split index out of range", index, len(timingData.TimingSplits))
         return maxFloat
     }
 
@@ -349,29 +316,7 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
         bestIndex = len(timingData.BestSplits) - 1
     }
 
-    return timingData.TimingSplits[index].SplitTime - timingData.BestSplits[bestIndex].SplitTime
-}
-
-// OpenDBConnection initializes and returns a new *sql.DB instance.
-func OpenDBConnection(host, port, user, password, dbname string) (*sql.DB, error) {
-    // Create the connection string
-    connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-        host, port, user, password, dbname)
-
-    // Open the database connection
-    dbret, err := sql.Open("postgres", connStr)
-    if err != nil {
-        return nil, fmt.Errorf("failed to open database connection: %v", err)
-    }
-
-    // Ping the database to ensure the connection is valid
-    if err := dbret.Ping(); err != nil {
-        dbret.Close()
-        return nil, fmt.Errorf("failed to ping database: %v", err)
-    }
-
-    fmt.Println("Connected to the database successfully.")
-    return dbret, nil
+    return timingData.TimingSplits[index] - timingData.BestSplits[bestIndex]
 }
 
 func main() {
@@ -383,16 +328,10 @@ func main() {
     flag.Parse()
 
     jsonEnabled := *jsonPTR
+    SelectedGame = game
     debugMode := *debugModePTR
 
     SetupCloseHandler() // handle CTRL+C
-
-    g_db, err := OpenDBConnection("localhost", "5432", "postgres", "simrace", "postgres");
-
-    if g_db == nil || err != nil {
-        fmt.Printf("Error initializing database: %v\n", err)
-        return
-    }
 
     if debugMode {
         log.Println("Debug mode enabled")
@@ -494,10 +433,8 @@ func main() {
     }
 
     for {
-        readForzaData(listener, telemArray, game)
+        readForzaData(listener, telemArray)
     }
-
-    defer g_db.Close()
 }
 
 func init() {
