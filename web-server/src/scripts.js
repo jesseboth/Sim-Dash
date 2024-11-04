@@ -12,6 +12,7 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
   launchControlBlink = 0;
   launchControlComplete = false;
   launchControlSpeed = 0;
+  bestLap = -1;
   
   OdometerInfo = {
     carNumber: 0,
@@ -26,6 +27,7 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
   const hotTemperature = 280;
   const splitDistance = 12;
   const timeDelay = 2;
+  var countDelay = 0;
   const invalidSplit =  9999999999.0
   defaultData = false;
   set_default();
@@ -37,10 +39,10 @@ setTimeout(function() {
 }, 250);
 
 function get_data() {
-  // if (telemetryType == null) {
-  //   telemetry = null;
-  //   return;
-  // }
+  if (telemetryType == null) {
+    telemetry = null;
+    return;
+  }
   fetch('http://' + ipAddress + ':8888/telemetry')
     .then(response => {
       // Check if the response is successful
@@ -96,12 +98,12 @@ function set_default() {
 }
 
 function get_telemetryType() {
-  // fetch('/telemetrytype')
-  //   .then(response => response.json())
-  //   .then(data => {
-  //     telemetryType = data["type"]
-  //   })
-  //   .catch(error => null);
+  fetch('/telemetrytype')
+    .then(response => response.json())
+    .then(data => {
+      telemetryType = data["type"]
+    })
+    .catch(error => null);
 }
 
 gearChangeTicks = 0;
@@ -144,7 +146,6 @@ async function set_display() {
 
   getOdometer(data["CarOrdinal"])
   updateDistance(OdometerInfo.meters)
-  // getSplit(data["CarOrdinal"], data["TrackOrdinal"])
 
   updateFuel(data["Fuel"]*100)
   configureRPM(data["EngineMaxRpm"])
@@ -157,22 +158,42 @@ async function set_display() {
                   data["SurfaceRumbleRearLeft"],
                   data["CurrentLap"])
 
+  // figure out if delay is required
+  if(data["CurrentLap"] == 0 || data["DistanceTraveled"] < 0) {
+    countDelay++;
+  }
+
   if(data["DistanceTraveled"] > 0){
-    updateTime("time", data["CurrentLap"])
-    updateSplit(data["Split"]);
+    if(countDelay < 2 && data["CurrentLap"] < timeDelay){ 
+      updateTime("time", data["LastLap"])
+      if(bestLap > 0){
+        updateSplit(data["LastLap"] - bestLap);
+      }
+    }
+    else {
+      updateTime("time", data["CurrentLap"])
+      updateSplit(data["Split"]);
+      updateDirtyLap(dirty);
+    }
   }
   else if(data["DistanceTraveled"] < 0){
     updateTime("time", 0);
     updateSplit(invalidSplit);
+    updateDirtyLap(false);
   }
   else if(data["DistanceTraveled"] == 0){
     updateTime("time", null);
     updateSplit(invalidSplit);
+    updateDirtyLap(false);
   }
-  updateDirtyLap(dirty);
 
+  // reset delay
+  if(data["DistanceTraveled"] > 0 && data["CurrentLap"] >= timeDelay){
+    countDelay = 0;
+    bestLap = data["BestLap"];
+  }
 
-  if(data["BestLap"] == 0 && data["Speed"] < .01 && data["CurrentEngineRpm"] > 2100 && 
+  if(data["SessionBestLap"] == 0 && data["Speed"] < .01 && data["CurrentEngineRpm"] > 2100 && 
       (data["Clutch"] == 255 || data["HandBrake"] == 255 || data["Accel"] > 128)){
     launchControl = true;
   }
@@ -183,7 +204,17 @@ async function set_display() {
   if(launchControl){
     updateLaunchControl(mpstomph(data["Speed"]))
   } else {
-    updateTime("best-time", data["BestLap"])
+    if(data["CurrentTime"] != 0){
+      if(data["BestLap"] != 0){
+        updateTime("best-time", data["BestLap"])
+      }
+      else {
+        updateTime("best-time", data["SessionBestLap"])
+      }
+    }
+    else{
+      updateTime("best-time", null)
+    }
   }
   updateTireTemp("FR", data["TireTempFrontRight"])
   updateTireTemp("FL", data["TireTempFrontLeft"])
@@ -414,7 +445,7 @@ function updateLaunchControl(speed){
 }
 
 function updateSplit(split){
-  if(split >= 9999999999.0){
+  if(split >= invalidSplit){
     document.getElementById("split").style.display = "none"
     return;
   }

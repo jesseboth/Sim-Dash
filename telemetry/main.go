@@ -50,7 +50,18 @@ type TimingData struct {
     startMeters   float32
 }
 
-var timingData TimingData
+var timingData = TimingData{
+    Car: CarDescription{
+        CarNumber:   -1, // Default value for CarNumber
+        TrackNumber: -1, // Default value for TrackNumber
+        CarClass:    -1, // Default value for CarClass
+    },
+    TimingSplits:  []float32{}, // Initializing empty slices
+    BestSplits:    []float32{}, // Initializing empty slices
+    SessionSplits: []float32{}, // Initializing empty slices
+    startMeters:   -1,           // Default value (already the zero value, so optional)
+}
+
 const splitDistance float32 = 12.0  // Distance per split, adjust as necessary
 
 const maxFloat = 9999999999.0
@@ -112,18 +123,47 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry) {
         log.Printf("DistanceTraveled: %.0f", f32map["DistanceTraveled"])
     }
 
-    timingData.Car.CarNumber = int(s32map["CarOrdinal"])
-    if(strings.HasPrefix(SelectedGame, "FM")) {
-        timingData.Car.TrackNumber = int(s32map["TrackOrdinal"])
-    } else {
-        timingData.Car.TrackNumber = -1
+    if timingData.Car.CarNumber != int(s32map["CarOrdinal"]) || timingData.Car.CarClass != int(s32map["CarClass"]) {
+        // Update CarNumber and CarClass
+        timingData.Car.CarNumber = int(s32map["CarOrdinal"])
+        timingData.Car.CarClass = int(s32map["CarClass"])
+        
+        // Check if the game is "FM" and TrackOrdinal exists
+        if strings.HasPrefix(SelectedGame, "FM") && checkKeyExists(s32map, "TrackOrdinal") {
+            timingData.Car.TrackNumber = int(s32map["TrackOrdinal"])
+            } else {
+                timingData.Car.TrackNumber = -1 // Set default value if TrackOrdinal is not found
+            }
+        timingData.BestSplits, err = getTimingSplits(timingData.Car)
+    } else if trackOrdinal, ok := s32map["TrackOrdinal"]; ok {
+        // Check if TrackOrdinal exists and is different from current TrackNumber
+        if timingData.Car.TrackNumber != int(trackOrdinal) {
+            // Update Car properties
+            timingData.Car.CarNumber = int(s32map["CarOrdinal"])
+            timingData.Car.CarClass = int(s32map["CarClass"])
+            timingData.Car.TrackNumber = int(trackOrdinal)
+            timingData.BestSplits, err = getTimingSplits(timingData.Car)
+        }
     }
-    timingData.Car.CarClass = int(s32map["CarClass"])
 
-    if s32map["IsRaceOn"] == 1 {
-        f32map["Split"] = UpdateSplit(&timingData, f32map["DistanceTraveled"], u16map["LapNumber"], f32map["CurrentLap"], f32map["LastLap"], f32map["BestLap"]);
+
+
+    if isRaceOn, ok := s32map["IsRaceOn"]; ok && isRaceOn == 1  {
+        f32map["Split"] = UpdateSplit(&timingData, f32map["DistanceTraveled"], u16map["LapNumber"], f32map["CurrentLap"], f32map["LastLap"], f32map["SessionBestLap"]);
+
+        // Set best Lap
+        if(len(timingData.BestSplits) > 0) {
+            f32map["BestLap"] = timingData.BestSplits[len(timingData.BestSplits)-1];
+        } else {
+            f32map["BestLap"] = 0;
+        }
     }else {
+        // timingData.TimingSplits = []float32{}
+        // timingData.BestSplits = []float32{}
+        // timingData.SessionSplits = []float32{}
+
         f32map["Split"] = maxFloat;
+        f32map["BestLap"] = 0;
     }
 
     if isFlagPassed("j") == true {
@@ -160,15 +200,19 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry) {
     }
 }
 
+func checkKeyExists[K comparable, V any](m map[K]V, key K) bool {
+    _, exists := m[key]
+    return exists
+}
 
 func setTimingSplits(data TimingData) error {
-    if(!strings.HasPrefix(SelectedGame, "FM")) {
+    if(!strings.HasPrefix(SelectedGame, "FM") || data.Car.TrackNumber == -1) {
         fmt.Errorf("Storing splits not allowed for game")
         return nil
     }
 
     // Create the directory path based on car class, car number, and track number
-    dirPath := fmt.Sprintf("data/splits/%d/%d/%d", data.Car.CarClass, data.Car.CarNumber, data.Car.TrackNumber)
+    dirPath := fmt.Sprintf("data/splits/%d/%d", data.Car.CarClass, data.Car.CarNumber)
 
     // Create the directories (including parent directories if needed)
     err := os.MkdirAll(dirPath, 0755)
@@ -177,7 +221,7 @@ func setTimingSplits(data TimingData) error {
     }
 
     // Create the full path for the JSON file
-    filePath := filepath.Join(dirPath, "splits.json")
+    filePath := filepath.Join(dirPath, fmt.Sprintf("%d.json", data.Car.TrackNumber))
 
     // Open the file for writing (create or truncate if it already exists)
     file, err := os.Create(filePath)
@@ -200,7 +244,7 @@ func setTimingSplits(data TimingData) error {
 
 func getTimingSplits(car CarDescription) ([]float32, error) {
     // Construct the path to the JSON file
-    filePath := filepath.Join("data", "splits", fmt.Sprintf("%d", car.CarClass), fmt.Sprintf("%d", car.CarNumber), fmt.Sprintf("%d", car.TrackNumber), "splits.json")
+    filePath := filepath.Join("data", "splits", fmt.Sprintf("%d", car.CarClass), fmt.Sprintf("%d", car.CarNumber), fmt.Sprintf("%d.json", car.TrackNumber))
 
     // Check if the file exists
     if _, err := os.Stat(filePath); os.IsNotExist(err) {

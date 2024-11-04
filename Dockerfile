@@ -10,7 +10,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Download and install Go
-RUN wget -O go.tgz https://golang.org/dl/go1.17.7.linux-amd64.tar.gz && \
+RUN wget -O go.tgz https://golang.org/dl/go1.18.1.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go.tgz && \
     rm go.tgz
 
