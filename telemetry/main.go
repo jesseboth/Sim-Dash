@@ -553,19 +553,3 @@ func GetOutboundIP() net.IP {
 
     return localAddr.IP
 }
-
-// CheckAttitude looks for balance of the car
-func CheckAttitude(totalSlipFront int, totalSlipRear int) string {
-    // Check attitude of car by comparing front and rear slip levels
-    // If front slip > rear slip, means car is understeering
-    if totalSlipRear > totalSlipFront {
-        // log.Printf("Car is oversteering")
-        return "Oversteer"
-    } else if totalSlipFront > totalSlipRear {
-        // log.Printf("Car is understeering")
-        return "Understeer"
-    } else {
-        // log.Printf("Car balance is neutral")
-        return "Neutral"
-    }
-}
