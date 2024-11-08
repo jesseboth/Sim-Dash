@@ -53,6 +53,8 @@ elif [ "$1" == "remove" ]; then
   docker rm $CONTAINERNAME
 elif [ "$1" == "enter" ]; then
   docker exec -it $CONTAINERNAME bash
+elif [ "$1" == "logs" ]; then
+  docker logs -f $CONTAINERNAME
 else
   build
   start

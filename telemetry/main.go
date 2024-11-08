@@ -24,7 +24,7 @@ const port = "9999"                   // UDP Port number to listen on
 const service = hostname + ":" + port // Combined hostname+port
 
 var jsonData string // Stores the JSON data to be sent out via the web server if enabled
-var SelectedGame string
+var motorsport bool = false
 
 // Telemetry struct represents a piece of telemetry as defined in the Forza data format (see the .dat files)
 type Telemetry struct {
@@ -87,7 +87,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry) {
     s8map := make(map[string]int8)
 
     for i, T := range telemArray {
-        data := buffer[:n][T.startOffset:T.endOffset] 
+        data := buffer[:n][T.startOffset:T.endOffset]
 
         if isFlagPassed("d") == true {
             log.Printf("Data chunk %d: %v (%s) (%s)", i, data, T.name, T.dataType)
@@ -127,9 +127,9 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry) {
         // Update CarNumber and CarClass
         timingData.Car.CarNumber = int(s32map["CarOrdinal"])
         timingData.Car.CarClass = int(s32map["CarClass"])
-        
+
         // Check if the game is "FM" and TrackOrdinal exists
-        if strings.HasPrefix(SelectedGame, "FM") && checkKeyExists(s32map, "TrackOrdinal") {
+        if motorsport && checkKeyExists(s32map, "TrackOrdinal") {
             timingData.Car.TrackNumber = int(s32map["TrackOrdinal"])
             } else {
                 timingData.Car.TrackNumber = -1 // Set default value if TrackOrdinal is not found
@@ -169,7 +169,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry) {
     if isFlagPassed("j") == true {
         // Create a single map to hold all combined data
         combinedMap := make(map[string]interface{})
-    
+
         // Add each original map's contents to the combined map
         for k, v := range s32map {
             combinedMap[k] = v
@@ -189,13 +189,13 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry) {
         for k, v := range s8map {
             combinedMap[k] = v
         }
-    
+
         // Marshal the combined map into a single JSON object
         finalJSON, err := json.Marshal(combinedMap)
         if err != nil {
             log.Fatalf("Error marshalling combined JSON: %v", err)
         }
-    
+
         jsonData = fmt.Sprintf("%s", finalJSON)
     }
 }
@@ -206,7 +206,7 @@ func checkKeyExists[K comparable, V any](m map[K]V, key K) bool {
 }
 
 func setTimingSplits(data TimingData) error {
-    if(!strings.HasPrefix(SelectedGame, "FM") || data.Car.TrackNumber == -1) {
+    if(!motorsport || data.Car.TrackNumber == -1) {
         fmt.Errorf("Storing splits not allowed for game")
         return nil
     }
@@ -353,14 +353,22 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
         return maxFloat
     }
 
+
     bestIndex := index
-    if len(timingData.BestSplits) == 0 {
-        return maxFloat
-    } else if index >= len(timingData.BestSplits) {
-        bestIndex = len(timingData.BestSplits) - 1
+    var targetSplits []float32
+    if motorsport {
+        targetSplits = timingData.BestSplits
+    } else {
+        targetSplits = timingData.SessionSplits
     }
 
-    return timingData.TimingSplits[index] - timingData.BestSplits[bestIndex]
+    if len(targetSplits) == 0 {
+        return maxFloat
+    } else if index >= len(targetSplits) {
+        bestIndex = len(targetSplits) - 1
+    }
+
+    return timingData.TimingSplits[index] - targetSplits[bestIndex]
 }
 
 func main() {
@@ -372,7 +380,11 @@ func main() {
     flag.Parse()
 
     jsonEnabled := *jsonPTR
-    SelectedGame = game
+
+    if strings.HasPrefix(game, "FM") {
+        motorsport = true
+    }
+
     debugMode := *debugModePTR
 
     SetupCloseHandler() // handle CTRL+C
@@ -470,7 +482,7 @@ func main() {
 
     listener, err := net.ListenUDP("udp", udpAddr)
     check(err)
-    defer listener.Close() 
+    defer listener.Close()
 
     if(debugMode){
         log.Printf("Forza data out server listening on %s:%s, waiting for Forza data...\n", GetOutboundIP(), port)
