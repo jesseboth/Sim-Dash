@@ -82,6 +82,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
         return
     }
 
+    wrongData = 0;
     if isFlagPassed("d") == true {
         log.Println("UDP client connected:", addr)
     }
