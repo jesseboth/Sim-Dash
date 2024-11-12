@@ -296,6 +296,9 @@ function updateOdometer(){
             }
             try {
                 jsonData = JSON.parse(data);
+                if(Object.keys(jsonData).length === 0) {
+                    return;
+                }
             }
             catch{
                 return;

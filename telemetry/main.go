@@ -63,16 +63,23 @@ var timingData = TimingData{
 }
 
 const splitDistance float32 = 12.0  // Distance per split, adjust as necessary
-
 const maxFloat = 9999999999.0
+var wrongData int = 0;
 
 // readForzaData processes recieved UDP packets
-func readForzaData(conn *net.UDPConn, telemArray []Telemetry) {
+func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
     buffer := make([]byte, 1500)
 
     n, addr, err := conn.ReadFromUDP(buffer)
     if err != nil {
         log.Fatal("Error reading UDP data:", err, addr)
+    } else if n < totalLength {
+        if(wrongData <= 5) {
+            wrongData++;
+        } else {
+            jsonData = "";
+        }
+        return
     }
 
     if isFlagPassed("d") == true {
@@ -405,6 +412,7 @@ func main() {
     startOffset := 0
     endOffset := 0
     dataLength := 0
+    totalLength := 0
     var telemArray []Telemetry
 
     for i, line := range lines {
@@ -418,42 +426,49 @@ func main() {
             dataLength = 4
             endOffset = endOffset + dataLength
             startOffset = endOffset - dataLength
+            totalLength = totalLength + dataLength
             telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
             telemArray = append(telemArray, telemItem)
         case "u32":
             dataLength = 4
             endOffset = endOffset + dataLength
             startOffset = endOffset - dataLength
+            totalLength = totalLength + dataLength
             telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
             telemArray = append(telemArray, telemItem)
         case "f32":
             dataLength = 4
             endOffset = endOffset + dataLength
             startOffset = endOffset - dataLength
+            totalLength = totalLength + dataLength
             telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
             telemArray = append(telemArray, telemItem)
         case "u16":
             dataLength = 2
             endOffset = endOffset + dataLength
             startOffset = endOffset - dataLength
+            totalLength = totalLength + dataLength
             telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
             telemArray = append(telemArray, telemItem)
         case "u8":
             dataLength = 1
             endOffset = endOffset + dataLength
             startOffset = endOffset - dataLength
+            totalLength = totalLength + dataLength
             telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
             telemArray = append(telemArray, telemItem)
         case "s8":
             dataLength = 1
             endOffset = endOffset + dataLength
             startOffset = endOffset - dataLength
+            totalLength = totalLength + dataLength
             telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
             telemArray = append(telemArray, telemItem)
         case "hzn":
             dataLength = 12
             endOffset = endOffset + dataLength
             startOffset = endOffset - dataLength
+            totalLength = totalLength + dataLength
             telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
             telemArray = append(telemArray, telemItem)
         default:
@@ -489,7 +504,7 @@ func main() {
     }
 
     for {
-        readForzaData(listener, telemArray)
+        readForzaData(listener, telemArray, totalLength)
     }
 }
 
