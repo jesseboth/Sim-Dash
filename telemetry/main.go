@@ -121,7 +121,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
     // Dont print / log / do anything if RPM is zero
     // This happens if the game is paused or you rewind
     // There is a bug with FH4 where it will continue to send data when in certain menus
-    if f32map["CurrentEngineRpm"] == 0 {
+    if !motorsport && f32map["CurrentEngineRpm"] == 0 {
         return
     }
 
@@ -153,8 +153,6 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
             timingData.BestSplits, err = getTimingSplits(timingData.Car)
         }
     }
-
-
 
     if isRaceOn, ok := s32map["IsRaceOn"]; ok && isRaceOn == 1  {
         f32map["Split"] = UpdateSplit(&timingData, f32map["DistanceTraveled"], u16map["LapNumber"], f32map["CurrentLap"], f32map["LastLap"], f32map["SessionBestLap"]);
