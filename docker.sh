@@ -31,7 +31,6 @@ newJsonFile() {
 
 start() {
   newJsonFile web-server/data/odometers.json
-  newJsonFile web-server/data/splits.json
   docker run -d $PORTS $VOLUMES --network host --restart always --name "$CONTAINERNAME" "$IMAGENAME"
 }
 
