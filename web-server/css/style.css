@@ -116,6 +116,14 @@ body {
   display: none;
 }
 
+#container-clock {
+  height: 18;
+  width: 200px;
+  right: 76.5%;
+  top: 75%;
+  display: none;
+}
+
 .time {
   font-size: 200%;
   color: #d0c5c3;

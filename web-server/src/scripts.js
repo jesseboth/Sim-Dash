@@ -77,6 +77,7 @@ function set_default() {
     updateTime("time", null)
     updateDirtyLap(false);
     updateTime("best-time", null)
+    updateTime("clock", null)
     updateTireTemp("FR", normalTemperature)
     updateTireTemp("FL", normalTemperature)
     updateTireTemp("RR", normalTemperature)
@@ -187,6 +188,8 @@ async function set_display() {
     updateDirtyLap(false);
   }
 
+  updateTime("clock", getCurrentTimeUnformatted(), false)
+
   // reset delay
   if(data["DistanceTraveled"] > 0 && data["CurrentLap"] >= timeDelay){
     countDelay = 0;
@@ -269,8 +272,8 @@ function updateGear(gear) {
   }
 }
 
-function updateTime(id, time) {
-  formattedTime = formatTime(time)
+function updateTime(id, time, minutes=true) {
+  formattedTime = formatTime(time, minutes)
   if (time != null && time != 0) {
     document.getElementById("container-"+id).style.display = "inline-flex";
     document.getElementById(id).textContent = formattedTime;
@@ -579,6 +582,13 @@ function getCurrentTime() {
   const hours = String(now.getHours()) % 12 || 12;
   const minutes = String(now.getMinutes()).padStart(2, '0');
   return `${hours}:${minutes}`;
+}
+
+function getCurrentTimeUnformatted() {
+  const now = new Date();
+  const hours = now.getHours() % 12 || 12;
+  const minutes = now.getMinutes();
+  return hours + (minutes/100);
 }
 
 function getOdometer(carNumber, offset=0){
