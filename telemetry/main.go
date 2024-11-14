@@ -308,7 +308,7 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
             }
         }
 
-        if len(timingData.TimingSplits) > 1 {
+        if len(timingData.TimingSplits) > 1 && timingData.TimingSplits[len(timingData.TimingSplits)-1] + 2 > last {
             timingData.TimingSplits = append(timingData.TimingSplits, float32(math.Round(float64(last*1000)) / 1000))
 
             // Update best and session splits if last time matches best
