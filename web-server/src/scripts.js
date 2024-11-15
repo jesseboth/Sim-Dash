@@ -1,5 +1,6 @@
 const repeat = setInterval(set_display, 25);
 const another = setInterval(get_telemetryType, 1000 * 10);
+const position = setInterval(getDashPostion, 1000 * 10); getDashPostion();
 const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) != null
   ? window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/)[1] : "localhost";
   telemetry = null;
@@ -630,4 +631,60 @@ function checkDirtyLap(FR, FL, RR, RL, time){
   if(!dirty && FR > 1 && FL > 1 && RR > 1 && RL > 1){
     dirty = true
   }
+}
+
+function getOdometer(carNumber, offset=0){
+  if(carNumber == 0){
+    OdometerInfo.meters = 0;
+    OdometerInfo.carNumber = carNumber;
+    return 0;
+  }
+
+  fetch("/Odometer", {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({carNumber: carNumber, meters: null})
+  })
+  .then(response => {
+      if (response.ok) {
+          return response.json();
+      }
+  })
+  .then(data => {
+    if(data != null){
+      OdometerInfo.carNumber = carNumber
+      OdometerInfo.meters = data.meters;
+    }
+  })
+  .catch(error => {
+      console.error('Error sending data to server:', error);
+  });
+}
+
+function getDashPostion(){
+  fetch("/Scale", {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({get: "scale"})
+  })
+  .then(response => {
+      if (response.ok) {
+          return response.json();
+      }
+  })
+  .then(data => {
+    if(data != null){
+      document.getElementById("all").style.top = data.top;
+      document.getElementById("all").style.left = data.left;
+      document.getElementById("all").style.width = data.width;
+      document.getElementById("all").style.zoom = data.zoom;
+    }
+  })
+  .catch(error => {
+      console.error('Error sending data to server:', error);
+  });
 }

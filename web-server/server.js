@@ -24,7 +24,8 @@ const getJsonData = (filePath) => {
     }
 };
 
-scale = getJsonData('data/scale.json')["default"];
+scales = getJsonData('data/scale.json');
+scale = scales["default"];
 
 const EventEmitter = require('events');
 class Emitter extends EventEmitter { };
@@ -147,15 +148,29 @@ const server = http.createServer((req, res) => {
             retJson = {success: false}
             try {
                 const data = JSON.parse(body);
-
-                if(data.hasOwnProperty("set") && data.set == true){
+                if(data.hasOwnProperty("set") && data.set != "custom"){
+                    scale = scales[data.set];
+                    retJson.success = true;
+                }
+                else if(data.hasOwnProperty("get") && data.get == "keys"){
+                    retJson.success = true;
+                    retJson.elements = Object.keys(scales);
                 }
                 else {
+                    const top = scale["top"];
+                    const zoom = scale["zoom"];
+                    const width = zoom;
+                    const left = (100 - width) / 2;
 
+                    retJson = {
+                        "top": top+"%",
+                        "left": left+"%",
+                        "width": width+"%",
+                        "zoom": zoom+"%"
+                    }
                 }
 
                 res.writeHead(200, { 'Content-Type': 'text/plain' });
-                retJson.success = true;
                 res.end(JSON.stringify(retJson));
 
             } catch (error) {

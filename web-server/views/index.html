@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scale and Move Example</title>
+  <meta charset="UTF-8">
 </head>
+
 <body style="background-color:#999999">
   <div id="myModal" class="modal">
     <div class="modal-content">
@@ -16,8 +16,16 @@
       <button id="noBtn" class="modalButton">No</button>
     </div>
   </div>
-  
+
   <div id="scaleModal" class="modal">
+    <div id="selectModal" class="modal-content">
+      <span class="close">&times;</span>
+      <div class="text">Select Positon: </div>
+      <button class="modalButton selectButton">Custom</button>
+    </div>
+  </div>
+
+  <div id="scaleModalAdjust" class="modal">
     <div class="modal-content">
       <span class="close" id="scaleClose">&times;</span>
       <div class="text">Adjust the dash scaling and position:</div>
@@ -27,7 +35,8 @@
         <button id="scaleDownBtn" class="modalButton">Scale Down</button>
         <button id="moveDownBtn" class="modalButton">Move Down</button>
       </div>
-      <input type="text" id="scaleNameInput" placeholder="Enter name" style="width: 80%; padding: 10px; font-size: 16px; margin-top: 20px;">
+      <input type="text" id="scaleNameInput" placeholder="Enter name"
+        style="width: 80%; padding: 10px; font-size: 16px; margin-top: 20px;">
       <button id="saveBtn" class="modalButton saveButton">Save</button>
     </div>
   </div>
@@ -99,7 +108,7 @@
     width: 100%;
     height: 100%;
     overflow: auto;
-    background-color: rgba(0,0,0,0.4);
+    background-color: rgba(0, 0, 0, 0.4);
   }
 
   .modal-content {
@@ -119,6 +128,7 @@
     float: right;
     font-size: 28px;
     font-weight: bold;
+    z-index: 100;
   }
 
   .close:hover,
@@ -130,7 +140,8 @@
 
   .modalButton {
     width: 40%;
-    height: 40px;
+    height: 25%;
+    min-height: 50px;
     margin: 10px;
     font-size: 20px;
     cursor: pointer;
@@ -141,6 +152,13 @@
 
   .saveButton {
     background-color: blue;
+    color: white;
+    width: 50%;
+    margin-top: 20px;
+  }
+
+  .selectButton {
+    background-color: #007bff;
     color: white;
     width: 50%;
     margin-top: 20px;
@@ -171,6 +189,14 @@
     background-color: #eb5454;
   }
 
+  #noBtn {
+    background-color: red;
+  }
+
+  #yesBtn {
+    background-color: #007bff;
+  }
+
   .text {
     font-size: larger;
     margin-bottom: 20px;
@@ -182,17 +208,49 @@
   let scaleFactor = 1; // Default scale factor
   let verticalOffset = 0; // Default vertical position
 
-  function postToServer(action, value) {
-    fetch('/scale-move', {
+  function post(name) {
+    fetch('/' + name, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ action, value }),
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data == null) {
+          return;
+        }
+
+        if (!data.success) {
+          lastPressed = name;
+          document.getElementById("myModal").style.display = "block";
+        }
+      })
+      .catch(error => console.error('Error:', error));
+  }
+
+
+
+
+
+
+
+  function postToServer(action, value) {
+    const body = {};
+    body[action] = value;
+
+    return fetch('/Scale', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
     })
       .then((response) => response.json())
-      .then((data) => console.log('Server response:', data))
-      .catch((error) => console.error('Error:', error));
+      .catch((error) => {
+        console.error('Error:', error);
+        throw error; // Re-throw the error so it can be handled by the caller
+      });
   }
 
   function saveSettings() {
@@ -209,18 +267,8 @@
   }
 
   function createButtonListener(name) {
-    document.getElementById(name).addEventListener("click", function () {
-      fetch('/' + name, { method: 'POST' })
-        .then((response) => response.json())
-        .then((data) => {
-          if (data == null) return;
-
-          if (!data.success) {
-            lastPressed = name;
-            document.getElementById("myModal").style.display = "block";
-          }
-        })
-        .catch((error) => console.error('Error:', error));
+    document.getElementById(name).addEventListener('click', function () {
+      post(name);
     });
   }
 
@@ -258,9 +306,55 @@
   // Save settings
   document.getElementById("saveBtn").addEventListener("click", saveSettings);
 
-  // Open Scale Modal
-  document.getElementById("scale").addEventListener("click", () => {
-    scaleModal.style.display = "block";
+  function setScale(key) {
+    postToServer("set", key);
+  }
+
+  document.getElementById("scale").addEventListener("click", async () => {
+    try {
+      scaleModal.style.display = "block";
+      const data = await postToServer("get", "keys");
+      elems = data.elements
+
+      document.getElementById("selectModal").innerHTML = `
+      <span class="close" id="scaleClose" onclick="document.getElementById('scaleModal').style.display = 'none'">&times;</span>
+    `;
+
+      document.getElementById("selectModal").innerHTML += `<div class="text">Select Dash Postion: </div>`;
+      for (let i = 0; i < elems.length; i++) {
+        document.getElementById("selectModal").innerHTML += `<button class="modalButton selectButton" onclick="postToServer('set', '${elems[i]}')">${elems[i]}</button>`;
+      }
+      document.getElementById("selectModal").innerHTML += `<button class="modalButton selectButton">custom</button>`;
+
+        // Close modals
+      document.querySelectorAll(".modalButton").forEach((closeBtn) => {
+        closeBtn.addEventListener("click", () => {
+          scaleModal.style.display = "none";
+          lastPressed = "";
+        });
+      });
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  });
+
+  // Add event listeners to Yes and No buttons
+  yesBtn.addEventListener("click", function () {
+    if (lastPressed == "") {
+      modal.style.display = "none";
+      return;
+    }
+    post("stop")
+    setTimeout(function () {
+      post(lastPressed)
+    }, 1000);
+    modal.style.display = "none";
+  });
+
+  noBtn.addEventListener("click", function () {
+    lastPressed = ""
+    modal.style.display = "none";
   });
 </script>
+
 </html>

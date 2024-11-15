@@ -15,15 +15,16 @@
   overflow: hidden;
 }
 
-.all {
+#all {
   position: absolute;
-  /* top: 0; */
-  /* left: 0; */
-  /* width: 100%;  */
-  top: 28%;
+  top: 0;
+  left: 0;
+  width: 100%; 
+  zoom: 100%;
+  /* top: 28%;
   left: 15%;
   width: 70%;
-  zoom: 70%;
+  zoom: 70%; */
 }
 
 .content {
