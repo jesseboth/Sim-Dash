@@ -13,6 +13,19 @@ const options = {
 
 dash="/forza-dash";
 
+// Function to read and parse the JSON file
+const getJsonData = (filePath) => {
+    try {
+        const data = fs.readFileSync(filePath, 'utf8');
+        return JSON.parse(data);
+    } catch (err) {
+        console.error(`Error reading or parsing file: ${err}`);
+        return null;
+    }
+};
+
+scale = getJsonData('data/scale.json')["default"];
+
 const EventEmitter = require('events');
 class Emitter extends EventEmitter { };
 const myEmitter = new Emitter();
@@ -120,6 +133,35 @@ const server = http.createServer((req, res) => {
                 console.error('Error parsing JSON:', error);
                 res.writeHead(400, { 'Content-Type': 'text/plain' });
                 res.end('Invalid JSON');
+            }
+        });
+        return;
+    }
+    else if (req.url == "/Scale" && req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk) => {
+            body += chunk.toString(); // convert Buffer to string
+        });
+
+        req.on('end', () => {
+            retJson = {success: false}
+            try {
+                const data = JSON.parse(body);
+
+                if(data.hasOwnProperty("set") && data.set == true){
+                }
+                else {
+
+                }
+
+                res.writeHead(200, { 'Content-Type': 'text/plain' });
+                retJson.success = true;
+                res.end(JSON.stringify(retJson));
+
+            } catch (error) {
+                console.error('Error parsing JSON:', error);
+                res.writeHead(400, { 'Content-Type': 'text/plain' });
+                res.end(JSON.stringify(retJson));
             }
         });
         return;

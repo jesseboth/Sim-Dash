@@ -184,6 +184,7 @@ async function set_display() {
   }
   else if(data["DistanceTraveled"] == 0){
     updateTime("time", null);
+    updateTime("clock", null);
     updateSplit(invalidSplit);
     updateDirtyLap(false);
   }
