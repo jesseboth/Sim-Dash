@@ -1,51 +1,117 @@
-# Forza data tools
-Building some tools for playing with the UDP data out feature from the Forza Motorsport 7 / Forza Horizon 4 games. Built with [golang](https://golang.org/dl/).  
+#  Forza-Dash
 
+Telemetry dash board guage cluster for Forza games in the style of the Mk8 Golf r guage cluster. Includes timing splits on a class/car/track basis along with an odometer for each car make/model.
 
+## How to Start
 
+This docker.sh script performs the following actions:
+- **Builds** a Docker image if it does not already exist.
+- **Starts** a Docker container with specified volume mappings and ports.
+- **Stops** and **removes** the container.
+- **Creates** empty JSON files if they do not exist.
+- **Provides** a help guide for usage.
+- **Configures** Forza to stream data to the `dash` at port `9999`.
 
-## Features
-- Realtime telemetry output to terminal  
-- Telemetry data logging to csv file  
-- Serve Forza Telemetry data as JSON over HTTP
-- Display race statistics from race/drive (when logging to CSV)  
+## Requirements
 
+- **Docker** must be installed on your system.
 
+## Usage
 
-(Feel free to open an issue if you have any suggestions/feature requests)
-&nbsp;
+Run the script with the following commands:
 
-## Setup
-From your game HUD options, enable the data out feature and set it to use the IP address of your computer. Port 9999.  
+### 1. Build and Start the Container
+```bash
+./docker.sh
+```
+- Builds the `sim-telemetry` Docker image (if it does not exist) and starts the container with the specified ports and volume mappings.
 
-Forza Motorsport 7 select the "car dash" format.
+### 2. Stop the Container
+```bash
+./docker.sh stop
+```
+- Stops the running container and disables its automatic restart.
 
-&nbsp;
+### 3. Restart the Container
+```bash
+./docker.sh restart
+```
+- Stops, removes, rebuilds, and starts the container.
 
-## Build
-Start the add
-* ./docker.sh start 
+### 4. Remove the Container
+```bash
+./docker.sh remove
+```
+- Stops and removes the container from your system.
 
-Allow the app to start on boot
-* ./docker.sh daemon
+### 5. Enter the Container Shell
+```bash
+./docker.sh enter
+```
+- Opens an interactive Bash shell inside the running container.
 
-Stop the app
-* ./docker.sh stop
+### 6. Display Help
+```bash
+./docker.sh help
+```
+- Displays help information and usage instructions.
 
-&nbsp;
+## Configuration
 
-### JSON Data
-If the `-j` flag is provided, JSON data will be available at: http://localhost:8888/forza. Could be used to make a web dashboard interface or something similar. JSON Format is an array of objects containing the various Forza data types.  
+### Environment Variables
+- **`IMAGENAME`**: Name of the Docker image (`sim-telemetry`).
+- **`CONTAINERNAME`**: Name of the Docker container (`sim-telemetry-container`).
+- **`PORTS`**: Ports exposed by the container (`8888`, `3000`, `9999`).
+- **`SCRIPT_DIR`**: Directory containing the script.
+- **`VOLUMES`**: Volume mappings between the host and the container.
 
-You can see a sample of the kind of data that will be returned [here](https://github.com/richstokes/Forza-data-tools/blob/master/dash/sample.json).  
+### Volume Structure
+The script maps the following directories:
+- `web-server/data` and `telemetry/data` directories from the host to corresponding directories inside the container (`/usr/src/app/web-server/data` and `/usr/src/app/telemetry/data`).
 
-There is a basic example JavaScript dashboard (with rev limiter function) in the `/dash` directory.  
+### Files Created
+The script creates empty JSON files (`odometers.json` and `splits.json`) in `web-server/data` if they do not already exist.
 
-&nbsp; 
+## Accessing the Dashboard and Game Selection
 
-## Further reading
-- Forza data out format: https://forums.forzamotorsport.net/turn10_postsm926839_Forza-Motorsport-7--Data-Out--feature-details.aspx#post_926839
+1. **Game Selection**:
+   - Open a web browser and go to `http://<IP>:3000` (replace `<IP>` with the actual IP address of the machine running the Docker container).
+   - This page allows you to select the game you want to use with the telemetry system.
 
-- Forza Motorsport: https://support.forzamotorsport.net/hc/en-us/articles/21742934024211-Forza-Motorsport-Data-Out-Documentation
+2. **Dashboard Gauge Cluster**:
+   - Access the telemetry dashboard at `http://<IP>:3000/dash`.
+   - This page displays real-time telemetry data in a gauge cluster format.
 
-- Forza Horizon 4 has some mystery data in the packet, waiting on info from the developers: https://forums.forzamotorsport.net/turn10_postsm1086012_Data-Output.aspx#post_1086012
+## Setting Forza to Stream Data
+
+To configure Forza Motorsport or Forza Horizon to stream data to your `sim-telemetry` dashboard:
+
+1. **Open Forza on your gaming platform**.
+2. Navigate to **Settings > HUD and Gameplay** or a similar section with telemetry options.
+3. Locate the **Data Out** or **UDP Telemetry** settings.
+4. Set the **IP address** to the IP of the machine running the Docker container.
+5. Set the **Port** to `9999`.
+
+This will enable Forza to stream real-time telemetry data to the `sim-telemetry` dashboard via port `9999`.
+
+## Script Details
+
+### Functions
+- **`build()`**: Builds the Docker image if it doesn't exist.
+- **`stop()`**: Stops the container and disables automatic restart.
+- **`newJsonFile()`**: Creates an empty JSON file with `{}` content if the file does not exist.
+- **`start()`**: Starts the container, ensuring JSON files are present.
+
+### Conditional Logic
+- `./docker.sh`: Builds and starts the container.
+- `./docker.sh stop`: Stops the container.
+- `./docker.sh restart`: Stops, removes, rebuilds, and restarts the container.
+- `./docker.sh remove`: Stops and removes the container.
+- `./docker.sh enter`: Opens a shell inside the running container.
+- `./docker.sh help`: Displays usage instructions.
+
+## Example Command
+```bash
+./docker.sh restart
+```
+- This command will stop the container, remove it, rebuild the image, and start a new container.

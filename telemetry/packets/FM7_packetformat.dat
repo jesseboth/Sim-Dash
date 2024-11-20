@@ -69,7 +69,7 @@ f32 TireTempRearRight;
 f32 Boost;
 f32 Fuel;
 f32 DistanceTraveled;
-f32 BestLap;
+f32 SessionBestLap;
 f32 LastLap;
 f32 CurrentLap;
 f32 CurrentRaceTime;

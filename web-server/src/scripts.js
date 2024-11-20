@@ -12,24 +12,14 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
   launchControlBlink = 0;
   launchControlComplete = false;
   launchControlSpeed = 0;
+  bestLap = -1;
   
   OdometerInfo = {
     carNumber: 0,
     meters: 0
   };
 
-  SplitInfoReset = {
-    bestSplits: [],
-    sessionSplits: [],
-    splits: [],
-    startMeters: Infinity,
-    splitTry: 25,
-    prev: false
-  }
-  SplitInfo = structuredClone(SplitInfoReset);
-
   LapNumber = -1;
-
 
   // Define temperature range (adjust as needed)
   const coldTemperature = 180;
@@ -37,6 +27,8 @@ const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) !=
   const hotTemperature = 280;
   const splitDistance = 12;
   const timeDelay = 2;
+  var countDelay = 0;
+  const invalidSplit =  9999999999.0
   defaultData = false;
   set_default();
 
@@ -85,6 +77,7 @@ function set_default() {
     updateTime("time", null)
     updateDirtyLap(false);
     updateTime("best-time", null)
+    updateTime("clock", null)
     updateTireTemp("FR", normalTemperature)
     updateTireTemp("FL", normalTemperature)
     updateTireTemp("RR", normalTemperature)
@@ -95,13 +88,12 @@ function set_default() {
     updateTireWear("RL", 100)
     updateTraction(0, 0);
     updatePosition(0)
-    updateSplit(0, 0)
+    updateSplit(invalidSplit)
     GOLF_R = 3533;
     getOdometer(GOLF_R);
     setTimeout(() => {
       updateDistance(OdometerInfo.meters)
     }, 250);
-    SplitInfo = structuredClone(SplitInfoReset);
     LapNumber = -1;
   }
 }
@@ -155,25 +147,6 @@ async function set_display() {
 
   getOdometer(data["CarOrdinal"])
   updateDistance(OdometerInfo.meters)
-  getSplit(data["CarClass"], data["CarOrdinal"], data["TrackOrdinal"])
-
-  if(data["LapNumber"] == LapNumber+1){
-    LapNumber = data["LapNumber"];
-    if((LapNumber == 0 && data["DistanceTraveled"] < 100) || LapNumber > 0){
-      SplitInfo.startMeters = data["DistanceTraveled"];
-    }
- 
-    configureLapTime(data["CarOrdinal"], data["TrackOrdinal"], data["CarClass"], data["CurrentLap"], data["LastLap"], data["BestLap"]);
-  }
-  else if(data["DistanceTraveled"] < 0){
-    LapNumber = data["LapNumber"];
-    SplitInfo.startMeters = 0;
-  }
-  else {
-    LapNumber = data["LapNumber"];
-  }
-
-  updateSplit(data["DistanceTraveled"], data["CurrentLap"]);
 
   updateFuel(data["Fuel"]*100)
   configureRPM(data["EngineMaxRpm"])
@@ -186,21 +159,44 @@ async function set_display() {
                   data["SurfaceRumbleRearLeft"],
                   data["CurrentLap"])
 
-  if(!SplitInfo.prev || (SplitInfo.prev && data["CurrentLap"] >= timeDelay)){
-    if(data["DistanceTraveled"] > 0){
-      updateTime("time", data["CurrentLap"])
-    }
-    else if(data["DistanceTraveled"] < 0){
-      updateTime("time", 0);
-    }
-    else if(data["DistanceTraveled"] == 0){
-      updateTime("time", null);
-    }
-    updateDirtyLap(dirty);
+  // figure out if delay is required
+  if(data["CurrentLap"] == 0 || data["DistanceTraveled"] < 0) {
+    countDelay++;
   }
 
+  if(data["DistanceTraveled"] > 0){
+    if(countDelay < 2 && data["CurrentLap"] < timeDelay){ 
+      updateTime("time", data["LastLap"])
+      if(bestLap > 0){
+        updateSplit(data["LastLap"] - bestLap);
+      }
+    }
+    else {
+      updateTime("time", data["CurrentLap"])
+      updateSplit(data["Split"]);
+      updateDirtyLap(dirty);
+    }
+  }
+  else if(data["DistanceTraveled"] < 0){
+    updateTime("time", 0);
+    updateSplit(invalidSplit);
+    updateDirtyLap(false);
+  }
+  else if(data["DistanceTraveled"] == 0){
+    updateTime("time", null);
+    updateSplit(invalidSplit);
+    updateDirtyLap(false);
+  }
 
-  if(data["BestLap"] == 0 && data["Speed"] < .01 && data["CurrentEngineRpm"] > 2100 && 
+  updateTime("clock", getCurrentTimeUnformatted(), false)
+
+  // reset delay
+  if(data["DistanceTraveled"] > 0 && data["CurrentLap"] >= timeDelay){
+    countDelay = 0;
+    bestLap = data["BestLap"];
+  }
+
+  if(data["SessionBestLap"] == 0 && data["Speed"] < .01 && data["CurrentEngineRpm"] > 2100 && 
       (data["Clutch"] == 255 || data["HandBrake"] == 255 || data["Accel"] > 128)){
     launchControl = true;
   }
@@ -211,11 +207,16 @@ async function set_display() {
   if(launchControl){
     updateLaunchControl(mpstomph(data["Speed"]))
   } else {
-    if(SplitInfo.bestSplits.length == 0){
-      updateTime("best-time", data["BestLap"])
+    if(data["CurrentTime"] != 0){
+      if(data["BestLap"] != 0){
+        updateTime("best-time", data["BestLap"])
+      }
+      else {
+        updateTime("best-time", data["SessionBestLap"])
+      }
     }
-    else {
-      updateTime("best-time", SplitInfo.bestSplits[SplitInfo.bestSplits.length-1])
+    else{
+      updateTime("best-time", null)
     }
   }
   updateTireTemp("FR", data["TireTempFrontRight"])
@@ -271,8 +272,8 @@ function updateGear(gear) {
   }
 }
 
-function updateTime(id, time) {
-  formattedTime = formatTime(time)
+function updateTime(id, time, minutes=true) {
+  formattedTime = formatTime(time, minutes)
   if (time != null && time != 0) {
     document.getElementById("container-"+id).style.display = "inline-flex";
     document.getElementById(id).textContent = formattedTime;
@@ -446,102 +447,24 @@ function updateLaunchControl(speed){
   }
 }
 
-function showSplit(iCurrent, iBest){
-  if(iBest > SplitInfo.bestSplits.length || iCurrent > SplitInfo.splits.length){
-    return;
-  }
-
-  timeSplit = SplitInfo.splits[iCurrent] - SplitInfo.bestSplits[iBest];
-  let ShowMinutes = (timeSplit > 60 || timeSplit < -60) ? true :  false;
-
-  if(timeSplit <= 0){
-    document.getElementById("split").style.color = "#00c721"
-    document.getElementById("split").textContent = "-" + formatTime(-1*timeSplit, ShowMinutes)
-  }
-  else {
-    document.getElementById("split").style.color = "#c90000"
-    document.getElementById("split").textContent = "+" + formatTime(timeSplit, ShowMinutes)
-  }
-  document.getElementById("container-split").style.left = ShowMinutes ? "80%" : "81%"
-  document.getElementById("split").style.display = "contents"
-}
-
-function updateSplit(distance, time){
-  time = time.toFixed(2)
-  traveled = distance - SplitInfo.startMeters;
-  if(distance == 0){
+function updateSplit(split){
+  if(split >= invalidSplit){
     document.getElementById("split").style.display = "none"
     return;
   }
-  let index = Math.floor(traveled / splitDistance) - 1;
-  if(index < 0){
-    if(index < -1){
-      SplitInfo.prev = false;
-      document.getElementById("split").style.display = "none"
-    }
-    
-    
-    SplitInfo.splits = [];
-    return;
-  }
-  else if(index+1 < SplitInfo.splits.length){
-    SplitInfo.splits.splice(index)
-    SplitInfo.splits[index] = time;
-    SplitInfo.splits[0] = null; // invalidate the lap due to rewind
-  }
-  else if(index < SplitInfo.splits.length){
-    ; // ignore
-  }
-  else if(index == SplitInfo.splits.length){
-    SplitInfo.splits[index] = time;
+
+  ShowMinutes = (split > 60 || split < -60) ? true :  false;
+
+  if(split <= 0){
+    document.getElementById("split").style.color = "#00c721"
+    document.getElementById("split").textContent = "-" + formatTime(-1*split, ShowMinutes)
   }
   else {
-    console.error("Error: Split index out of range")
-    return;
+    document.getElementById("split").style.color = "#c90000"
+    document.getElementById("split").textContent = "+" + formatTime(split, ShowMinutes)
   }
-
-  if(SplitInfo.prev && time < timeDelay){
-    return;
-  }
-  else if(!SplitInfo.prev && time >= timeDelay){
-    SplitInfo.prev = true;
-  }
-
-  bestIndex = -1;
-  if(SplitInfo.bestSplits.length == 0){
-    return;
-  }
-  else if(SplitInfo.bestSplits.length > index){
-    bestIndex = index;
-  }
-  else {
-    bestIndex = SplitInfo.bestSplits.length - 1;
-  }
-
-  if(SplitInfo.bestSplits[bestIndex] == null){
-    return;
-  }
-
-  showSplit(index, bestIndex);
-}
-
-function configureLapTime(car, track, carClass, current, last, best){
-  if(SplitInfo.splits.length > 1 ) {
-    SplitInfo.splits.push(last.toFixed(3));
-      showSplit(SplitInfo.splits.length-1, SplitInfo.bestSplits.length-1);
-      if(SplitInfo.splits[0] != null && last == best) {
-        
-        if(SplitInfo.bestSplits.length == 0 || best < SplitInfo.bestSplits[SplitInfo.bestSplits.length-1]){
-          SplitInfo.bestSplits = SplitInfo.splits;
-          SplitInfo.sessionSplits = SplitInfo.splits;
-          setSplit(car, track, carClass);
-        }
-        if(SplitInfo.sessionSplits.length == 0 || best < SplitInfo.sessionSplits[SplitInfo.sessionSplits.length-1]){
-          SplitInfo.sessionSplits = SplitInfo.splits;
-        }
-      }
-    }
-    SplitInfo.splits = [];
+  document.getElementById("container-split").style.left = ShowMinutes ? "80%" : "81%"
+  document.getElementById("split").style.display = "contents"
 }
 
 function configureRPM(_maxRPM) {
@@ -661,6 +584,13 @@ function getCurrentTime() {
   return `${hours}:${minutes}`;
 }
 
+function getCurrentTimeUnformatted() {
+  const now = new Date();
+  const hours = now.getHours() % 12 || 12;
+  const minutes = now.getMinutes();
+  return hours + (minutes/100);
+}
+
 function getOdometer(carNumber, offset=0){
   if(carNumber == 0){
     OdometerInfo.meters = 0;
@@ -684,90 +614,6 @@ function getOdometer(carNumber, offset=0){
     if(data != null){
       OdometerInfo.carNumber = carNumber
       OdometerInfo.meters = data.meters;
-    }
-  })
-  .catch(error => {
-      console.error('Error sending data to server:', error);
-  });
-}
-
-function newTrack(trackID){
-  if(SplitInfo.coords.length == 0){
-    return;
-  }
-
-  fetch("/Split", {
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({type: "new", trackID: trackID, splits: SplitInfo.coords})
-  })
-  .then(response => {
-      if (response.ok) {
-          return response.json();
-      }
-  })
-  .then(data => {
-  })
-  .catch(error => {
-      console.error('Error sending data to server:', error);
-  });
-}
-
-function setSplit(carID, trackID, Class){
-  if(SplitInfo.splits.length < 3){
-    return;
-  }
-
-  fetch("/Split", {
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({type: "set", carID: carID, trackID: trackID, carClass: Class, splits: SplitInfo.bestSplits})
-  })
-  .then(response => {
-      if (response.ok) {
-          return response.json();
-      }
-  })
-  .then(data => {
-  })
-  .catch(error => {
-      console.error('Error sending data to server:', error);
-  });
-}
-
-function getSplit(Class, carID, trackID){
-  SplitInfo.splitTry++;
-  if(SplitInfo.bestSplits.length != 0 || SplitInfo.splitTry < 25){
-    return;
-  }
-  else {
-    SplitInfo.splitTry = 0;
-  }
-
-  fetch("/Split", {
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({type: "get", carID: carID, trackID: trackID, carClass: Class})
-  })
-  .then(response => {
-      if (response.ok) {
-          return response.json();
-      }
-  })
-  .then(data => {
-    if(data != null){
-      if(data.splits == null){
-        SplitInfo.bestSplits = [];
-      }
-      else{
-        SplitInfo.bestSplits = data.splits;
-      }
     }
   })
   .catch(error => {

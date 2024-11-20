@@ -5,7 +5,8 @@ CONTAINERNAME="${IMAGENAME}-container"
 PORTS="-p 8888:8888 -p 3000:3000 -p 9999:9999"
 
 SCRIPT_DIR=$(realpath $(dirname "$0"))
-VOLUMES="-v ${SCRIPT_DIR}/web-server/data:/usr/src/app/web-server/data"
+VOLUMES="-v ${SCRIPT_DIR}/web-server/data:/usr/src/app/web-server/data \
+         -v ${SCRIPT_DIR}/telemetry/data:/usr/src/app/telemetry/data"
 
 build(){
   if ! docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINERNAME}$"; then
@@ -30,7 +31,6 @@ newJsonFile() {
 
 start() {
   newJsonFile web-server/data/odometers.json
-  newJsonFile web-server/data/splits.json
   docker run -d $PORTS $VOLUMES --network host --restart always --name "$CONTAINERNAME" "$IMAGENAME"
 }
 
@@ -52,6 +52,8 @@ elif [ "$1" == "remove" ]; then
   docker rm $CONTAINERNAME
 elif [ "$1" == "enter" ]; then
   docker exec -it $CONTAINERNAME bash
+elif [ "$1" == "logs" ]; then
+  docker logs -f $CONTAINERNAME
 else
   build
   start

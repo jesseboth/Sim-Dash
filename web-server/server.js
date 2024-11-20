@@ -11,8 +11,6 @@ const options = {
     cwd: '../telemetry/', // Set the working directory
 };
 
-let newSplit = Date.now();
-
 dash="/forza-dash";
 
 const EventEmitter = require('events');
@@ -115,41 +113,6 @@ const server = http.createServer((req, res) => {
                 if(meters == null){
                     retJson = readOdometer(carNumber)
                 }
-                res.writeHead(200, { 'Content-Type': 'text/plain' });
-                res.end(JSON.stringify(retJson));
-
-            } catch (error) {
-                console.error('Error parsing JSON:', error);
-                res.writeHead(400, { 'Content-Type': 'text/plain' });
-                res.end('Invalid JSON');
-            }
-        });
-        return;
-    }
-    else if (req.url == "/Split" && req.method === 'POST') {
-        let body = '';
-        req.on('data', (chunk) => {
-            body += chunk.toString(); // convert Buffer to string
-        });
-
-        req.on('end', () => {
-            try {
-                retJson = {
-                    splits: null,
-                }
-
-                const data = JSON.parse(body);
-                if(data.type == "get"){
-                    splits = getCarSplits(data.carClass, data.carID, data.trackID)
-                    retJson.splits = splits;
-                }
-                else if(data.type == "set"){
-                    if(Date.now() - newSplit > 10000){
-                        newSplit = Date.now();
-                        setCarSplits(data.carClass, data.carID, data.trackID, data.splits)
-                    }
-                }
-
                 res.writeHead(200, { 'Content-Type': 'text/plain' });
                 res.end(JSON.stringify(retJson));
 
@@ -333,6 +296,9 @@ function updateOdometer(){
             }
             try {
                 jsonData = JSON.parse(data);
+                if(Object.keys(jsonData).length === 0) {
+                    return;
+                }
             }
             catch{
                 return;
@@ -391,38 +357,4 @@ function resetOdometer(){
     OdometerInfo.meters = 0;
     OdometerInfo.offset = 0;
     OdometerInfo.store = 0;
-}
-
-function getCarSplits(Class, carNumber, trackID){
-    try {
-        const file = fs.readFileSync('data/splits.json', 'utf8');
-        data = JSON.parse(file)[Class+":"+carNumber+":"+trackID];
-    } catch (err) {
-        console.error(err)
-        data = null;
-    }
-    return data;
-}
-
-function setCarSplits(Class, carNumber, trackID, times){
-    try {
-        // Read and parse the existing data
-        let fileData = fs.readFileSync('data/splits.json', 'utf8');
-        const jsonData = JSON.parse(fileData);
-
-        jsonData[`${Class}:${carNumber}:${trackID}`] = times;
-
-        // Custom formatting: Write each key-value pair, ensuring arrays are single-line
-        let formattedOutput = '{\n' + 
-        Object.entries(jsonData).map(([key, value]) => {
-        // Format array values on one line
-        const arrayString = Array.isArray(value) ? `[${value.join(', ')}]` : JSON.stringify(value);
-        return `  "${key}": ${arrayString}`;
-        }).join(',\n') + '\n}';
-
-        // Write the updated data back to the file
-        fs.writeFileSync('data/splits.json', formattedOutput);
-    } catch (err) {
-        console.error("Error writing splits:", err);
-    }
 }

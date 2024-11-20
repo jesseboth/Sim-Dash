@@ -1,3 +1,3 @@
-module richstokes/fdt
+module jesseboth/fdt
 
 go 1.18
