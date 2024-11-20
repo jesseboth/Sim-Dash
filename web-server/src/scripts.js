@@ -166,6 +166,7 @@ async function set_display() {
   }
 
   if(data["DistanceTraveled"] > 0){
+    updateTime("clock", getCurrentTimeUnformatted(), false)
     if(countDelay < 2 && data["CurrentLap"] < timeDelay){ 
       updateTime("time", data["LastLap"])
       if(bestLap > 0){
@@ -179,6 +180,7 @@ async function set_display() {
     }
   }
   else if(data["DistanceTraveled"] < 0){
+    updateTime("clock", getCurrentTimeUnformatted(), false)
     updateTime("time", 0);
     updateSplit(invalidSplit);
     updateDirtyLap(false);
@@ -189,8 +191,6 @@ async function set_display() {
     updateSplit(invalidSplit);
     updateDirtyLap(false);
   }
-
-  updateTime("clock", getCurrentTimeUnformatted(), false)
 
   // reset delay
   if(data["DistanceTraveled"] > 0 && data["CurrentLap"] >= timeDelay){
