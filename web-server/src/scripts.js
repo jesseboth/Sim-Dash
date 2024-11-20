@@ -1,6 +1,6 @@
 const repeat = setInterval(set_display, 25);
 const another = setInterval(get_telemetryType, 1000 * 10);
-const position = setInterval(getDashPostion, 1000 * 10); getDashPostion();
+var position = setInterval(getDashPosition, 1000 * 10); getDashPosition();
 const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) != null
   ? window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/)[1] : "localhost";
   telemetry = null;
@@ -663,7 +663,8 @@ function getOdometer(carNumber, offset=0){
   });
 }
 
-function getDashPostion(){
+scaleSpeedUp = false;
+function getDashPosition(){
   fetch("/Scale", {
       method: 'POST',
       headers: {
@@ -682,6 +683,18 @@ function getDashPostion(){
       document.getElementById("all").style.left = data.left;
       document.getElementById("all").style.width = data.width;
       document.getElementById("all").style.zoom = data.zoom;
+      if(scaleSpeedUp != data["speedUp"]){
+        scaleSpeedUp = data["speedUp"];
+        clearInterval(position); // Clear any existing interval
+        console.log(data["speedUp"])
+        if(scaleSpeedUp){
+          position = setInterval(getDashPosition, 25);
+        }
+        else{
+          position = setInterval(getDashPosition, 1000 * 10);
+        }
+      }
+
     }
   })
   .catch(error => {

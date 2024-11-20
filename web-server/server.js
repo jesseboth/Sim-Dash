@@ -25,7 +25,11 @@ const getJsonData = (filePath) => {
 };
 
 scales = getJsonData('data/scale.json');
-scale = scales["default"];
+scale = { ...scales["default"] };;
+
+scaleName = "default";
+scaleSpeedUp = false;
+scaleTime = 0;
 
 const EventEmitter = require('events');
 class Emitter extends EventEmitter { };
@@ -78,7 +82,7 @@ const server = http.createServer((req, res) => {
             telemetry = spawn('../telemetry/fdt', ['-game', req.url.substring(1), '-j'], options);
             retVal.success = true;
         }
-        
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(retVal));
         return;
@@ -148,15 +152,42 @@ const server = http.createServer((req, res) => {
             retJson = {success: false}
             try {
                 const data = JSON.parse(body);
+
+                if(data.hasOwnProperty("scale")){
+                    scale["zoom"] += data.scale;
+                    scaleTime = Date.now();
+                }
+                if(data.hasOwnProperty("move")){
+                    scale["top"] += data.move;
+                    scaleTime = Date.now();
+                }
+
                 if(data.hasOwnProperty("set") && data.set != "custom"){
-                    scale = scales[data.set];
+                    scaleName = data.set;
+                    scale = { ...scales[data.set] };
+                    retJson.success = true;
+                }
+                else if(data.hasOwnProperty("set") && data.set == "custom"){
+                    scaleName = data.set;
+                    scaleTime = Date.now();
+                    scaleSpeedUp = true;
                     retJson.success = true;
                 }
                 else if(data.hasOwnProperty("get") && data.get == "keys"){
                     retJson.success = true;
                     retJson.elements = Object.keys(scales);
                 }
+                else if(data.hasOwnProperty("save")){
+                    scales[data["save"]] = { ...scale };
+                    fs.writeFileSync('data/scale.json', JSON.stringify(scales, null, 4));
+                    retJson.success = true;
+                }
                 else {
+                    if(scaleTime != 0 && Date.now()-scaleTime > 10000){
+                        scaleTime = 0;
+                        scaleSpeedUp = false;
+                    }
+
                     const top = scale["top"];
                     const zoom = scale["zoom"];
                     const width = zoom;
@@ -166,7 +197,8 @@ const server = http.createServer((req, res) => {
                         "top": top+"%",
                         "left": left+"%",
                         "width": width+"%",
-                        "zoom": zoom+"%"
+                        "zoom": zoom+"%",
+                        "speedUp": scaleSpeedUp
                     }
                 }
 
@@ -322,12 +354,12 @@ function getStoredDistance(carNumber){
 }
 
 dataSaved = false;
-let interval = setInterval(updateOdometer, 25); 
+let interval = setInterval(updateOdometer, 25);
 function updateOdometer(){
     if (telemetryType == "") {
         return;
     }
-    
+
     const options = {
         hostname: "localhost",
         port: 8888,
@@ -337,12 +369,12 @@ function updateOdometer(){
 
     const req = http.request(options, (res) => {
         let data = '';
-        
+
         // A chunk of data has been received
         res.on('data', (chunk) => {
             data += chunk;
         });
-        
+
         // The whole response has been received
         res.on('end', () => {
             if (res.statusCode !== 200) {
@@ -391,10 +423,10 @@ function updateOdometer(){
 
         });
     });
-    
+
     req.on('error', (error) => {
     });
-    
+
     req.end();
 }
 

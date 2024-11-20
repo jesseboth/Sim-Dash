@@ -29,8 +29,24 @@ newJsonFile() {
   echo "{}" > $1
 }
 
+newScaleFile() {
+  if [ -f ${SCRIPT_DIR}/$1 ]; then
+    return
+  fi
+
+  touch ${SCRIPT_DIR}/$1
+echo '{
+      "default": {
+        "top": 0,
+        "zoom": 100
+    }
+}' > $1
+}
+
+
 start() {
   newJsonFile web-server/data/odometers.json
+  newScaleFile web-server/data/scale.json
   docker run -d $PORTS $VOLUMES --network host --restart always --name "$CONTAINERNAME" "$IMAGENAME"
 }
 

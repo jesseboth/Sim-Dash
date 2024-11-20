@@ -247,19 +247,6 @@
       });
   }
 
-  function saveSettings() {
-    fetch('/save-settings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ scaleFactor, verticalOffset }),
-    })
-      .then((response) => response.json())
-      .then((data) => console.log('Settings saved:', data))
-      .catch((error) => console.error('Error:', error));
-  }
-
   function createButtonListener(name) {
     document.getElementById(name).addEventListener('click', function () {
       post(name);
@@ -281,24 +268,38 @@
 
   const modal = document.getElementById("myModal");
   const scaleModal = document.getElementById("scaleModal");
+  const scaleModalAdjust = document.getElementById("scaleModalAdjust");
 
   // Close modals
   document.querySelectorAll(".close").forEach((closeBtn) => {
     closeBtn.addEventListener("click", () => {
       modal.style.display = "none";
       scaleModal.style.display = "none";
+      scaleModalAdjust.style.display = "none";
       lastPressed = "";
     });
   });
 
   // Scale and Move Functions
-  document.getElementById("scaleUpBtn").addEventListener("click", () => postToServer("scale", "up"));
-  document.getElementById("scaleDownBtn").addEventListener("click", () => postToServer("scale", "down"));
-  document.getElementById("moveUpBtn").addEventListener("click", () => postToServer("move", "up"));
-  document.getElementById("moveDownBtn").addEventListener("click", () => postToServer("move", "down"));
+  document.getElementById("scaleUpBtn").addEventListener("click", () => postToServer("scale", 1));
+  document.getElementById("scaleDownBtn").addEventListener("click", () => postToServer("scale", -1));
+  document.getElementById("moveUpBtn").addEventListener("click", () => postToServer("move", -1));
+  document.getElementById("moveDownBtn").addEventListener("click", () => postToServer("move", 1));
 
   // Save settings
-  document.getElementById("saveBtn").addEventListener("click", saveSettings);
+  document.getElementById("saveBtn").addEventListener("click", () => {
+    newName = document.getElementById("scaleNameInput").value;
+
+    // Check if the input is empty
+    if (!newName.trim()) {
+        console.log("No name entered.");
+        return;
+    }
+    newName = newName.toLowerCase();
+    newName.split(" ").join("-");
+    postToServer("save", newName);
+    scaleModalAdjust.style.display = "none";
+});
 
   function setScale(key) {
     postToServer("set", key);
@@ -318,7 +319,7 @@
       for (let i = 0; i < elems.length; i++) {
         document.getElementById("selectModal").innerHTML += `<button class="modalButton selectButton" onclick="postToServer('set', '${elems[i]}')">${elems[i]}</button>`;
       }
-      document.getElementById("selectModal").innerHTML += `<button class="modalButton selectButton">custom</button>`;
+      document.getElementById("selectModal").innerHTML += `<button class="modalButton selectButton" onclick="postToServer('set', 'custom'); scaleModal.style.display = 'none'; scaleModalAdjust.style.display = 'block';">custom</button>`;
 
         // Close modals
       document.querySelectorAll(".modalButton").forEach((closeBtn) => {
