@@ -1,88 +1,125 @@
-#  Forza-Dash
 
-Telemetry dash board guage cluster for Forza games in the style of the Mk8 Golf r guage cluster. Includes timing splits on a class/car/track basis along with an odometer for each car make/model.
+# Forza-Dash
 
-## How to Start
+Telemetry dashboard gauge cluster for Forza games in the style of the Mk8 Golf R gauge cluster. Includes timing splits on a class/car/track basis along with an odometer for each car make/model.
 
-This docker.sh script performs the following actions:
-- **Builds** a Docker image if it does not already exist.
-- **Starts** a Docker container with specified volume mappings and ports.
-- **Stops** and **removes** the container.
-- **Creates** empty JSON files if they do not exist.
-- **Provides** a help guide for usage.
-- **Configures** Forza to stream data to the `dash` at port `9999`.
+<div align="center">
+   <img src="images/dash.png" alt="Dash" width="75%">
+</div>
 
-## Requirements
+---
+
+## Supported Games
+
+- **Forza Motorsport**
+- **Forza Horizon 5**
+- **Forza Motorsport 7** *(untested)*
+- **Forza Horizon 4** *(untested)*
+
+---
+
+## Setup
+
+### Overview
+
+- **Server Setup**: Get the Docker container running.
+- **Dash Setup**: Learn how to access and configure the dashboard.
+- **Forza Setup**: Configure the game to stream telemetry data.
+
+---
+
+<details>
+<summary>Server Setup</summary>
+
+### Requirements
 
 - **Docker** must be installed on your system.
 
-## Usage
+### Usage
 
-Run the script with the following commands:
-
-### 1. Build and Start the Container
+#### 1. Build and Start the Container
 ```bash
 ./docker.sh
 ```
 - Builds the `sim-telemetry` Docker image (if it does not exist) and starts the container with the specified ports and volume mappings.
 
-### 2. Stop the Container
-```bash
-./docker.sh stop
-```
-- Stops the running container and disables its automatic restart.
+---
 
-### 3. Restart the Container
-```bash
-./docker.sh restart
-```
-- Stops, removes, rebuilds, and starts the container.
+### Configuration
 
-### 4. Remove the Container
-```bash
-./docker.sh remove
-```
-- Stops and removes the container from your system.
-
-### 5. Enter the Container Shell
-```bash
-./docker.sh enter
-```
-- Opens an interactive Bash shell inside the running container.
-
-### 6. Display Help
-```bash
-./docker.sh help
-```
-- Displays help information and usage instructions.
-
-## Configuration
-
-### Environment Variables
+#### Docker Variables
 - **`IMAGENAME`**: Name of the Docker image (`sim-telemetry`).
 - **`CONTAINERNAME`**: Name of the Docker container (`sim-telemetry-container`).
 - **`PORTS`**: Ports exposed by the container (`8888`, `3000`, `9999`).
-- **`SCRIPT_DIR`**: Directory containing the script.
-- **`VOLUMES`**: Volume mappings between the host and the container.
 
-### Volume Structure
-The script maps the following directories:
-- `web-server/data` and `telemetry/data` directories from the host to corresponding directories inside the container (`/usr/src/app/web-server/data` and `/usr/src/app/telemetry/data`).
+### Script Details
+- **`./docker.sh`**: Builds and starts the container.
+- **`./docker.sh stop`**: Stops the container.
+- **`./docker.sh restart`**: Stops, removes, rebuilds, and restarts the container.
+- **`./docker.sh remove`**: Stops and removes the container.
+- **`./docker.sh enter`**: Opens a shell inside the running container.
 
-### Files Created
-The script creates empty JSON files (`odometers.json` and `splits.json`) in `web-server/data` if they do not already exist.
+</details>
 
-## Accessing the Dashboard and Game Selection
+---
+
+<details>
+<summary>Dash Setup</summary>
+
+### Accessing the Dashboard and Game Selection
 
 1. **Game Selection**:
    - Open a web browser and go to `http://<IP>:3000` (replace `<IP>` with the actual IP address of the machine running the Docker container).
    - This page allows you to select the game you want to use with the telemetry system.
+   - You can also scale/move the dash to adjust for setup.
 
 2. **Dashboard Gauge Cluster**:
    - Access the telemetry dashboard at `http://<IP>:3000/dash`.
    - This page displays real-time telemetry data in a gauge cluster format.
 
-## Setting Forza to Stream Data
+#### Game Selection
+
+- Buttons are provided for:
+  - Forza Motorsport (`FM`)
+  - Forza Horizon 5 (`FH5`)
+  - Forza Motorsport 7 (`FM7`)
+  - Forza Horizon 4 (`FH4`)
+- Click the corresponding button to load the appropriate settings for the selected game.
+
+#### Stop Button
+
+- Clicking the **"Stop"** button halts the telemetry process and resets the dashboard.
+
+#### Dashboard Scaling and Positioning
+
+- Click **"Scale Dash"** to open the scaling and position adjustment interface.
+- **Adjusting Settings**:
+  - **Scale Up**: Increase dashboard size.
+  - **Scale Down**: Decrease dashboard size.
+  - **Move Up**: Shift dashboard upward.
+  - **Move Down**: Shift dashboard downward.
+
+#### Saving Dashboard Layouts
+
+- After making adjustments:
+  - Enter a name for your layout in the input field.
+  - Click **Save** to store the layout.
+- Layouts are saved server-side and can be loaded later.
+
+#### Loading Saved Layouts
+
+- When clicking **"Scale Dash"**, you'll see a list of available layouts.
+- Select a layout to apply it, or choose "Custom" to define a new layout.
+
+
+</details>
+
+---
+
+<details>
+<summary>Forza Setup</summary>
+
+### Setting Forza to Stream Data
 
 To configure Forza Motorsport or Forza Horizon to stream data to your `sim-telemetry` dashboard:
 
@@ -94,24 +131,4 @@ To configure Forza Motorsport or Forza Horizon to stream data to your `sim-telem
 
 This will enable Forza to stream real-time telemetry data to the `sim-telemetry` dashboard via port `9999`.
 
-## Script Details
-
-### Functions
-- **`build()`**: Builds the Docker image if it doesn't exist.
-- **`stop()`**: Stops the container and disables automatic restart.
-- **`newJsonFile()`**: Creates an empty JSON file with `{}` content if the file does not exist.
-- **`start()`**: Starts the container, ensuring JSON files are present.
-
-### Conditional Logic
-- `./docker.sh`: Builds and starts the container.
-- `./docker.sh stop`: Stops the container.
-- `./docker.sh restart`: Stops, removes, rebuilds, and restarts the container.
-- `./docker.sh remove`: Stops and removes the container.
-- `./docker.sh enter`: Opens a shell inside the running container.
-- `./docker.sh help`: Displays usage instructions.
-
-## Example Command
-```bash
-./docker.sh restart
-```
-- This command will stop the container, remove it, rebuild the image, and start a new container.
+</details>

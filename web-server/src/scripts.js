@@ -1,5 +1,6 @@
 const repeat = setInterval(set_display, 25);
 const another = setInterval(get_telemetryType, 1000 * 10);
+var position = setInterval(getDashPosition, 1000 * 10); getDashPosition();
 const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) != null
   ? window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/)[1] : "localhost";
   telemetry = null;
@@ -165,6 +166,7 @@ async function set_display() {
   }
 
   if(data["DistanceTraveled"] > 0){
+    updateTime("clock", getCurrentTimeUnformatted(), false)
     if(countDelay < 2 && data["CurrentLap"] < timeDelay){ 
       updateTime("time", data["LastLap"])
       if(bestLap > 0){
@@ -178,17 +180,17 @@ async function set_display() {
     }
   }
   else if(data["DistanceTraveled"] < 0){
+    updateTime("clock", getCurrentTimeUnformatted(), false)
     updateTime("time", 0);
     updateSplit(invalidSplit);
     updateDirtyLap(false);
   }
   else if(data["DistanceTraveled"] == 0){
     updateTime("time", null);
+    updateTime("clock", null);
     updateSplit(invalidSplit);
     updateDirtyLap(false);
   }
-
-  updateTime("clock", getCurrentTimeUnformatted(), false)
 
   // reset delay
   if(data["DistanceTraveled"] > 0 && data["CurrentLap"] >= timeDelay){
@@ -629,4 +631,73 @@ function checkDirtyLap(FR, FL, RR, RL, time){
   if(!dirty && FR > 1 && FL > 1 && RR > 1 && RL > 1){
     dirty = true
   }
+}
+
+function getOdometer(carNumber, offset=0){
+  if(carNumber == 0){
+    OdometerInfo.meters = 0;
+    OdometerInfo.carNumber = carNumber;
+    return 0;
+  }
+
+  fetch("/Odometer", {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({carNumber: carNumber, meters: null})
+  })
+  .then(response => {
+      if (response.ok) {
+          return response.json();
+      }
+  })
+  .then(data => {
+    if(data != null){
+      OdometerInfo.carNumber = carNumber
+      OdometerInfo.meters = data.meters;
+    }
+  })
+  .catch(error => {
+      console.error('Error sending data to server:', error);
+  });
+}
+
+scaleSpeedUp = false;
+function getDashPosition(){
+  fetch("/Scale", {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({get: "scale"})
+  })
+  .then(response => {
+      if (response.ok) {
+          return response.json();
+      }
+  })
+  .then(data => {
+    if(data != null){
+      document.getElementById("all").style.top = data.top;
+      document.getElementById("all").style.left = data.left;
+      document.getElementById("all").style.width = data.width;
+      document.getElementById("all").style.zoom = data.zoom;
+      if(scaleSpeedUp != data["speedUp"]){
+        scaleSpeedUp = data["speedUp"];
+        clearInterval(position); // Clear any existing interval
+        console.log(data["speedUp"])
+        if(scaleSpeedUp){
+          position = setInterval(getDashPosition, 25);
+        }
+        else{
+          position = setInterval(getDashPosition, 1000 * 10);
+        }
+      }
+
+    }
+  })
+  .catch(error => {
+      console.error('Error sending data to server:', error);
+  });
 }

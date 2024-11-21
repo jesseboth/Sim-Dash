@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
+  <meta charset="UTF-8">
 </head>
+
 <body style="background-color:#999999">
   <div id="myModal" class="modal">
     <div class="modal-content">
@@ -14,211 +16,340 @@
       <button id="noBtn" class="modalButton">No</button>
     </div>
   </div>
-  
+
+  <div id="scaleModal" class="modal">
+    <div id="selectModal" class="modal-content">
+      <span class="close">&times;</span>
+      <div class="text">Select Positon: </div>
+      <button class="modalButton selectButton">Custom</button>
+    </div>
+  </div>
+
+  <div id="scaleModalAdjust" class="modal">
+    <div class="modal-content">
+      <span class="close" id="scaleClose">&times;</span>
+      <div class="text">Adjust the dash scaling and position:</div>
+      <div class="button-container">
+        <button id="scaleUpBtn" class="modalButton">Scale Up</button>
+        <button id="moveUpBtn" class="modalButton">Move Up</button>
+        <button id="scaleDownBtn" class="modalButton">Scale Down</button>
+        <button id="moveDownBtn" class="modalButton">Move Down</button>
+      </div>
+      <input type="text" id="scaleNameInput" placeholder="Enter name"
+        style="width: 80%; padding: 10px; font-size: 16px; margin-top: 20px;">
+      <button id="saveBtn" class="modalButton saveButton">Save</button>
+    </div>
+  </div>
+
   <button id="FM" class="large-button">Forza Motorsport</button>
   <button id="FH5" class="large-button">Forza Horizon 5</button>
   <button id="FM7" class="large-button">Forza Motorsport 7</button>
   <button id="FH4" class="large-button">Forza Horizon 4</button>
-  <button id="stop" class="large-button"
-          style="position:fixed; bottom: 20px; background-color: red; border: 2px solid red;">
-          Stop
-  </button>
-
+  <button id="stop" class="large-button" style="background-color: red; border: 2px solid red;">Stop</button>
+  <button id="scale" class="large-button" style="position:fixed; bottom: 20px;">Scale Dash</button>
   <button id="dash" class="redirect"></button>
 </body>
+
 <style>
   body {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: start;
-  height: 100vh;
-  gap: 20px;
-  margin: 0;
-  padding-top: 20px;
-}
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: start;
+    height: 100vh;
+    gap: 20px;
+    margin: 0;
+    padding-top: 20px;
+  }
 
-.large-button {
-  width: 500px;
-  height: 10%;
-  padding: 20px 40px;
-  font-size: 20px;
-  cursor: pointer;
-  border: 2px solid #007bff;
-  background-color: #007bff;
-  color: white;
-  border-radius: 10px;
-  transition: background-color 0.3s, color 0.3s;
-}
+  .large-button {
+    width: 500px;
+    height: 10%;
+    padding: 20px 40px;
+    font-size: 20px;
+    cursor: pointer;
+    border: 2px solid #007bff;
+    background-color: #007bff;
+    color: white;
+    border-radius: 10px;
+    transition: background-color 0.3s, color 0.3s;
+  }
 
-.large-button:hover {
-  background-color: #0056b3;
-  color: #d4d4d4;
-}
+  .large-button:hover {
+    background-color: #0056b3;
+    color: #d4d4d4;
+  }
 
-.redirect {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  outline: none;
-  cursor: pointer;
-  font-size: 16px;
-}
+  .redirect {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    font-size: 16px;
+  }
 
-.redirect:hover {
-  background-color: #0056b3;
-}
+  .redirect:hover {
+    background-color: #0056b3;
+  }
 
-.modal {
-  display: none;
-  position: fixed;
-  z-index: 1;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  background-color: rgb(0,0,0);
-  background-color: rgba(0,0,0,0.4);
-}
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+  }
 
-.modal-content {
-  background-color: #999999;
-  margin: 15% auto;
-  padding: 20px;
-  border: 1px solid #888;
-  width: 75%;
-  height: 40%;
-  border-radius: 10px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
+  .modal-content {
+    background-color: #999999;
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 75%;
+    height: auto;
+    border-radius: 10px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    text-align: center;
+  }
 
-.close {
-  color: red;
-  float: right;
-  font-size: 28px;
-  font-weight: bold;
-}
+  .close {
+    color: red;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    z-index: 100;
+  }
 
-.close:hover,
-.close:focus {
-  color: #000;
-  text-decoration: none;
-  cursor: pointer;
-}
+  .close:hover,
+  .close:focus {
+    color: #000;
+    text-decoration: none;
+    cursor: pointer;
+  }
 
-.modalButton {
-  width: 40%;
-  height: 25%;
-  padding: 20px 40px;
-  font-size: 20px;
-  cursor: pointer;
-  color: black;
-  border-radius: 10px;
-  position: relative;
-  bottom: -30%;
-  left: 10%;
-  transition: background-color 0.3s, color 0.3s;
-}
+  .modalButton {
+    width: 40%;
+    height: 25%;
+    min-height: 50px;
+    margin: 10px;
+    font-size: 20px;
+    cursor: pointer;
+    color: black;
+    border-radius: 10px;
+    transition: background-color 0.3s, color 0.3s;
+  }
 
-#noBtn {
-  background-color: red;
-}
+  .saveButton {
+    background-color: blue;
+    color: white;
+    width: 50%;
+    margin-top: 20px;
+  }
 
-#yesBtn {
-  background-color: #007bff;
-}
-.text {
-  font-size: larger;
-  position: relative;
-  left: 0;
-  right: 0;
-  width: 100%;
-  padding-bottom: 2%;
-  overflow: hidden;
-}
+  .selectButton {
+    background-color: #007bff;
+    color: white;
+    width: 50%;
+    margin-top: 20px;
+  }
 
+  .button-container {
+    /* display: grid; */
+    /* grid-template-columns: 1fr 1fr; */
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+  }
 
+  #scaleUpBtn {
+    background-color: green;
+  }
+
+  #scaleDownBtn {
+    background-color: red;
+  }
+
+  #moveUpBtn {
+    background-color: #4caf50;
+  }
+
+  #moveDownBtn {
+    background-color: #eb5454;
+  }
+
+  #noBtn {
+    background-color: red;
+  }
+
+  #yesBtn {
+    background-color: #007bff;
+  }
+
+  .text {
+    font-size: larger;
+    margin-bottom: 20px;
+  }
 </style>
 
 <script>
-    lastPressed = ""
-    function post(name){
-      fetch('/' + name, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        })
-        .then(response => response.json())
-        .then(data => {
-            if(data == null){
-              return;
-            }
+  let lastPressed = "";
+  let scaleFactor = 1; // Default scale factor
+  let verticalOffset = 0; // Default vertical position
 
-            if(!data.success){
-              lastPressed = name;
-              document.getElementById("myModal").style.display = "block";
-            }
-        })
-        .catch(error => console.error('Error:', error));
-    }
+  function post(name) {
+    fetch('/' + name, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data == null) {
+          return;
+        }
 
-    function createButtonListener(name){
-      document.getElementById(name).addEventListener('click', function() {
-        post(name);
+        if (!data.success) {
+          lastPressed = name;
+          document.getElementById("myModal").style.display = "block";
+        }
+      })
+      .catch(error => console.error('Error:', error));
+  }
+
+  function postToServer(action, value) {
+    const body = {};
+    body[action] = value;
+
+    return fetch('/Scale', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+      .then((response) => response.json())
+      .catch((error) => {
+        console.error('Error:', error);
+        throw error; // Re-throw the error so it can be handled by the caller
+      });
+  }
+
+  function createButtonListener(name) {
+    document.getElementById(name).addEventListener('click', function () {
+      post(name);
     });
-    }
+  }
 
-    function createRedirect(name){
-      document.getElementById(name).addEventListener('click', function() {
-        window.location.href = window.location.href + name
+  function createRedirect(name) {
+    document.getElementById(name).addEventListener("click", function () {
+      window.location.href = window.location.href + name;
     });
-    }
-    createButtonListener("FM")
-    createButtonListener("FH5")
-    createButtonListener("FM7")
-    createButtonListener("FH4")
-    createButtonListener("stop")
-    createRedirect("dash")
+  }
 
+  createButtonListener("FM");
+  createButtonListener("FH5");
+  createButtonListener("FM7");
+  createButtonListener("FH4");
+  createButtonListener("stop");
+  createRedirect("dash");
 
-    const modal = document.getElementById("myModal")
-    // Get the close button
-    var closeBtn = document.getElementsByClassName("close")[0];
+  const modal = document.getElementById("myModal");
+  const scaleModal = document.getElementById("scaleModal");
+  const scaleModalAdjust = document.getElementById("scaleModalAdjust");
 
-    // When the user clicks on the close button, close the modal
-    closeBtn.onclick = function() {
+  // Close modals
+  document.querySelectorAll(".close").forEach((closeBtn) => {
+    closeBtn.addEventListener("click", () => {
       modal.style.display = "none";
-      lastPressed = ""
-    }
+      scaleModal.style.display = "none";
+      scaleModalAdjust.style.display = "none";
+      lastPressed = "";
+    });
+  });
 
-    // Get the Yes and No buttons
-    var yesBtn = document.getElementById("yesBtn");
-    var noBtn = document.getElementById("noBtn");
+  // Scale and Move Functions
+  document.getElementById("scaleUpBtn").addEventListener("click", () => postToServer("scale", 1));
+  document.getElementById("scaleDownBtn").addEventListener("click", () => postToServer("scale", -1));
+  document.getElementById("moveUpBtn").addEventListener("click", () => postToServer("move", -1));
+  document.getElementById("moveDownBtn").addEventListener("click", () => postToServer("move", 1));
 
-    // Add event listeners to Yes and No buttons
-    yesBtn.addEventListener("click", function() {
-      if(lastPressed == ""){
-        modal.style.display = "none";
+  // Save settings
+  document.getElementById("saveBtn").addEventListener("click", () => {
+    newName = document.getElementById("scaleNameInput").value;
+
+    // Check if the input is empty
+    if (!newName.trim()) {
+        console.log("No name entered.");
         return;
-      }
-      post("stop")
-      setTimeout(function() {
-          post(lastPressed)
-      }, 1000);
-      modal.style.display = "none";
-    });
+    }
+    newName = newName.toLowerCase();
+    newName.split(" ").join("-");
+    postToServer("save", newName);
+    scaleModalAdjust.style.display = "none";
+});
 
-    noBtn.addEventListener("click", function() {
-      lastPressed = ""
+  function setScale(key) {
+    postToServer("set", key);
+  }
+
+  document.getElementById("scale").addEventListener("click", async () => {
+    try {
+      scaleModal.style.display = "block";
+      const data = await postToServer("get", "keys");
+      elems = data.elements
+
+      document.getElementById("selectModal").innerHTML = `
+      <span class="close" id="scaleClose" onclick="document.getElementById('scaleModal').style.display = 'none'">&times;</span>
+    `;
+
+      document.getElementById("selectModal").innerHTML += `<div class="text">Select Dash Postion: </div>`;
+      for (let i = 0; i < elems.length; i++) {
+        document.getElementById("selectModal").innerHTML += `<button class="modalButton selectButton" onclick="postToServer('set', '${elems[i]}')">${elems[i]}</button>`;
+      }
+      document.getElementById("selectModal").innerHTML += `<button class="modalButton selectButton" onclick="postToServer('set', 'custom'); scaleModal.style.display = 'none'; scaleModalAdjust.style.display = 'block';">custom</button>`;
+
+        // Close modals
+      document.querySelectorAll(".modalButton").forEach((closeBtn) => {
+        closeBtn.addEventListener("click", () => {
+          scaleModal.style.display = "none";
+          lastPressed = "";
+        });
+      });
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  });
+
+  // Add event listeners to Yes and No buttons
+  yesBtn.addEventListener("click", function () {
+    if (lastPressed == "") {
       modal.style.display = "none";
-    });
+      return;
+    }
+    post("stop")
+    setTimeout(function () {
+      post(lastPressed)
+    }, 1000);
+    modal.style.display = "none";
+  });
+
+  noBtn.addEventListener("click", function () {
+    lastPressed = ""
+    modal.style.display = "none";
+  });
 </script>
+
 </html>
