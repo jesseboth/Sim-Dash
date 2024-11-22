@@ -21,6 +21,10 @@ stop(){
 }
 
 newJsonFile() {
+  if [ ! -d ${SCRIPT_DIR}/$(dirname "$1") ]; then
+    mkdir ${SCRIPT_DIR}/web-server/data
+  fi
+
   if [ -f ${SCRIPT_DIR}/$1 ]; then
     return
   fi
@@ -30,6 +34,10 @@ newJsonFile() {
 }
 
 newScaleFile() {
+  if [ ! -d ${SCRIPT_DIR}/$(dirname "$1") ]; then
+    mkdir ${SCRIPT_DIR}/web-server/data
+  fi
+
   if [ -f ${SCRIPT_DIR}/$1 ]; then
     return
   fi
