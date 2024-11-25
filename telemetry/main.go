@@ -13,6 +13,7 @@ import (
     "os/signal"
     "strings"
     "syscall"
+    "strconv"
 
     "encoding/json"
     "io/ioutil"
@@ -46,7 +47,8 @@ type TimingData struct {
     TimingSplits  []float32 // Current lap splits
     BestSplits    []float32 // Best splits for comparison
     SessionSplits []float32 // Best splits for the current session
-
+    BestCarTrack  CarDescription       // Track number for the best car for the specific track
+    BestCarTrackSplits []float32 // Time for the best car for the specific track
     startMeters   float32
 }
 
@@ -59,12 +61,19 @@ var timingData = TimingData{
     TimingSplits:  []float32{}, // Initializing empty slices
     BestSplits:    []float32{}, // Initializing empty slices
     SessionSplits: []float32{}, // Initializing empty slices
+    BestCarTrack: CarDescription{
+        CarNumber:   -1, // Default value for CarNumber
+        TrackNumber: -1, // Default value for TrackNumber
+        CarClass:    -1, // Default value for CarClass
+    },
+    BestCarTrackSplits: []float32{},
     startMeters:   -1,           // Default value (already the zero value, so optional)
 }
 
 const splitDistance float32 = 12.0  // Distance per split, adjust as necessary
 const maxFloat = 9999999999.0
 var wrongData int = 0;
+var classBased bool = false;
 
 // readForzaData processes recieved UDP packets
 func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
@@ -143,6 +152,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
                 timingData.Car.TrackNumber = -1 // Set default value if TrackOrdinal is not found
             }
         timingData.BestSplits, err = getTimingSplits(timingData.Car)
+        timingData.BestCarTrack, timingData.BestCarTrackSplits, err = getBestCarforTrack(timingData.Car)
     } else if trackOrdinal, ok := s32map["TrackOrdinal"]; ok {
         // Check if TrackOrdinal exists and is different from current TrackNumber
         if timingData.Car.TrackNumber != int(trackOrdinal) {
@@ -151,6 +161,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
             timingData.Car.CarClass = int(s32map["CarClass"])
             timingData.Car.TrackNumber = int(trackOrdinal)
             timingData.BestSplits, err = getTimingSplits(timingData.Car)
+            timingData.BestCarTrack, timingData.BestCarTrackSplits, err = getBestCarforTrack(timingData.Car)
         }
     }
 
@@ -303,6 +314,7 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
             // Get lap splits from storage
             var err error
             timingData.BestSplits, err = getTimingSplits(timingData.Car)
+            timingData.BestCarTrack, timingData.BestCarTrackSplits, err = getBestCarforTrack(timingData.Car)
             if err != nil {
                 fmt.Println("Error getting timing splits:", err)
             }
@@ -320,6 +332,12 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
                         if err != nil {
                             fmt.Println("Error storing timing data:", err)
                         }
+                    }
+
+                    if last < Last(timingData.BestCarTrackSplits) && timingData.Car.CarNumber != timingData.BestCarTrack.CarNumber {
+                        timingData.BestCarTrackSplits = timingData.TimingSplits;
+                        timingData.BestCarTrack = timingData.Car;
+                        setBestCarForTrack(timingData.Car)
                     }
                 }
 
@@ -362,7 +380,9 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
 
     bestIndex := index
     var targetSplits []float32
-    if motorsport {
+    if(motorsport && classBased) {
+        targetSplits = timingData.BestCarTrackSplits
+    } else if motorsport {
         targetSplits = timingData.BestSplits
     } else {
         targetSplits = timingData.SessionSplits
@@ -377,15 +397,90 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
     return timingData.TimingSplits[index] - targetSplits[bestIndex]
 }
 
+// ReadTopInt reads the first line of a file, trims any whitespace, and converts it to an integer.
+func getBestCarforTrack(car CarDescription) (CarDescription, []float32, error) {
+    // Open the file
+    var trackCar = CarDescription{
+        CarNumber: -1,
+        TrackNumber: -1,
+        CarClass: -1,
+    }
+
+    filePath := filepath.Join("data", "splits", fmt.Sprintf("%d", car.CarClass), fmt.Sprintf("%d", car.TrackNumber))
+    file, err := os.Open(filePath)
+    if err != nil {
+        return trackCar, []float32{}, fmt.Errorf("failed to open file: %w", err)
+    }
+    defer file.Close()
+
+    // Read the first line using a scanner
+    scanner := bufio.NewScanner(file)
+    if scanner.Scan() {
+        line := strings.TrimSpace(scanner.Text())
+        // Convert the line to an integer
+        value, err := strconv.Atoi(line)
+        if err != nil {
+            return trackCar, []float32{}, fmt.Errorf("failed to convert to int: %w", err)
+        }
+
+        trackCar = CarDescription{
+            CarNumber: value,
+            TrackNumber: car.TrackNumber,
+            CarClass: car.CarClass,
+        }
+
+        splits, err := getTimingSplits(trackCar)
+        if len(splits) == 0 {
+            return trackCar, []float32{}, fmt.Errorf("error reading file: ", err)
+        }
+            
+        return trackCar, splits, nil
+    }
+
+    // Check for scanner errors
+    if err := scanner.Err(); err != nil {
+        return trackCar, []float32{}, fmt.Errorf("error reading file: %w", err)
+    }
+
+    return trackCar, []float32{}, fmt.Errorf("file is empty")
+}
+
+func setBestCarForTrack(car CarDescription) error {
+    // Construct the file path
+    filePath := filepath.Join("data", "splits", fmt.Sprintf("%d", car.CarClass), fmt.Sprintf("%d", car.TrackNumber))
+
+    // Create the directory if it doesn't exist
+    if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+        return fmt.Errorf("failed to create directory: %w", err)
+    }
+
+    // Open the file for writing (create or truncate if it already exists)
+    file, err := os.Create(filePath)
+    if err != nil {
+        return fmt.Errorf("failed to open file: %w", err)
+    }
+    defer file.Close()
+
+    // Write the car number and best time to the file
+    _, err = fmt.Fprintf(file, "%d", car.CarNumber)
+    if err != nil {
+        return fmt.Errorf("failed to write to file: %w", err)
+    }
+
+    return nil
+}
+
 func main() {
     var game string;
 
     flag.StringVar(&game, "game", "FM", "Specify an abreviated game ie: FM, FH5")
     jsonPTR := flag.Bool("j", true, "Enables JSON HTTP server on port 8888")
+    classPTR := flag.Bool("c", true, "Enables class based splits instead of car based")
     debugModePTR := flag.Bool("d", false, "Enables extra debug information if set")
     flag.Parse()
 
     jsonEnabled := *jsonPTR
+    classBased = *classPTR
 
     if strings.HasPrefix(game, "FM") {
         motorsport = true
@@ -578,4 +673,12 @@ func GetOutboundIP() net.IP {
     localAddr := conn.LocalAddr().(*net.UDPAddr)
 
     return localAddr.IP
+}
+
+func Last[T any](arr []T) (T) {
+	if len(arr) == 0 {
+		var zeroValue T // Return zero value for the type
+		return zeroValue
+	}
+	return arr[len(arr)-1]
 }
