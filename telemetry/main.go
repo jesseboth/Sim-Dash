@@ -52,6 +52,14 @@ type TimingData struct {
     startMeters   float32
 }
 
+type SplitType int
+const (
+	Unknown SplitType = iota // iota starts at 0 and increments
+    ClassSpecific
+	CarSpecific
+	Session
+)
+
 var timingData = TimingData{
     Car: CarDescription{
         CarNumber:   -1, // Default value for CarNumber
@@ -73,7 +81,7 @@ var timingData = TimingData{
 const splitDistance float32 = 12.0  // Distance per split, adjust as necessary
 const maxFloat = 9999999999.0
 var wrongData int = 0;
-var classBased bool = false;
+var splitType SplitType = Unknown;
 
 // readForzaData processes recieved UDP packets
 func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
@@ -380,9 +388,9 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
 
     bestIndex := index
     var targetSplits []float32
-    if(motorsport && classBased) {
+    if(motorsport && splitType == ClassSpecific) {
         targetSplits = timingData.BestCarTrackSplits
-    } else if motorsport {
+    } else if motorsport && splitType == CarSpecific {
         targetSplits = timingData.BestSplits
     } else {
         targetSplits = timingData.SessionSplits
@@ -472,15 +480,26 @@ func setBestCarForTrack(car CarDescription) error {
 
 func main() {
     var game string;
+    var splitTypeSTR string;
 
     flag.StringVar(&game, "game", "FM", "Specify an abreviated game ie: FM, FH5")
     jsonPTR := flag.Bool("j", true, "Enables JSON HTTP server on port 8888")
-    classPTR := flag.Bool("c", true, "Enables class based splits instead of car based")
+    flag.StringVar(&splitTypeSTR, "split", "car", "car(overall)/class(overall)/session based splits")
     debugModePTR := flag.Bool("d", false, "Enables extra debug information if set")
     flag.Parse()
 
     jsonEnabled := *jsonPTR
-    classBased = *classPTR
+
+    if splitTypeSTR == "car" {
+        splitType = CarSpecific
+    }else if splitTypeSTR == "class" {
+        splitType = ClassSpecific
+    }else if splitTypeSTR == "session" {
+        splitType = Session
+    }else {
+        fmt.Errorf("Invalid split type %s", splitTypeSTR)
+        return
+    }
 
     if strings.HasPrefix(game, "FM") {
         motorsport = true
