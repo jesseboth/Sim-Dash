@@ -177,8 +177,12 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
         f32map["Split"] = UpdateSplit(&timingData, f32map["DistanceTraveled"], u16map["LapNumber"], f32map["CurrentLap"], f32map["LastLap"], f32map["SessionBestLap"]);
 
         // Set best Lap
-        if(len(timingData.BestSplits) > 0) {
+        if(splitType == CarSpecific && len(timingData.BestSplits) > 0) {
             f32map["BestLap"] = timingData.BestSplits[len(timingData.BestSplits)-1];
+        } else if(splitType == ClassSpecific && len(timingData.BestCarTrackSplits) > 0) {
+            f32map["BestLap"] = timingData.BestCarTrackSplits[len(timingData.BestCarTrackSplits)-1];
+        } else if(splitType == Session && len(timingData.SessionSplits) > 0) {
+            f32map["BestLap"] = timingData.SessionSplits[len(timingData.SessionSplits)-1];
         } else {
             f32map["BestLap"] = 0;
         }
@@ -454,6 +458,13 @@ func getBestCarforTrack(car CarDescription) (CarDescription, []float32, error) {
 }
 
 func setBestCarForTrack(car CarDescription) error {
+    // Create the directories (including parent directories if needed)
+    dirPath := fmt.Sprintf("data/splits/%d/%d", car.CarClass)
+    err := os.MkdirAll(dirPath, 0755)
+    if err != nil {
+        return fmt.Errorf("failed to create directory: %v", err)
+    }
+    
     // Construct the file path
     filePath := filepath.Join("data", "splits", fmt.Sprintf("%d", car.CarClass), fmt.Sprintf("%d", car.TrackNumber))
 
