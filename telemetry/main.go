@@ -326,10 +326,10 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
             // Get lap splits from storage
             var err error
             timingData.BestSplits, err = getTimingSplits(timingData.Car)
-            timingData.BestCarTrack, timingData.BestCarTrackSplits, err = getBestCarforTrack(timingData.Car)
             if err != nil {
                 fmt.Println("Error getting timing splits:", err)
             }
+            timingData.BestCarTrack, timingData.BestCarTrackSplits, err = getBestCarforTrack(timingData.Car)
         }
 
         if len(timingData.TimingSplits) > 1 && timingData.TimingSplits[len(timingData.TimingSplits)-1] + 2 > last {
@@ -346,7 +346,7 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
                         }
                     }
 
-                    if last < Last(timingData.BestCarTrackSplits) && timingData.Car.CarNumber != timingData.BestCarTrack.CarNumber {
+                    if last < Last(timingData.BestCarTrackSplits) {
                         timingData.BestCarTrackSplits = timingData.TimingSplits;
                         timingData.BestCarTrack = timingData.Car;
                         setBestCarForTrack(timingData.Car)
@@ -458,12 +458,6 @@ func getBestCarforTrack(car CarDescription) (CarDescription, []float32, error) {
 }
 
 func setBestCarForTrack(car CarDescription) error {
-    // Create the directories (including parent directories if needed)
-    dirPath := fmt.Sprintf("data/splits/%d/%d", car.CarClass)
-    err := os.MkdirAll(dirPath, 0755)
-    if err != nil {
-        return fmt.Errorf("failed to create directory: %v", err)
-    }
     
     // Construct the file path
     filePath := filepath.Join("data", "splits", fmt.Sprintf("%d", car.CarClass), fmt.Sprintf("%d", car.TrackNumber))
@@ -705,10 +699,9 @@ func GetOutboundIP() net.IP {
     return localAddr.IP
 }
 
-func Last[T any](arr []T) (T) {
+func Last(arr []float32) float32 {
 	if len(arr) == 0 {
-		var zeroValue T // Return zero value for the type
-		return zeroValue
+		return 3.402823466e+38 // Max value for float32
 	}
 	return arr[len(arr)-1]
 }
