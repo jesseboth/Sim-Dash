@@ -41,12 +41,29 @@
     </div>
   </div>
 
+  <div id="splitTypeModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <div class="container"></div>
+      <div class="text">Select Split Type:</div>
+      <div class="button-row">
+        <button id="split-car" class="splitBtn modalButton">Car</button>
+        <button id="split-class" class="splitBtn modalButton">Class</button>
+        <button id="split-session" class="splitBtn modalButton">Session</button>
+      </div>
+    </div>
+  </div>
+
   <button id="FM" class="large-button">Forza Motorsport</button>
   <button id="FH5" class="large-button">Forza Horizon 5</button>
   <button id="FM7" class="large-button">Forza Motorsport 7</button>
   <button id="FH4" class="large-button">Forza Horizon 4</button>
   <button id="stop" class="large-button" style="background-color: red; border: 2px solid red;">Stop</button>
-  <button id="scale" class="large-button" style="position:fixed; bottom: 20px;">Scale Dash</button>
+  <!-- <button id="scale" class="large-button" style="position:fixed; bottom: 20px;">Scale Dash</button> -->
+  <div class="bottom-buttons">
+    <button id="scale" class="small-button">Scale Dash</button>
+    <button id="config" class="small-button">Config</button>
+  </div>
   <button id="dash" class="redirect"></button>
 </body>
 
@@ -78,6 +95,39 @@
   .large-button:hover {
     background-color: #0056b3;
     color: #d4d4d4;
+  }
+
+  .bottom-buttons {
+    position: fixed;
+    bottom: 20px;
+    display: flex;
+    gap: 20px;
+    height: 10%;
+  }
+
+  .small-button {
+    width: 240px; /* Half the size of large-button */
+    /* height: 10%; */
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border: 2px solid #007bff;
+    background-color: #007bff;
+    color: white;
+    border-radius: 10px;
+    transition: background-color 0.3s, color 0.3s;
+  }
+
+  .small-button:hover {
+    background-color: #0056b3;
+    color: #d4d4d4;
+  }
+
+  .button-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px; /* Space between buttons */
+    margin-top: 20px; /* Optional spacing above the row */
   }
 
   .redirect {
@@ -147,6 +197,8 @@
     cursor: pointer;
     color: black;
     border-radius: 10px;
+    background-color: #007bff;
+    border: 2px solid #007bff;
     transition: background-color 0.3s, color 0.3s;
   }
 
@@ -229,22 +281,29 @@
       .catch(error => console.error('Error:', error));
   }
 
-  function postToServer(action, value) {
+  async function postToServer(post, action, value) {
     const body = {};
     body[action] = value;
 
-    return fetch('/Scale', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    })
-      .then((response) => response.json())
-      .catch((error) => {
-        console.error('Error:', error);
-        throw error; // Re-throw the error so it can be handled by the caller
+    try {
+      const response = await fetch(`/${post}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data; // Returns the parsed JSON response
+    } catch (error) {
+      console.error('Error:', error);
+      throw error; // Rethrow the error for the caller to handle
+    }
   }
 
   function createButtonListener(name) {
@@ -269,6 +328,7 @@
   const modal = document.getElementById("myModal");
   const scaleModal = document.getElementById("scaleModal");
   const scaleModalAdjust = document.getElementById("scaleModalAdjust");
+  const splitTypeModal = document.getElementById("splitTypeModal");
 
   // Close modals
   document.querySelectorAll(".close").forEach((closeBtn) => {
@@ -276,15 +336,20 @@
       modal.style.display = "none";
       scaleModal.style.display = "none";
       scaleModalAdjust.style.display = "none";
+      splitTypeModal.style.display = "none";
       lastPressed = "";
     });
   });
 
   // Scale and Move Functions
-  document.getElementById("scaleUpBtn").addEventListener("click", () => postToServer("scale", 1));
-  document.getElementById("scaleDownBtn").addEventListener("click", () => postToServer("scale", -1));
-  document.getElementById("moveUpBtn").addEventListener("click", () => postToServer("move", -1));
-  document.getElementById("moveDownBtn").addEventListener("click", () => postToServer("move", 1));
+  document.getElementById("scaleUpBtn").addEventListener("click", () => postToServer("Scale", "scale", 1));
+  document.getElementById("scaleDownBtn").addEventListener("click", () => postToServer("Scale", "scale", -1));
+  document.getElementById("moveUpBtn").addEventListener("click", () => postToServer("Scale", "move", -1));
+  document.getElementById("moveDownBtn").addEventListener("click", () => postToServer("Scale", "move", 1));
+
+  document.getElementById("split-car").addEventListener("click", () => postToServer("SplitType", "split", "car") && refreshSplitType("car"));
+  document.getElementById("split-class").addEventListener("click", () => postToServer("SplitType", "split", "class") && refreshSplitType("class"));
+  document.getElementById("split-session").addEventListener("click", () => postToServer("SplitType", "split", "session") && refreshSplitType("session"));
 
   // Save settings
   document.getElementById("saveBtn").addEventListener("click", () => {
@@ -297,19 +362,21 @@
     }
     newName = newName.toLowerCase();
     newName.split(" ").join("-");
-    postToServer("save", newName);
+    postToServer("Scale", "save", newName);
     scaleModalAdjust.style.display = "none";
 });
 
   function setScale(key) {
-    postToServer("set", key);
+    postToServer("Scale", "set", key);
   }
 
   document.getElementById("scale").addEventListener("click", async () => {
     try {
       scaleModal.style.display = "block";
-      const data = await postToServer("get", "keys");
+      const data = await postToServer("Scale", "get", "keys");
       elems = data.elements
+
+      const selected = (await postToServer("Scale", "get", "current")).current;
 
       document.getElementById("selectModal").innerHTML = `
       <span class="close" id="scaleClose" onclick="document.getElementById('scaleModal').style.display = 'none'">&times;</span>
@@ -317,10 +384,11 @@
 
       document.getElementById("selectModal").innerHTML += `<div class="text">Select Dash Postion: </div>`;
       for (let i = 0; i < elems.length; i++) {
-        document.getElementById("selectModal").innerHTML += `<button class="modalButton selectButton" onclick="postToServer('set', '${elems[i]}')">${elems[i]}</button>`;
+        document.getElementById("selectModal").innerHTML += `<button id='scale-${elems[i]}'class="modalButton selectButton" onclick="postToServer('Scale', 'set', '${elems[i]}')">${elems[i]}</button>`;
       }
-      document.getElementById("selectModal").innerHTML += `<button class="modalButton selectButton" onclick="postToServer('set', 'custom'); scaleModal.style.display = 'none'; scaleModalAdjust.style.display = 'block';">custom</button>`;
+      document.getElementById("selectModal").innerHTML += `<button id='scale-custom' class="modalButton selectButton" onclick="postToServer('Scale', 'set', 'custom'); scaleModal.style.display = 'none'; scaleModalAdjust.style.display = 'block';">custom</button>`;
 
+      document.getElementById("scale-"+selected).style.border = "2px solid #67e088";
         // Close modals
       document.querySelectorAll(".modalButton").forEach((closeBtn) => {
         closeBtn.addEventListener("click", () => {
@@ -349,6 +417,30 @@
   noBtn.addEventListener("click", function () {
     lastPressed = ""
     modal.style.display = "none";
+  });
+
+  async function refreshSplitType(split=undefined) {
+    if(split == undefined) {
+      data = await postToServer("SplitType", "split", "get");
+      if(data.success = false) {
+        console.log("Error getting split type");
+        return;
+      }
+      split = data.split;
+    }
+
+
+    document.querySelectorAll('.splitBtn').forEach((element) => {
+      element.style.border = "2px solid #007bff";
+    });
+
+    document.getElementById("split-" + split).style.border = "2px solid #67e088";
+
+    splitTypeModal.style.display = "block";
+  }
+
+  document.getElementById("config").addEventListener("click", async () => {
+    await refreshSplitType();
   });
 </script>
 

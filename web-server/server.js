@@ -12,6 +12,7 @@ const options = {
 };
 
 dash="/forza-dash";
+split="car";
 
 // Function to read and parse the JSON file
 const getJsonData = (filePath) => {
@@ -79,7 +80,7 @@ const server = http.createServer((req, res) => {
         if(telemetry == null){
             telemetryType = "motorsport"
             dash = "forza-dash"
-            telemetry = spawn('../telemetry/fdt', ['-game', req.url.substring(1), '-j'], options);
+            telemetry = spawn('../telemetry/fdt', ['-game', req.url.substring(1), '-j', '-split', split], options);
             retVal.success = true;
         }
 
@@ -177,6 +178,10 @@ const server = http.createServer((req, res) => {
                     retJson.success = true;
                     retJson.elements = Object.keys(scales);
                 }
+                else if(data.hasOwnProperty("get") && data.get == "current"){
+                    retJson.success = true;
+                    retJson.current = scaleName;
+                }
                 else if(data.hasOwnProperty("save")){
                     scales[data["save"]] = { ...scale };
                     fs.writeFileSync('data/scale.json', JSON.stringify(scales, null, 4));
@@ -209,6 +214,39 @@ const server = http.createServer((req, res) => {
                 console.error('Error parsing JSON:', error);
                 res.writeHead(400, { 'Content-Type': 'text/plain' });
                 res.end(JSON.stringify(retJson));
+            }
+        });
+        return;
+    }
+    else if (req.url === '/SplitType' && req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk) => {
+            body += chunk.toString(); // convert Buffer to string
+        });
+
+        req.on('end', () => {
+            try {
+                retJson = {success: false}
+                const data = JSON.parse(body);
+
+                data.split = data.split.toLowerCase();
+
+                if(data.split == "car" || data.split == "class" || data.split == "session"){
+                    split = data.split;
+                    retJson.success = true;
+                }
+                else if(data.split == "get"){
+                    retJson.success = true;
+                    retJson.split = split;
+                }
+
+                res.writeHead(200, { 'Content-Type': 'text/plain' });
+                res.end(JSON.stringify(retJson));
+
+            } catch (error) {
+                console.error('Error parsing JSON:', error);
+                res.writeHead(400, { 'Content-Type': 'text/plain' });
+                res.end('Invalid JSON');
             }
         });
         return;
