@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const { spawn } = require('child_process');
-const port = 3001; // This is the port for the Express server
+const port = 3000; // This is the port for the Express server
 
 // Template for the return objects
 const postReturn = {

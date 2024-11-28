@@ -178,11 +178,11 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
 
         // Set best Lap
         if(splitType == CarSpecific && len(timingData.BestSplits) > 0) {
-            f32map["BestLap"] = timingData.BestSplits[len(timingData.BestSplits)-1];
+            f32map["BestLap"] = Last(timingData.BestSplits);
         } else if(splitType == ClassSpecific && len(timingData.BestCarTrackSplits) > 0) {
-            f32map["BestLap"] = timingData.BestCarTrackSplits[len(timingData.BestCarTrackSplits)-1];
+            f32map["BestLap"] = Last(timingData.BestCarTrackSplits);
         } else if(splitType == Session && len(timingData.SessionSplits) > 0) {
-            f32map["BestLap"] = timingData.SessionSplits[len(timingData.SessionSplits)-1];
+            f32map["BestLap"] = Last(timingData.SessionSplits);
         } else {
             f32map["BestLap"] = 0;
         }
@@ -332,12 +332,12 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
             timingData.BestCarTrack, timingData.BestCarTrackSplits, err = getBestCarforTrack(timingData.Car)
         }
 
-        if len(timingData.TimingSplits) > 1 && timingData.TimingSplits[len(timingData.TimingSplits)-1] + 2 > last {
+        if len(timingData.TimingSplits) > 1 && Last(timingData.TimingSplits) + 2 > last {
             timingData.TimingSplits = append(timingData.TimingSplits, float32(math.Round(float64(last*1000)) / 1000))
 
             // Update best and session splits if last time matches best
             if timingData.TimingSplits[0] != -1 && last > 0 && last == best {
-                if len(timingData.BestSplits) == 0 || best < timingData.BestSplits[len(timingData.BestSplits)-1] {
+                if len(timingData.BestSplits) == 0 || best < Last(timingData.BestSplits) {
                     timingData.BestSplits = append([]float32(nil), timingData.TimingSplits...) // Copy splits to BestSplits
                     if timingData.Car.TrackNumber != -1 {
                         err := setTimingSplits(*timingData)
@@ -353,7 +353,7 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
                     }
                 }
 
-                if len(timingData.SessionSplits) == 0 || best < timingData.SessionSplits[len(timingData.SessionSplits)-1] {
+                if len(timingData.SessionSplits) == 0 || best < Last(timingData.SessionSplits) {
                     timingData.SessionSplits = append([]float32(nil), timingData.TimingSplits...) // Copy splits to SessionSplits
                 }
             }
