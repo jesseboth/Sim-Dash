@@ -3,119 +3,61 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const { spawn } = require('child_process');
-const port = 3000; // This is the port for the Express server
+const port = 3001; // This is the port for the Express server
 
-telemetry = null;
-telemetryType = ""
-const options = {
-    cwd: '../telemetry/', // Set the working directory
-};
-
-dash="/forza-dash";
-split="car";
-
-// Function to read and parse the JSON file
-const getJsonData = (filePath) => {
-    try {
-        const data = fs.readFileSync(filePath, 'utf8');
-        return JSON.parse(data);
-    } catch (err) {
-        console.error(`Error reading or parsing file: ${err}`);
-        return null;
-    }
-};
-
-scales = getJsonData('data/scale.json');
-scale = { ...scales["default"] };;
-
-scaleName = "default";
-scaleSpeedUp = false;
-scaleTime = 0;
+// Template for the return objects
+const postReturn = {
+    success: false,
+    return: undefined,
+    error: undefined,
+}
 
 const EventEmitter = require('events');
+const { DefaultDeserializer } = require('v8');
+const { error } = require('console');
 class Emitter extends EventEmitter { };
 const myEmitter = new Emitter();
 const serveFile = async (filePath, contentType, response) => {
-  try {
-      const rawData = await fsPromises.readFile(
-          filePath,
-          !contentType.includes('image') ? 'utf8' : ''
-      );
-      const data = contentType === 'application/json'
-          ? JSON.parse(rawData) : rawData;
-      response.writeHead(
-          filePath.includes('404.html') ? 404 : 200,
-          { 'Content-Type': contentType }
-      );
-      response.end(
-          contentType === 'application/json' ? JSON.stringify(data) : data
-      );
-  } catch (err) {
-      console.log(err);
-      myEmitter.emit('log', `${err.name}: ${err.message}`, 'errLog.txt');
-      response.statusCode = 500;
-      response.end();
-  }
+    try {
+        const rawData = await fsPromises.readFile(
+            filePath,
+            !contentType.includes('image') ? 'utf8' : ''
+        );
+        const data = contentType === 'application/json'
+            ? JSON.parse(rawData) : rawData;
+        response.writeHead(
+            filePath.includes('404.html') ? 404 : 200,
+            { 'Content-Type': contentType }
+        );
+        response.end(
+            contentType === 'application/json' ? JSON.stringify(data) : data
+        );
+    } catch (err) {
+        console.error(err);
+        myEmitter.emit('log', `${err.name}: ${err.message}`, 'errLog.txt');
+        response.statusCode = 500;
+        response.end();
+    }
 }
 
 const server = http.createServer((req, res) => {
-  // console.log(req.url, req.method);
-  myEmitter.emit('log', `${req.url}\t${req.method}`, 'reqLog.txt');
+    myEmitter.emit('log', `${req.url}\t${req.method}`, 'reqLog.txt');
 
-  const extension = path.extname(req.url);
+    const extension = path.extname(req.url);
 
-  let contentType;
+    let contentType;
 
-  if(req.url == "/telemetrytype" && req.method === 'GET'){
-    retVal = {"type": null}
-    if(telemetry != null){
-        retVal["type"] = telemetryType;
-    }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(retVal));
-    return;
-  }
-  else if (req.url.startsWith("/FM") && req.method === 'POST') {
-        retVal = {succss: false}
-        if(telemetry == null){
-            telemetryType = "motorsport"
-            dash = "forza-dash"
-            telemetry = spawn('../telemetry/fdt', ['-game', req.url.substring(1), '-j', '-split', split], options);
-            retVal.success = true;
+    // is this needed?
+    if (req.url == "/telemetrytype" && req.method === 'GET') {
+        retVal = { "type": null }
+        if (telemetry != null) {
+            retVal["type"] = telemetryType;
         }
-
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(retVal));
         return;
     }
-    else if (req.url.startsWith("/FH") && req.method === 'POST') {
-        retVal = {succss: false}
-        if(telemetry == null){
-            telemetryType = "horizon"
-            dash = "forza-dash"
-            telemetry = spawn('../telemetry/fdt', ['-game', req.url.substring(1), '-j'], options);
-            retVal.success = true;
-        }
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(retVal));
-        return;
-    }
-    else if (req.url === '/stop' && req.method === 'POST') {
-        if(telemetry != null){
-            telemetryType = "";
-            telemetry.kill('SIGKILL');
-            telemetry = null
-            resetOdometer()
-            dash = "forza-dash"
-        }
-
-        retVal = {success: true}
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(retVal));
-        return;
-    }
     else if (req.url == "/Odometer" && req.method === 'POST') {
         let body = '';
         req.on('data', (chunk) => {
@@ -129,7 +71,7 @@ const server = http.createServer((req, res) => {
                 const carNumber = data.carNumber;
                 const meters = data.meters;
 
-                if(meters == null){
+                if (meters == null) {
                     retJson = readOdometer(carNumber)
                 }
                 res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -143,104 +85,28 @@ const server = http.createServer((req, res) => {
         });
         return;
     }
-    else if (req.url == "/Scale" && req.method === 'POST') {
+    else if (req.url === '/config' && req.method === 'POST') {
+        retJson = JSON.parse(JSON.stringify(postReturn));
+
         let body = '';
         req.on('data', (chunk) => {
             body += chunk.toString(); // convert Buffer to string
         });
 
         req.on('end', () => {
-            retJson = {success: false}
             try {
                 const data = JSON.parse(body);
+                retJson.success = true;
 
-                if(data.hasOwnProperty("scale")){
-                    scale["zoom"] += data.scale;
-                    scaleTime = Date.now();
-                }
-                if(data.hasOwnProperty("move")){
-                    scale["top"] += data.move;
-                    scaleTime = Date.now();
-                }
-
-                if(data.hasOwnProperty("set") && data.set != "custom"){
-                    scaleName = data.set;
-                    scale = { ...scales[data.set] };
-                    retJson.success = true;
-                }
-                else if(data.hasOwnProperty("set") && data.set == "custom"){
-                    scaleName = data.set;
-                    scaleTime = Date.now();
-                    scaleSpeedUp = true;
-                    retJson.success = true;
-                }
-                else if(data.hasOwnProperty("get") && data.get == "keys"){
-                    retJson.success = true;
-                    retJson.elements = Object.keys(scales);
-                }
-                else if(data.hasOwnProperty("get") && data.get == "current"){
-                    retJson.success = true;
-                    retJson.current = scaleName;
-                }
-                else if(data.hasOwnProperty("save")){
-                    scales[data["save"]] = { ...scale };
-                    fs.writeFileSync('data/scale.json', JSON.stringify(scales, null, 4));
-                    retJson.success = true;
-                }
+                if (data.hasOwnProperty("game")) { retJson["game"] = reqGame(data.game); }
+                else if (data.hasOwnProperty("split")) { retJson["split"] = reqSplit(data.split); }
+                else if (data.hasOwnProperty("scale")) { retJson["scale"] = reqScale(data.scale); }
                 else {
-                    if(scaleTime != 0 && Date.now()-scaleTime > 10000){
-                        scaleTime = 0;
-                        scaleSpeedUp = false;
-                    }
-
-                    const top = scale["top"];
-                    const zoom = scale["zoom"];
-                    const width = zoom;
-                    const left = (100 - width) / 2;
-
-                    retJson = {
-                        "top": top+"%",
-                        "left": left+"%",
-                        "width": width+"%",
-                        "zoom": zoom+"%",
-                        "speedUp": scaleSpeedUp
-                    }
+                    retJson.success = false;
+                    retJson.error = "Invalid config request: property unknown"
                 }
 
-                res.writeHead(200, { 'Content-Type': 'text/plain' });
-                res.end(JSON.stringify(retJson));
-
-            } catch (error) {
-                console.error('Error parsing JSON:', error);
-                res.writeHead(400, { 'Content-Type': 'text/plain' });
-                res.end(JSON.stringify(retJson));
-            }
-        });
-        return;
-    }
-    else if (req.url === '/SplitType' && req.method === 'POST') {
-        let body = '';
-        req.on('data', (chunk) => {
-            body += chunk.toString(); // convert Buffer to string
-        });
-
-        req.on('end', () => {
-            try {
-                retJson = {success: false}
-                const data = JSON.parse(body);
-
-                data.split = data.split.toLowerCase();
-
-                if(data.split == "car" || data.split == "class" || data.split == "session"){
-                    split = data.split;
-                    retJson.success = true;
-                }
-                else if(data.split == "get"){
-                    retJson.success = true;
-                    retJson.split = split;
-                }
-
-                res.writeHead(200, { 'Content-Type': 'text/plain' });
+                res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(retJson));
 
             } catch (error) {
@@ -249,75 +115,240 @@ const server = http.createServer((req, res) => {
                 res.end('Invalid JSON');
             }
         });
+
         return;
     }
 
-  switch (extension) {
-      case '.css':
-          contentType = 'text/css';
-          break;
-      case '.js':
-          contentType = 'text/javascript';
-          break;
-      case '.json':
-          contentType = 'application/json';
-          break;
-      case '.jpg':
-          contentType = 'image/jpeg';
-          break;
-      case '.png':
-          contentType = 'image/png';
-          break;
-      case '.txt':
-          contentType = 'text/plain';
-          break;
-      case '.otf':
-          contentType = 'application/x-font-opentype';
-          break;
-      default:
-          contentType = 'text/html';
-  }
+    switch (extension) {
+        case '.css':
+            contentType = 'text/css';
+            break;
+        case '.js':
+            contentType = 'text/javascript';
+            break;
+        case '.json':
+            contentType = 'application/json';
+            break;
+        case '.jpg':
+            contentType = 'image/jpeg';
+            break;
+        case '.png':
+            contentType = 'image/png';
+            break;
+        case '.txt':
+            contentType = 'text/plain';
+            break;
+        case '.otf':
+            contentType = 'application/x-font-opentype';
+            break;
+        default:
+            contentType = 'text/html';
+    }
 
-  let filePath =
-      contentType === 'text/html' && req.url === '/'
-          ? path.join(__dirname, 'views', 'index.html')
-          : contentType === 'text/html' && req.url.slice(-1) === '/'
-              ? path.join(__dirname, 'views', req.url, 'index.html')
-              : contentType === 'text/html'
-                  ? path.join(__dirname, 'views', req.url)
-                  : path.join(__dirname, req.url);
+    let filePath =
+        contentType === 'text/html' && req.url === '/'
+            ? path.join(__dirname, 'views', 'index.html')
+            : contentType === 'text/html' && req.url.slice(-1) === '/'
+                ? path.join(__dirname, 'views', req.url, 'index.html')
+                : contentType === 'text/html'
+                    ? path.join(__dirname, 'views', req.url)
+                    : path.join(__dirname, req.url);
 
-  // makes .html extension not required in the browser
-  if (!extension && req.url.slice(-1) !== '/') filePath += '.html';
+    // makes .html extension not required in the browser
+    if (!extension && req.url.slice(-1) !== '/') filePath += '.html';
 
-  const fileExists = fs.existsSync(filePath);
+    const fileExists = fs.existsSync(filePath);
 
-  if(req.url == "/dash"){
-    serveFile(path.join(__dirname, 'views', dash+'.html'), 'text/html', res);
-    return;
-  }
+    if (req.url == "/dash") {
+        serveFile(path.join(__dirname, 'views', dash + '.html'), 'text/html', res);
+        return;
+    }
 
-  if (fileExists) {
-      serveFile(filePath, contentType, res);
-  } else {
-      switch (path.parse(filePath).base) {
-          case 'old-page.html':
-              res.writeHead(301, { 'Location': '/new-page.html' });
-              res.end();
-              break;
-          case 'www-page.html':
-              res.writeHead(301, { 'Location': '/' });
-              res.end();
-              break;
-          default:
-              serveFile(path.join(__dirname, 'views', '404.html'), 'text/html', res);
-      }
-  }
+    if (fileExists) {
+        serveFile(filePath, contentType, res);
+    } else {
+        switch (path.parse(filePath).base) {
+            case 'old-page.html':
+                res.writeHead(301, { 'Location': '/new-page.html' });
+                res.end();
+                break;
+            case 'www-page.html':
+                res.writeHead(301, { 'Location': '/' });
+                res.end();
+                break;
+            default:
+                serveFile(path.join(__dirname, 'views', '404.html'), 'text/html', res);
+        }
+    }
 });
 const PORT = process.env.PORT || port;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
+// Function to read and parse the JSON file
+const getJsonData = (filePath) => {
+    try {
+        const data = fs.readFileSync(filePath, 'utf8');
+        return JSON.parse(data);
+    } catch (err) {
+        console.error(`Error reading or parsing file: ${err}`);
+        return null;
+    }
+};
 
+const config = getJsonData('data/config.json');
+
+telemetry = null;
+telemetryType = ""
+const options = {
+    cwd: '../telemetry/', // Set the working directory
+};
+
+dash = "forza-dash";
+
+function reqGame(game) {
+    retVal = JSON.parse(JSON.stringify(postReturn));
+    game = game.toLowerCase();
+    if (game == "stop") {
+        if (telemetry != null) {
+            telemetryType = "";
+            telemetry.kill('SIGKILL');
+            telemetry = null
+            resetOdometer()
+            dash = "forza-dash"
+        } else {
+            retVal.error = "Telemetry not running"
+        }
+        retVal.success = true;
+
+    } else if (game == "get") {
+        if(telemetryType == ""){
+            retVal.error = "No game running"
+        }
+        else {
+            retVal.return = telemetryType;
+
+        }
+        retVal.success = true;
+
+    } else {
+        if (telemetry == null) {
+            telemetryType = game
+            dash = "forza-dash"
+            telemetry = spawn('../telemetry/fdt', ['-game', game, '-j', '-split', config.split], options);
+            retVal.success = true;
+        } else {
+            retVal.error = "Telemetry already running, stop before starting a new game"
+        }
+    }
+
+    return retVal;
+}
+
+scales = getJsonData('data/scale.json');
+scale = { ...scales["default"] };
+
+scaleSpeedUp = false;
+scaleTime = 0;
+
+function reqScale(data) {
+    retVal = JSON.parse(JSON.stringify(postReturn));
+    if (data.hasOwnProperty("scale")) {
+        scale["zoom"] += data.scale;
+        scaleTime = Date.now();
+    }
+    if (data.hasOwnProperty("move")) {
+        scale["top"] += data.move;
+        scaleTime = Date.now();
+    }
+
+    if (data.hasOwnProperty("set") && data.set != "custom") {
+        if(data.set != config.scale){
+            config.scale = data.set;
+            fs.writeFileSync('data/config.json', JSON.stringify(config, null, 4));
+        }
+
+        scale = { ...scales[data.set] };
+        retVal.success = true;
+    }
+    else if (data.hasOwnProperty("set") && data.set == "custom") {
+        config.scale = data.set;
+        scaleTime = Date.now();
+        scaleSpeedUp = true;
+        retVal.success = true;
+    }
+    else if (data.hasOwnProperty("get") && data.get == "keys") {
+        retVal.success = true;
+        retVal.return = Object.keys(scales);
+    }
+    else if (data.hasOwnProperty("get") && data.get == "current") {
+        retVal.success = true;
+        retVal.return = config.scale;
+    }
+    else if (data.hasOwnProperty("save")) {
+        scales[data["save"]] = { ...scale };
+        fs.writeFileSync('data/scale.json', JSON.stringify(scales, null, 4));
+        retVal.success = true;
+    }
+    else {
+        if (scaleTime != 0 && Date.now() - scaleTime > 10000) {
+            scaleTime = 0;
+            scaleSpeedUp = false;
+        }
+
+        const top = scale["top"];
+        const zoom = scale["zoom"];
+        const width = zoom;
+        const left = (100 - width) / 2;
+
+        retVal.return = {
+            "top": top + "%",
+            "left": left + "%",
+            "width": width + "%",
+            "zoom": zoom + "%",
+            "speedUp": scaleSpeedUp
+        }
+
+        retVal.success = true;
+    }
+
+    return retVal;
+}
+
+function reqSplit(input) {
+    retVal = JSON.parse(JSON.stringify(postReturn));
+
+    input = input.toLowerCase();
+
+    if (input == "car" || input == "class" || input == "session") {
+        if(input != config.split){
+            config.split = input;
+            fs.writeFileSync('data/config.json', JSON.stringify(config, null, 4));
+        }
+        config.split = input;
+        retVal.success = true;
+    }
+    else if (input == "get") {
+        retVal.success = true;
+        retVal.return = config.split;
+    }
+    else {
+        retVal.error = "Invalid split type"
+    }
+    return retVal;
+}
+
+
+
+
+
+
+
+
+
+
+
+/////////////////////////////////////////////////////////////////
+// Odometer Functions - TODO: These should be moved to telemetry
 // Function to update car data in a JSON file
 function updateCarData() {
     const filename = 'data/odometers.json';
@@ -331,10 +362,10 @@ function updateCarData() {
         // Handle file read error or empty file
     }
 
-    if(OdometerInfo.carNumber > 0 && !carData.hasOwnProperty(OdometerInfo.carNumber)){
+    if (OdometerInfo.carNumber > 0 && !carData.hasOwnProperty(OdometerInfo.carNumber)) {
         carData[OdometerInfo.carNumber] = OdometerInfo.stored;
     }
-    else if(OdometerInfo.carNumber > 0 && OdometerInfo.stored > carData[OdometerInfo.carNumber]){
+    else if (OdometerInfo.carNumber > 0 && OdometerInfo.stored > carData[OdometerInfo.carNumber]) {
         carData[OdometerInfo.carNumber] = OdometerInfo.stored;
     }
     else {
@@ -355,7 +386,7 @@ OdometerInfo = {
     stored: 0,
 }
 
-function getCarData(carNumber){
+function getCarData(carNumber) {
     try {
         const data = fs.readFileSync('data/odometers.json', 'utf8');
         carData = JSON.parse(data);
@@ -372,12 +403,12 @@ function getCarData(carNumber){
     }
 }
 
-function getStoredDistance(carNumber){
+function getStoredDistance(carNumber) {
     try {
         const data = fs.readFileSync('data/odometers.json', 'utf8');
         carData = JSON.parse(data);
     } catch (err) {
-        console.log(err)
+        console.error(err)
         return;
     }
 
@@ -393,7 +424,7 @@ function getStoredDistance(carNumber){
 
 dataSaved = false;
 let interval = setInterval(updateOdometer, 25);
-function updateOdometer(){
+function updateOdometer() {
     if (telemetryType == "") {
         return;
     }
@@ -418,45 +449,45 @@ function updateOdometer(){
             if (res.statusCode !== 200) {
                 return;
             }
-            if(data == null){
+            if (data == null) {
                 return;
             }
             try {
                 jsonData = JSON.parse(data);
-                if(Object.keys(jsonData).length === 0) {
+                if (Object.keys(jsonData).length === 0) {
                     return;
                 }
             }
-            catch{
+            catch {
                 return;
             }
 
             newCarNumber = jsonData["CarOrdinal"]
             newMeters = jsonData["DistanceTraveled"];
             velocity = jsonData["Speed"];
-            if(newMeters == 0 && velocity > 5){
-                newMeters = OdometerInfo.meters+(velocity*.025)
+            if (newMeters == 0 && velocity > 5) {
+                newMeters = OdometerInfo.meters + (velocity * .025)
             }
 
-            if(newCarNumber != OdometerInfo.carNumber){
+            if (newCarNumber != OdometerInfo.carNumber) {
                 updateCarData()
                 getCarData(newCarNumber);
             }
 
-            if(newCarNumber != 0){
+            if (newCarNumber != 0) {
                 dataSaved = false;
             }
 
             OdometerInfo.carNumber = newCarNumber;
-            if(newCarNumber != 0){
-                if(newMeters <= 0){
+            if (newCarNumber != 0) {
+                if (newMeters <= 0) {
                     OdometerInfo.offset = newMeters
                 }
-                else{
+                else {
                     OdometerInfo.offset = OdometerInfo.meters;
                 }
                 OdometerInfo.meters = newMeters;
-                OdometerInfo.stored += (OdometerInfo.meters-OdometerInfo.offset)
+                OdometerInfo.stored += (OdometerInfo.meters - OdometerInfo.offset)
             }
 
         });
@@ -477,7 +508,7 @@ function readOdometer(carNumber) {
     }
 }
 
-function resetOdometer(){
+function resetOdometer() {
     updateCarData()
 
     OdometerInfo.carNumber = 0;
