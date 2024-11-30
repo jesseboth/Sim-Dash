@@ -94,7 +94,7 @@ gameBtn("fh4");
 gameBtn("stop");
 createRedirect("dash");
 
-const modal = document.getElementById("myModal");
+const modal = document.getElementById("fdtModal");
 const scaleModal = document.getElementById("scaleModal");
 const scaleModalAdjust = document.getElementById("scaleModalAdjust");
 const configModal = document.getElementById("configModal");
@@ -139,12 +139,11 @@ document.getElementById("config").addEventListener("click", async () => {
 
 document.getElementById("scale").addEventListener("click", async () => {
   try {
-    scaleModal.style.display = "block";
     const data = await postToServer("scale", {"get": "keys"});
     elems = data.return
-
+    
     if(config.scale == "" || config.scale == undefined) {
-        config.scale = (await postToServer("scale", {"get": "current"})).return;
+      config.scale = (await postToServer("scale", {"get": "current"})).return;
     }
 
     document.getElementById("selectModal").innerHTML = `
@@ -158,6 +157,8 @@ document.getElementById("scale").addEventListener("click", async () => {
     document.getElementById("selectModal").innerHTML += `<button id='scale-custom' class="modalButton scaleBtn" onclick="postToServer('scale', {'set': 'custom'}); refreshBtn('scale', 'custom'); scaleModal.style.display = 'none'; scaleModalAdjust.style.display = 'block';">custom</button>`;
 
     refreshBtn("scale", config.scale);
+
+    scaleModal.style.display = "block";
   } catch (error) {
     console.error("Error:", error);
   }
