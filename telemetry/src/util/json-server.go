@@ -1,11 +1,11 @@
 package util
 
 import (
-        "fmt"
-        "log"
-        "net/http"
-        "net"
-        "sync"
+    "fmt"
+    "log"
+    "net/http"
+    "net"
+    "sync"
 )
 
 var (
@@ -59,7 +59,6 @@ func SetJson(str string){
     jsonData = str
 }
 
-// INTERNAL FUNCTIONS
 func enableCors(w *http.ResponseWriter) {
     (*w).Header().Set("Access-Control-Allow-Origin", "*")
 }

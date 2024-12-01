@@ -1,8 +1,8 @@
 package util
 
 import (
-	"encoding/binary"
-	"math"
+    "encoding/binary"
+    "math"
 )
 
 // Float32frombytes converts bytes into a float32

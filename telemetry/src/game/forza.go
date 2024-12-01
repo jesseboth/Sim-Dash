@@ -63,7 +63,34 @@ var wrongData int = 0;
 var splitType SplitType = Unknown;
 var motorsport bool = false;
 
-// readForzaData processes recieved UDP packets
+func Forza(game string) bool {
+    switch game {
+        case "FM":
+            SetMotorsport(true)
+        case "FM7":
+            SetMotorsport(true)
+        case "FH5":
+        case "FH4":
+        default:
+            return false
+        
+        }
+    return true;
+}
+
+func ForzaSetSplit(split string) {
+    if split == "car" {
+        splitType = CarSpecific
+    }else if split == "class" {
+        splitType = ClassSpecific
+    }else if split == "session" {
+        splitType = Session
+   }else {
+        fmt.Errorf("Invalid split type %s", split)
+        return
+    }
+}
+
 func ForzaReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
     buffer := make([]byte, 1500)
 
@@ -154,15 +181,15 @@ func ForzaReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength i
     }
 
     if isRaceOn, ok := s32map["IsRaceOn"]; ok && isRaceOn == 1  {
-        f32map["Split"] = UpdateSplit(&timingData, f32map["DistanceTraveled"], u16map["LapNumber"], f32map["CurrentLap"], f32map["LastLap"], f32map["SessionBestLap"]);
+        f32map["Split"] = updateSplit(&timingData, f32map["DistanceTraveled"], u16map["LapNumber"], f32map["CurrentLap"], f32map["LastLap"], f32map["SessionBestLap"]);
 
         // Set best Lap
         if(splitType == CarSpecific && len(timingData.BestSplits) > 0) {
-            f32map["BestLap"] = Last(timingData.BestSplits);
+            f32map["BestLap"] = lastVal(timingData.BestSplits);
         } else if(splitType == ClassSpecific && len(timingData.BestCarTrackSplits) > 0) {
-            f32map["BestLap"] = Last(timingData.BestCarTrackSplits);
+            f32map["BestLap"] = lastVal(timingData.BestCarTrackSplits);
         } else if(splitType == Session && len(timingData.SessionSplits) > 0) {
-            f32map["BestLap"] = Last(timingData.SessionSplits);
+            f32map["BestLap"] = lastVal(timingData.SessionSplits);
         } else {
             f32map["BestLap"] = 0;
         }
@@ -278,7 +305,7 @@ func getTimingSplits(car CarDescription) ([]float32, error) {
 
 var g_lap = -1
 var g_valid = false
-func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time float32, last float32, best float32) float32 {
+func updateSplit(timingData *TimingData, distance float32, lap uint16, time float32, last float32, best float32) float32 {
     // Round time to 2 decimal places
     time = float32(math.Round(float64(time*100)) / 100)
 
@@ -312,12 +339,12 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
             timingData.BestCarTrack, timingData.BestCarTrackSplits, err = getBestCarforTrack(timingData.Car)
         }
 
-        if len(timingData.TimingSplits) > 1 && Last(timingData.TimingSplits) + 2 > last {
+        if len(timingData.TimingSplits) > 1 && lastVal(timingData.TimingSplits) + 2 > last {
             timingData.TimingSplits = append(timingData.TimingSplits, float32(math.Round(float64(last*1000)) / 1000))
 
             // Update best and session splits if last time matches best
             if timingData.TimingSplits[0] != -1 && last > 0 && last == best {
-                if len(timingData.BestSplits) == 0 || best < Last(timingData.BestSplits) {
+                if len(timingData.BestSplits) == 0 || best < lastVal(timingData.BestSplits) {
                     timingData.BestSplits = append([]float32(nil), timingData.TimingSplits...) // Copy splits to BestSplits
                     if timingData.Car.TrackNumber != -1 {
                         err := setTimingSplits(*timingData)
@@ -326,14 +353,14 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
                         }
                     }
 
-                    if last < Last(timingData.BestCarTrackSplits) {
+                    if last < lastVal(timingData.BestCarTrackSplits) {
                         timingData.BestCarTrackSplits = timingData.TimingSplits;
                         timingData.BestCarTrack = timingData.Car;
                         setBestCarForTrack(timingData.Car)
                     }
                 }
 
-                if len(timingData.SessionSplits) == 0 || best < Last(timingData.SessionSplits) {
+                if len(timingData.SessionSplits) == 0 || best < lastVal(timingData.SessionSplits) {
                     timingData.SessionSplits = append([]float32(nil), timingData.TimingSplits...) // Copy splits to SessionSplits
                 }
             }
@@ -437,7 +464,7 @@ func setBestCarForTrack(car CarDescription) error {
     return nil
 }
 
-func Last(arr []float32) float32 {
+func lastVal(arr []float32) float32 {
     if len(arr) == 0 {
         return 3.402823466e+38 // Max value for float32
     }
@@ -446,36 +473,4 @@ func Last(arr []float32) float32 {
 
 func SetMotorsport(value bool) {
     motorsport = value
-}
-
-func Forza(game string) bool {
-    if game == "FM" {
-        SetMotorsport(true)
-    }
-
-    switch game {
-        case "FM":
-            SetMotorsport(true)
-        case "FM7":
-            SetMotorsport(true)
-        case "FH5":
-        case "FH4":
-        default:
-            return false
-        
-        }
-    return true;
-}
-
-func ForzaSetSplit(split string) {
-    if split == "car" {
-        splitType = CarSpecific
-    }else if split == "class" {
-        splitType = ClassSpecific
-    }else if split == "session" {
-        splitType = Session
-   }else {
-        fmt.Errorf("Invalid split type %s", split)
-        return
-    }
 }

@@ -36,7 +36,7 @@ func main() {
 
     debugMode := *debugModePTR
 
-    SetupCloseHandler() // handle CTRL+C
+    setupCloseHandler() // handle CTRL+C
 
     if debugMode {
         log.Println("Debug mode enabled")
@@ -155,8 +155,7 @@ func main() {
     }
 }
 
-// SetupCloseHandler performs some clean up on exit (CTRL+C)
-func SetupCloseHandler() {
+func setupCloseHandler() {
     c := make(chan os.Signal, 2)
     signal.Notify(c, os.Interrupt, syscall.SIGTERM)
     go func() {
