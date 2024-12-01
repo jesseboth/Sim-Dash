@@ -1,40 +1,19 @@
-package main
+package game
 
 import (
-    "bufio"
     "encoding/binary"
-    "flag"
+    "encoding/json"
     "fmt"
+    "io/ioutil"
     "log"
     "math"
     "net"
-
     "os"
-    "os/signal"
-    "strings"
-    "syscall"
+    "path/filepath"
     "strconv"
 
-    "encoding/json"
-    "io/ioutil"
-    "path/filepath"
+    "jesseboth/fdt/src/util"
 )
-
-const hostname = "0.0.0.0"            // Address to listen on (0.0.0.0 = all interfaces)
-const port = "9999"                   // UDP Port number to listen on
-const service = hostname + ":" + port // Combined hostname+port
-
-var jsonData string // Stores the JSON data to be sent out via the web server if enabled
-var motorsport bool = false
-
-// Telemetry struct represents a piece of telemetry as defined in the Forza data format (see the .dat files)
-type Telemetry struct {
-    position    int
-    name        string
-    dataType    string
-    startOffset int
-    endOffset   int
-}
 
 type CarDescription struct {
     CarNumber     int
@@ -54,10 +33,10 @@ type TimingData struct {
 
 type SplitType int
 const (
-	Unknown SplitType = iota // iota starts at 0 and increments
+    Unknown SplitType = iota // iota starts at 0 and increments
     ClassSpecific
-	CarSpecific
-	Session
+    CarSpecific
+    Session
 )
 
 var timingData = TimingData{
@@ -82,9 +61,10 @@ const splitDistance float32 = 12.0  // Distance per split, adjust as necessary
 const maxFloat = 9999999999.0
 var wrongData int = 0;
 var splitType SplitType = Unknown;
+var motorsport bool = false;
 
 // readForzaData processes recieved UDP packets
-func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
+func ForzaReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
     buffer := make([]byte, 1500)
 
     n, addr, err := conn.ReadFromUDP(buffer)
@@ -94,13 +74,13 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
         if(wrongData <= 5) {
             wrongData++;
         } else {
-            jsonData = "";
+            util.SetJson("")
         }
         return
     }
 
     wrongData = 0;
-    if isFlagPassed("d") == true {
+    if debug {
         log.Println("UDP client connected:", addr)
     }
 
@@ -112,26 +92,26 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
     s8map := make(map[string]int8)
 
     for i, T := range telemArray {
-        data := buffer[:n][T.startOffset:T.endOffset]
+        data := buffer[:n][T.StartOffset:T.EndOffset]
 
-        if isFlagPassed("d") == true {
-            log.Printf("Data chunk %d: %v (%s) (%s)", i, data, T.name, T.dataType)
+        if debug {
+            log.Printf("Data chunk %d: %v (%s) (%s)", i, data, T.Name, T.DataType)
         }
 
-        switch T.dataType {
+        switch T.DataType {
         case "s32":
-            s32map[T.name] = binary.LittleEndian.Uint32(data)
+            s32map[T.Name] = binary.LittleEndian.Uint32(data)
         case "u32":
-            u32map[T.name] = binary.LittleEndian.Uint32(data)
+            u32map[T.Name] = binary.LittleEndian.Uint32(data)
         case "f32":
-            dataFloated := Float32frombytes(data)
-            f32map[T.name] = dataFloated
+            dataFloated := util.Float32frombytes(data)
+            f32map[T.Name] = dataFloated
         case "u16":
-            u16map[T.name] = binary.LittleEndian.Uint16(data)
+            u16map[T.Name] = binary.LittleEndian.Uint16(data)
         case "u8":
-            u8map[T.name] = uint8(data[0])
+            u8map[T.Name] = uint8(data[0])
         case "s8":
-            s8map[T.name] = int8(data[0])
+            s8map[T.Name] = int8(data[0])
         }
     }
 
@@ -142,7 +122,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
         return
     }
 
-    if isFlagPassed("d") == true {
+    if debug {
 
         log.Printf("RPM: %.0f \t Gear: %d \t BHP: %.0f \t Speed: %.0f \t Total slip: %.0f \t Attitude: %s", f32map["CurrentEngineRpm"], u8map["Gear"], (f32map["Power"] / 745.7), (f32map["Speed"] * 2.237))
         log.Printf("DistanceTraveled: %.0f", f32map["DistanceTraveled"])
@@ -195,7 +175,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
         f32map["BestLap"] = 0;
     }
 
-    if isFlagPassed("j") == true {
+    if true {
         // Create a single map to hold all combined data
         combinedMap := make(map[string]interface{})
 
@@ -225,7 +205,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
             log.Fatalf("Error marshalling combined JSON: %v", err)
         }
 
-        jsonData = fmt.Sprintf("%s", finalJSON)
+        util.SetJson(fmt.Sprintf("%s", finalJSON))
     }
 }
 
@@ -419,42 +399,29 @@ func getBestCarforTrack(car CarDescription) (CarDescription, []float32, error) {
     }
 
     filePath := filepath.Join("data", "splits", fmt.Sprintf("%d", car.CarClass), fmt.Sprintf("%d", car.TrackNumber))
-    file, err := os.Open(filePath)
+
+    line, err := util.ReadFileTop(filePath)
     if err != nil {
-        return trackCar, []float32{}, fmt.Errorf("failed to open file: %w", err)
-    }
-    defer file.Close()
-
-    // Read the first line using a scanner
-    scanner := bufio.NewScanner(file)
-    if scanner.Scan() {
-        line := strings.TrimSpace(scanner.Text())
-        // Convert the line to an integer
-        value, err := strconv.Atoi(line)
-        if err != nil {
-            return trackCar, []float32{}, fmt.Errorf("failed to convert to int: %w", err)
-        }
-
-        trackCar = CarDescription{
-            CarNumber: value,
-            TrackNumber: car.TrackNumber,
-            CarClass: car.CarClass,
-        }
-
-        splits, err := getTimingSplits(trackCar)
-        if len(splits) == 0 {
-            return trackCar, []float32{}, fmt.Errorf("error reading file: ", err)
-        }
-            
-        return trackCar, splits, nil
+        return trackCar, []float32{}, fmt.Errorf("error reading file: ", err)
     }
 
-    // Check for scanner errors
-    if err := scanner.Err(); err != nil {
-        return trackCar, []float32{}, fmt.Errorf("error reading file: %w", err)
+    value, err := strconv.Atoi(line)
+    if err != nil {
+        return trackCar, []float32{}, fmt.Errorf("failed to convert to int: %w", err)
     }
 
-    return trackCar, []float32{}, fmt.Errorf("file is empty")
+    trackCar = CarDescription{
+        CarNumber: value,
+        TrackNumber: car.TrackNumber,
+        CarClass: car.CarClass,
+    }
+
+    splits, err := getTimingSplits(trackCar)
+    if len(splits) == 0 {
+        return trackCar, []float32{}, fmt.Errorf("error reading file: ", err)
+    }
+        
+    return trackCar, splits, nil
 }
 
 func setBestCarForTrack(car CarDescription) error {
@@ -462,20 +429,7 @@ func setBestCarForTrack(car CarDescription) error {
     // Construct the file path
     filePath := filepath.Join("data", "splits", fmt.Sprintf("%d", car.CarClass), fmt.Sprintf("%d", car.TrackNumber))
 
-    // Create the directory if it doesn't exist
-    if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
-        return fmt.Errorf("failed to create directory: %w", err)
-    }
-
-    // Open the file for writing (create or truncate if it already exists)
-    file, err := os.Create(filePath)
-    if err != nil {
-        return fmt.Errorf("failed to open file: %w", err)
-    }
-    defer file.Close()
-
-    // Write the car number and best time to the file
-    _, err = fmt.Fprintf(file, "%d", car.CarNumber)
+    err := util.WriteFileTop(filePath, fmt.Sprintf("%d", car.CarNumber))
     if err != nil {
         return fmt.Errorf("failed to write to file: %w", err)
     }
@@ -483,225 +437,45 @@ func setBestCarForTrack(car CarDescription) error {
     return nil
 }
 
-func main() {
-    var game string;
-    var splitTypeSTR string;
+func Last(arr []float32) float32 {
+    if len(arr) == 0 {
+        return 3.402823466e+38 // Max value for float32
+    }
+    return arr[len(arr)-1]
+}
 
-    flag.StringVar(&game, "game", "FM", "Specify an abreviated game ie: FM, FH5")
-    jsonPTR := flag.Bool("j", true, "Enables JSON HTTP server on port 8888")
-    flag.StringVar(&splitTypeSTR, "split", "car", "car(overall)/class(overall)/session based splits")
-    debugModePTR := flag.Bool("d", false, "Enables extra debug information if set")
-    flag.Parse()
+func SetMotorsport(value bool) {
+    motorsport = value
+}
 
-    jsonEnabled := *jsonPTR
+func Forza(game string) bool {
+    if game == "FM" {
+        SetMotorsport(true)
+    }
 
-    if splitTypeSTR == "car" {
+    switch game {
+        case "FM":
+            SetMotorsport(true)
+        case "FM7":
+            SetMotorsport(true)
+        case "FH5":
+        case "FH4":
+        default:
+            return false
+        
+        }
+    return true;
+}
+
+func ForzaSetSplit(split string) {
+    if split == "car" {
         splitType = CarSpecific
-    }else if splitTypeSTR == "class" {
+    }else if split == "class" {
         splitType = ClassSpecific
-    }else if splitTypeSTR == "session" {
+    }else if split == "session" {
         splitType = Session
-    }else {
-        fmt.Errorf("Invalid split type %s", splitTypeSTR)
+   }else {
+        fmt.Errorf("Invalid split type %s", split)
         return
     }
-
-    if strings.HasPrefix(game, "FM") {
-        motorsport = true
-    }
-
-    debugMode := *debugModePTR
-
-    SetupCloseHandler() // handle CTRL+C
-
-    if debugMode {
-        log.Println("Debug mode enabled")
-    }
-
-    var formatFile = "packets/" + game + "_packetformat.dat"
-
-    // Load lines from packet format file
-    lines, err := readLines(formatFile)
-    if err != nil {
-        log.Fatalf("Error reading format file: %s", err)
-    }
-
-    // Process format file into array of Telemetry structs
-    startOffset := 0
-    endOffset := 0
-    dataLength := 0
-    totalLength := 0
-    var telemArray []Telemetry
-
-    for i, line := range lines {
-        dataClean := strings.Split(line, ";")
-        dataFormat := strings.Split(dataClean[0], " ")
-        dataType := dataFormat[0]
-        dataName := dataFormat[1]
-
-        switch dataType {
-        case "s32":
-            dataLength = 4
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "u32":
-            dataLength = 4
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "f32":
-            dataLength = 4
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "u16":
-            dataLength = 2
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "u8":
-            dataLength = 1
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "s8":
-            dataLength = 1
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "hzn":
-            dataLength = 12
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        default:
-            log.Fatalf("Error: Unknown data type in %s \n", formatFile)
-        }
-        if debugMode {
-            log.Printf("Processed %s line %d: %s (%s),  Byte offset: %d:%d \n", formatFile, i, dataName, dataType, startOffset, endOffset)
-        }
-    }
-
-    if debugMode {
-        log.Printf("Logging entire telemArray: \n%v", telemArray)
-        log.Printf("Proccessed %d Telemetry types OK!", len(telemArray))
-    }
-
-
-    if jsonEnabled {
-        go serveJSON()
-    }
-
-    // Setup UDP listener
-    udpAddr, err := net.ResolveUDPAddr("udp4", service)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    listener, err := net.ListenUDP("udp", udpAddr)
-    check(err)
-    defer listener.Close()
-
-    if(debugMode){
-        log.Printf("Forza data out server listening on %s:%s, waiting for Forza data...\n", GetOutboundIP(), port)
-    }
-
-    for {
-        readForzaData(listener, telemArray, totalLength)
-    }
-}
-
-func init() {
-    log.SetFlags(log.Lmicroseconds)
-    if isFlagPassed("d") == true {
-        log.Println("Started Forza Data Tools")
-    }
-}
-
-// Helper functions
-
-// SetupCloseHandler performs some clean up on exit (CTRL+C)
-func SetupCloseHandler() {
-    c := make(chan os.Signal, 2)
-    signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-    go func() {
-        <-c
-        os.Exit(0)
-    }()
-}
-
-// Quick error check helper
-func check(e error) {
-    if e != nil {
-        log.Fatalln(e)
-    }
-}
-
-// Check if flag was passed
-func isFlagPassed(name string) bool {
-    found := false
-    flag.Visit(func(f *flag.Flag) {
-        if f.Name == name {
-            found = true
-        }
-    })
-    return found
-}
-
-// Float32frombytes converts bytes into a float32
-func Float32frombytes(bytes []byte) float32 {
-    bits := binary.LittleEndian.Uint32(bytes)
-    float := math.Float32frombits(bits)
-    return float
-}
-
-// readLines reads a whole file into memory and returns a slice of its lines
-func readLines(path string) ([]string, error) {
-    file, err := os.Open(path)
-    if err != nil {
-        return nil, err
-    }
-    defer file.Close()
-
-    var lines []string
-    scanner := bufio.NewScanner(file)
-    for scanner.Scan() {
-        lines = append(lines, scanner.Text())
-    }
-    return lines, scanner.Err()
-}
-
-// GetOutboundIP finds preferred outbound ip of this machine
-func GetOutboundIP() net.IP {
-    conn, err := net.Dial("udp", "1.2.3.4:4321") // Destination does not need to exist, using this to see which is the primary network interface
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer conn.Close()
-
-    localAddr := conn.LocalAddr().(*net.UDPAddr)
-
-    return localAddr.IP
-}
-
-func Last(arr []float32) float32 {
-	if len(arr) == 0 {
-		return 3.402823466e+38 // Max value for float32
-	}
-	return arr[len(arr)-1]
 }
