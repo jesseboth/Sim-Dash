@@ -147,7 +147,8 @@ async function set_display() {
     }
 
     getOdometer(data["CarOrdinal"])
-    updateDistance(OdometerInfo.meters)
+    // updateDistance(OdometerInfo.meters)
+    updateDistance(data["Odometer"])
 
     updateFuel(data["Fuel"] * 100)
     configureRPM(data["EngineMaxRpm"])

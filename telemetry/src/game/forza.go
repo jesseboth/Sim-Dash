@@ -31,6 +31,13 @@ type TimingData struct {
     startMeters   float32
 }
 
+type Odometer struct {
+    Odometer float32
+    carNumber int
+    offset float32
+    distance float32
+}
+
 type SplitType int
 const (
     Unknown SplitType = iota // iota starts at 0 and increments
@@ -57,6 +64,13 @@ var timingData = TimingData{
     startMeters:   -1,           // Default value (already the zero value, so optional)
 }
 
+var odometer = Odometer{
+    Odometer: 0,
+    carNumber: 0,
+    offset: 0,
+    distance: 0,
+}
+
 const splitDistance float32 = 12.0  // Distance per split, adjust as necessary
 const maxFloat = 9999999999.0
 var wrongData int = 0;
@@ -73,9 +87,9 @@ func ForzaLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, tota
 func Forza(game string) bool {
     switch game {
         case "FM":
-            SetMotorsport(true)
+            setMotorport(true)
         case "FM7":
-            SetMotorsport(true)
+            setMotorport(true)
         case "FH5":
         case "FH4":
         default:
@@ -175,7 +189,6 @@ func readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, d
     }
 
     if debug {
-
         log.Printf("RPM: %.0f \t Gear: %d \t BHP: %.0f \t Speed: %.0f \t Total slip: %.0f \t Attitude: %s", f32map["CurrentEngineRpm"], u8map["Gear"], (f32map["Power"] / 745.7), (f32map["Speed"] * 2.237))
         log.Printf("DistanceTraveled: %.0f", f32map["DistanceTraveled"])
     }
@@ -207,6 +220,7 @@ func readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, d
 
     if isRaceOn, ok := s32map["IsRaceOn"]; ok && isRaceOn == 1  {
         f32map["Split"] = updateSplit(&timingData, f32map["DistanceTraveled"], u16map["LapNumber"], f32map["CurrentLap"], f32map["LastLap"], f32map["SessionBestLap"]);
+        f32map["Odometer"] = updateOdometer(f32map["DistanceTraveled"], s32map["CarOrdinal"]);
 
         // Set best Lap
         if(splitType == CarSpecific && len(timingData.BestSplits) > 0) {
@@ -219,12 +233,14 @@ func readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, d
             f32map["BestLap"] = 0;
         }
     }else {
-        // timingData.TimingSplits = []float32{}
-        // timingData.BestSplits = []float32{}
-        // timingData.SessionSplits = []float32{}
+
+        // Set odometer and reset car number
+        setOdometer(odometer);
+        odometer.carNumber = 0;
 
         f32map["Split"] = maxFloat;
         f32map["BestLap"] = 0;
+        f32map["Odometer"] = 0;
     }
 
     if true {
@@ -441,6 +457,41 @@ func updateSplit(timingData *TimingData, distance float32, lap uint16, time floa
     return timingData.TimingSplits[index] - targetSplits[bestIndex]
 }
 
+func updateOdometer(distance float32, carNumber uint32) float32 {
+    if(odometer.carNumber <= 0) {
+        odometer.carNumber = int(carNumber);
+
+        odometer.Odometer = getOdometer(odometer.carNumber);
+        odometer.offset = distance;
+        odometer.distance = distance;
+    } else if (odometer.carNumber != int(carNumber)) {
+        setOdometer(odometer);
+
+        odometer.carNumber = int(carNumber);
+        odometer.Odometer = getOdometer(odometer.carNumber);
+        odometer.offset = distance;
+        odometer.distance = distance;
+    } else if (odometer.distance-25 > distance) {
+        // rewind handling
+
+        setOdometer(odometer);
+        odometer.offset = distance;
+        odometer.distance = distance;
+    } else {
+        odometer.distance = distance;
+    }
+
+    if(distance < 0) {
+        odometer.offset = 0;
+        odometer.distance = 0;
+        return odometer.Odometer;
+    } else {
+        return odometer.Odometer + odometer.distance - odometer.offset;
+    }
+
+    return 0;
+}
+
 // ReadTopInt reads the first line of a file, trims any whitespace, and converts it to an integer.
 func getBestCarforTrack(car CarDescription) (CarDescription, []float32, error) {
     // Open the file
@@ -489,6 +540,44 @@ func setBestCarForTrack(car CarDescription) error {
     return nil
 }
 
+func getOdometer(CarNumber int) (float32) {
+
+    filePath := filepath.Join("data", "odometers", fmt.Sprintf("%d", CarNumber))
+
+    line, err := util.ReadFileTop(filePath)
+    if err != nil {
+        return 0
+    }
+
+    value, err := strconv.ParseFloat(line, 32)
+    if err != nil {
+        return 0
+    }
+
+    return float32(value)
+}
+
+func setOdometer(odo Odometer) error {
+    if odo.carNumber <= 0 {
+        return fmt.Errorf("Invalid car number")
+    }
+
+    // Construct the file path
+    filePath := filepath.Join("data", "odometers", fmt.Sprintf("%d", odo.carNumber))
+
+    store := odo.Odometer+odo.distance-odo.offset
+    if(store < 0 || odo.Odometer > store) {
+        return fmt.Errorf("Invalid odometer value")
+    }
+
+    err := util.WriteFileTop(filePath, fmt.Sprintf("%f", store))
+    if err != nil {
+        return fmt.Errorf("failed to write to file: %w", err)
+    }
+
+    return nil
+}
+
 func lastVal(arr []float32) float32 {
     if len(arr) == 0 {
         return 3.402823466e+38 // Max value for float32
@@ -496,6 +585,6 @@ func lastVal(arr []float32) float32 {
     return arr[len(arr)-1]
 }
 
-func SetMotorsport(value bool) {
+func setMotorport(value bool) {
     motorsport = value
 }
