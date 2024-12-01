@@ -23,12 +23,9 @@ func main() {
     var splitTypeSTR string;
 
     flag.StringVar(&gameSTR, "game", "FM", "Specify an abreviated game ie: FM, FH5")
-    jsonPTR := flag.Bool("j", true, "Enables JSON HTTP server on port 8888")
     flag.StringVar(&splitTypeSTR, "split", "car", "car(overall)/class(overall)/session based splits")
     debugModePTR := flag.Bool("d", false, "Enables extra debug information if set")
     flag.Parse()
-
-    jsonEnabled := *jsonPTR
 
     if game.Forza(gameSTR) {
         game.ForzaSetSplit(splitTypeSTR);
@@ -127,9 +124,7 @@ func main() {
     }
 
 
-    if jsonEnabled {
-        go util.ServeJson()
-    }
+    go util.ServeJson()
 
     // Setup UDP listener
     udpAddr, err := net.ResolveUDPAddr("udp4", service)
@@ -149,10 +144,10 @@ func main() {
 
 
     if game.Forza(gameSTR) {
-        for {
-            game.ForzaReadData(listener, telemArray, totalLength, debugMode)
-        }
+        go game.ForzaLoop(gameSTR, listener, telemArray, totalLength, debugMode)
     }
+
+    for {}
 }
 
 func setupCloseHandler() {

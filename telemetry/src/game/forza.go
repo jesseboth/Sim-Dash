@@ -63,6 +63,13 @@ var wrongData int = 0;
 var splitType SplitType = Unknown;
 var motorsport bool = false;
 
+func ForzaLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
+    fmt.Println("Starting Telemetry:", ForzaGame(game))
+    for {
+        readData(conn, telemArray, totalLength, debug)
+    }
+}
+
 func Forza(game string) bool {
     switch game {
         case "FM":
@@ -78,6 +85,24 @@ func Forza(game string) bool {
     return true;
 }
 
+func ForzaGame(game string) string {
+    var gameSTR string = "";
+    switch game {
+        case "FM":
+            gameSTR = "Forza Motorsport"
+        case "FM7":
+            gameSTR = "Forza Motorsport 7"
+        case "FH5":
+            gameSTR = "Forza Horizon 5"
+        case "FH4":
+            gameSTR = "Forza Horizon 4"
+        default:
+            return "Unknown"
+        
+        }
+    return gameSTR;
+}
+
 func ForzaSetSplit(split string) {
     if split == "car" {
         splitType = CarSpecific
@@ -91,7 +116,7 @@ func ForzaSetSplit(split string) {
     }
 }
 
-func ForzaReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
+func readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
     buffer := make([]byte, 1500)
 
     n, addr, err := conn.ReadFromUDP(buffer)

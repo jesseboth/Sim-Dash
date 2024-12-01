@@ -234,7 +234,16 @@ function reqGame(game) {
         if (telemetry == null) {
             telemetryType = game
             dash = "forza-dash"
-            telemetry = spawn('../telemetry/fdt', ['-game', game, '-j', '-split', config.split], options);
+            telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split], options);
+
+            telemetry.stdout.on('data', (data) => {
+                process.stdout.write(`FDT: ${data}`);
+            });
+
+            telemetry.stderr.on('data', (data) => {
+                process.stdout.write(`FDT: ${data}`);
+            });
+
             retVal.success = true;
         } else {
             retVal.error = "Telemetry already running, stop before starting a new game"
