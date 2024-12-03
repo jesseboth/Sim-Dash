@@ -220,7 +220,7 @@ func readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, d
 
     if isRaceOn, ok := s32map["IsRaceOn"]; ok && isRaceOn == 1  {
         f32map["Split"] = updateSplit(&timingData, f32map["DistanceTraveled"], u16map["LapNumber"], f32map["CurrentLap"], f32map["LastLap"], f32map["SessionBestLap"]);
-        f32map["Odometer"] = updateOdometer(f32map["DistanceTraveled"], s32map["CarOrdinal"]);
+        f32map["Odometer"] = updateOdometer(f32map["DistanceTraveled"], s32map["CarOrdinal"], f32map["Speed"]);
 
         // Set best Lap
         if(splitType == CarSpecific && len(timingData.BestSplits) > 0) {
@@ -457,13 +457,29 @@ func updateSplit(timingData *TimingData, distance float32, lap uint16, time floa
     return timingData.TimingSplits[index] - targetSplits[bestIndex]
 }
 
-func updateOdometer(distance float32, carNumber uint32) float32 {
+const odometerBounce = 25.0
+const frameTime float32 = 1.0 / 30.0
+var prevVelocity float32 = -1
+func updateOdometer(distance float32, carNumber uint32, velocity float32) float32 {
     if(odometer.carNumber <= 0) {
         odometer.carNumber = int(carNumber);
 
         odometer.Odometer = getOdometer(odometer.carNumber);
         odometer.offset = distance;
         odometer.distance = distance;
+        prevVelocity = -1;
+    } else if (distance == 0 && velocity > 5){
+        odometer.offset = 0;
+        if(velocity != prevVelocity) {
+            odometer.distance += (velocity * frameTime)
+        }
+        prevVelocity = velocity;
+    } else if (distance == 0 && prevVelocity != -1) {
+        setOdometer(odometer);
+        odometer.Odometer += odometer.distance - odometer.offset;
+        odometer.offset = 0;
+        odometer.distance = 0;
+        prevVelocity = -1;
     } else if (odometer.carNumber != int(carNumber)) {
         setOdometer(odometer);
 
@@ -471,13 +487,15 @@ func updateOdometer(distance float32, carNumber uint32) float32 {
         odometer.Odometer = getOdometer(odometer.carNumber);
         odometer.offset = distance;
         odometer.distance = distance;
-    } else if (odometer.distance-25 > distance) {
+        prevVelocity = -1;
+    } else if (odometer.distance-odometerBounce > distance) {
         // rewind handling
-
         setOdometer(odometer);
         odometer.offset = distance;
         odometer.distance = distance;
+        prevVelocity = -1;
     } else {
+        prevVelocity = -1;
         odometer.distance = distance;
     }
 
