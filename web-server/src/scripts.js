@@ -524,6 +524,16 @@ function configureRPM(_maxRPM) {
     document.getElementById("rpm-yellow").style.left = percentage + "%"
 }
 
+function checkDirtyLap(FR, FL, RR, RL, time) {
+    if (dirty && time < 1.0) {
+        dirty = false;
+    }
+
+    if (!dirty && FR > 1 && FL > 1 && RR > 1 && RL > 1) {
+        dirty = true
+    }
+}
+
 // HELPERS
 function formatTime(floatSeconds, showMinutes = true) {
     // Convert float seconds to integer milliseconds
@@ -597,25 +607,6 @@ function getCurrentTimeUnformatted() {
     const hours = now.getHours() % 12 || 12;
     const minutes = now.getMinutes();
     return hours + (minutes / 100);
-}
-
-function getFavoriteOdometer() {
-    fetch('/odometer')
-        .then(response => response.json())
-        .then(data => {
-            return data["return"]
-        })
-        .catch(error => null);
-}
-
-function checkDirtyLap(FR, FL, RR, RL, time) {
-    if (dirty && time < 1.0) {
-        dirty = false;
-    }
-
-    if (!dirty && FR > 1 && FL > 1 && RR > 1 && RL > 1) {
-        dirty = true
-    }
 }
 
 scaleSpeedUp = false;
