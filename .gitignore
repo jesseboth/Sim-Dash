@@ -3,5 +3,4 @@ testing/*
 fdt
 .DS_Store
 */node_modules
-web-server/odometers.json
-web-server/data/odometers.json
+telemetry/data/*
