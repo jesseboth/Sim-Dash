@@ -85,7 +85,7 @@ function set_default() {
         updateTraction(0, 0);
         updatePosition(0)
         updateSplit(invalidSplit)
-        console.log(get_favoriteOdometer())
+        get_favoriteOdometer()
         LapNumber = -1;
     }
 }
@@ -108,7 +108,7 @@ function get_favoriteOdometer() {
                 return data["return"]
             }
             else {
-                console.log("Error: " + data["error"])
+                console.error("Error: " + data["error"])
             }
             return 0;
         })

@@ -33,45 +33,7 @@ newJsonFile() {
   echo "{}" > $1
 }
 
-newScaleFile() {
-  if [ ! -d ${SCRIPT_DIR}/$(dirname "$1") ]; then
-    mkdir ${SCRIPT_DIR}/web-server/data
-  fi
-
-  if [ -f ${SCRIPT_DIR}/$1 ]; then
-    return
-  fi
-
-  touch ${SCRIPT_DIR}/$1
-echo '{
-      "default": {
-        "top": 0,
-        "zoom": 100
-    }
-}' > $1
-}
-
-newConfigFile() {
-  if [ ! -d ${SCRIPT_DIR}/$(dirname "$1") ]; then
-    mkdir ${SCRIPT_DIR}/web-server/data
-  fi
-
-  if [ -f ${SCRIPT_DIR}/$1 ]; then
-    return
-  fi
-
-  touch ${SCRIPT_DIR}/$1
-echo '{
-    "split": "class",
-    "scale": "default"
-}' > $1
-}
-
-
 start() {
-  newJsonFile web-server/data/odometers.json
-  newScaleFile web-server/data/scale.json
-  newConfigFile web-server/data/config.json
   docker run -d $PORTS $VOLUMES --network host --restart always --name "$CONTAINERNAME" "$IMAGENAME"
 }
 

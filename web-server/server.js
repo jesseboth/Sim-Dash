@@ -337,7 +337,7 @@ function reqFavoriteOdometer() {
         retVal.return = data;
     } catch (err) {
         retVal.success = false;
-        retVal.error = err;
+        retVal.error = err.message;
     }
 
     return retVal;
