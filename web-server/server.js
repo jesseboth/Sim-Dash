@@ -40,7 +40,7 @@ const serveFile = async (filePath, contentType, response) => {
     }
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer((req, res) =>  {
     myEmitter.emit('log', `${req.url}\t${req.method}`, 'reqLog.txt');
 
     const extension = path.extname(req.url);
@@ -57,34 +57,14 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify(retVal));
         return;
     }
-
-    else if (req.url == "/Odometer" && req.method === 'POST') {
-        let body = '';
-        req.on('data', (chunk) => {
-            body += chunk.toString(); // convert Buffer to string
-        });
-
-        req.on('end', () => {
-            try {
-                retJson = {}
-                const data = JSON.parse(body);
-                const carNumber = data.carNumber;
-                const meters = data.meters;
-
-                if (meters == null) {
-                    retJson = readOdometer(carNumber)
-                }
-                res.writeHead(200, { 'Content-Type': 'text/plain' });
-                res.end(JSON.stringify(retJson));
-
-            } catch (error) {
-                console.error('Error parsing JSON:', error);
-                res.writeHead(400, { 'Content-Type': 'text/plain' });
-                res.end('Invalid JSON');
-            }
-        });
+    else if (req.url == "/odometer" && req.method === 'GET') {
+        const retVal = reqFavoriteOdometer();
+        // TODO: favoriteCar should be modifiable via webpage
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(retVal));
         return;
     }
+
     else if (req.url === '/config' && req.method === 'POST') {
         retJson = JSON.parse(JSON.stringify(postReturn));
 
@@ -346,182 +326,19 @@ function reqSplit(input) {
     return retVal;
 }
 
+function reqFavoriteOdometer() {
+    retVal = JSON.parse(JSON.stringify(postReturn));
+    retVal.success = true;
 
+    const filePath = "../telemetry/data/odometers/" + config.favoriteCar;
 
-
-
-
-
-
-
-
-
-/////////////////////////////////////////////////////////////////
-// Odometer Functions - TODO: These should be moved to telemetry
-// Function to update car data in a JSON file
-function updateCarData() {
-    const filename = 'data/odometers.json';
-
-    // Read existing data from JSON file
-    let carData = {};
     try {
-        const data = fs.readFileSync(filename, 'utf8');
-        carData = JSON.parse(data);
-    } catch (error) {
-        // Handle file read error or empty file
-    }
-
-    if (OdometerInfo.carNumber > 0 && !carData.hasOwnProperty(OdometerInfo.carNumber)) {
-        carData[OdometerInfo.carNumber] = OdometerInfo.stored;
-    }
-    else if (OdometerInfo.carNumber > 0 && OdometerInfo.stored > carData[OdometerInfo.carNumber]) {
-        carData[OdometerInfo.carNumber] = OdometerInfo.stored;
-    }
-    else {
-        return;
-    }
-    // Write updated data back to JSON file
-    try {
-        const jsonData = JSON.stringify(carData, null, 2);
-        fs.writeFileSync(filename, jsonData);
-    } catch (error) {
-    }
-}
-
-OdometerInfo = {
-    carNumber: 0,
-    meters: 0,
-    offset: 0,
-    stored: 0,
-}
-
-function getCarData(carNumber) {
-    try {
-        const data = fs.readFileSync('data/odometers.json', 'utf8');
-        carData = JSON.parse(data);
+        const data = fs.readFileSync(filePath, 'utf8');
+        retVal.return = data;
     } catch (err) {
-        return;
+        retVal.success = false;
+        retVal.error = err;
     }
 
-    carString = carNumber.toString();
-    // Check if the car number exists in the data
-    if (carData.hasOwnProperty(carNumber)) {
-        OdometerInfo.stored = (carData[carNumber])
-    } else {
-        OdometerInfo.stored = 0;
-    }
-}
-
-function getStoredDistance(carNumber) {
-    try {
-        const data = fs.readFileSync('data/odometers.json', 'utf8');
-        carData = JSON.parse(data);
-    } catch (err) {
-        console.error(err)
-        return;
-    }
-
-    carString = carNumber.toString();
-
-    // Check if the car number exists in the data
-    if (carData.hasOwnProperty(carNumber)) {
-        return carData[carNumber];
-    } else {
-        return 0;
-    }
-}
-
-dataSaved = false;
-let interval = setInterval(updateOdometer, 25);
-function updateOdometer() {
-    if (telemetryType == "") {
-        return;
-    }
-
-    const options = {
-        hostname: "localhost",
-        port: 8888,
-        path: '/telemetry',
-        method: 'GET'
-    };
-
-    const req = http.request(options, (res) => {
-        let data = '';
-
-        // A chunk of data has been received
-        res.on('data', (chunk) => {
-            data += chunk;
-        });
-
-        // The whole response has been received
-        res.on('end', () => {
-            if (res.statusCode !== 200) {
-                return;
-            }
-            if (data == null) {
-                return;
-            }
-            try {
-                jsonData = JSON.parse(data);
-                if (Object.keys(jsonData).length === 0) {
-                    return;
-                }
-            }
-            catch {
-                return;
-            }
-
-            newCarNumber = jsonData["CarOrdinal"]
-            newMeters = jsonData["DistanceTraveled"];
-            velocity = jsonData["Speed"];
-            if (newMeters == 0 && velocity > 5) {
-                newMeters = OdometerInfo.meters + (velocity * .025)
-            }
-
-            if (newCarNumber != OdometerInfo.carNumber) {
-                updateCarData()
-                getCarData(newCarNumber);
-            }
-
-            if (newCarNumber != 0) {
-                dataSaved = false;
-            }
-
-            OdometerInfo.carNumber = newCarNumber;
-            if (newCarNumber != 0) {
-                if (newMeters <= 0) {
-                    OdometerInfo.offset = newMeters
-                }
-                else {
-                    OdometerInfo.offset = OdometerInfo.meters;
-                }
-                OdometerInfo.meters = newMeters;
-                OdometerInfo.stored += (OdometerInfo.meters - OdometerInfo.offset)
-            }
-
-        });
-    });
-
-    req.on('error', (error) => {
-    });
-
-    req.end();
-}
-
-function readOdometer(carNumber) {
-    carString = carNumber.toString();
-    if (OdometerInfo.carNumber == carNumber) {
-        return { "carNumber": carString, "meters": OdometerInfo.stored };
-    } else {
-        return { "carNumber": carString, "meters": getStoredDistance(carNumber) };
-    }
-}
-
-function resetOdometer() {
-    updateCarData()
-
-    OdometerInfo.carNumber = 0;
-    OdometerInfo.meters = 0;
-    OdometerInfo.offset = 0;
-    OdometerInfo.store = 0;
+    return retVal;
 }

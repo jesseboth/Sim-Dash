@@ -15,11 +15,6 @@ launchControlComplete = false;
 launchControlSpeed = 0;
 bestLap = -1;
 
-OdometerInfo = {
-    carNumber: 0,
-    meters: 0
-};
-
 LapNumber = -1;
 
 // Define temperature range (adjust as needed)
@@ -90,11 +85,7 @@ function set_default() {
         updateTraction(0, 0);
         updatePosition(0)
         updateSplit(invalidSplit)
-        GOLF_R = 3533;
-        getOdometer(GOLF_R);
-        setTimeout(() => {
-            updateDistance(OdometerInfo.meters)
-        }, 250);
+        console.log(get_favoriteOdometer())
         LapNumber = -1;
     }
 }
@@ -104,6 +95,22 @@ function get_telemetryType() {
         .then(response => response.json())
         .then(data => {
             telemetryType = data["type"]
+        })
+        .catch(error => null);
+}
+
+function get_favoriteOdometer() {
+    fetch('/odometer')
+        .then(response => response.json())
+        .then(data => {
+            if(data.success == true) {
+                updateDistance(data["return"])
+                return data["return"]
+            }
+            else {
+                console.log("Error: " + data["error"])
+            }
+            return 0;
         })
         .catch(error => null);
 }
@@ -146,8 +153,6 @@ async function set_display() {
         updateGear(gear)
     }
 
-    getOdometer(data["CarOrdinal"])
-    // updateDistance(OdometerInfo.meters)
     updateDistance(data["Odometer"])
 
     updateFuel(data["Fuel"] * 100)
@@ -594,34 +599,13 @@ function getCurrentTimeUnformatted() {
     return hours + (minutes / 100);
 }
 
-function getOdometer(carNumber, offset = 0) {
-    if (carNumber == 0) {
-        OdometerInfo.meters = 0;
-        OdometerInfo.carNumber = carNumber;
-        return 0;
-    }
-
-    fetch("/Odometer", {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ carNumber: carNumber, meters: null })
-    })
-        .then(response => {
-            if (response.ok) {
-                return response.json();
-            }
-        })
+function getFavoriteOdometer() {
+    fetch('/odometer')
+        .then(response => response.json())
         .then(data => {
-            if (data != null) {
-                OdometerInfo.carNumber = carNumber
-                OdometerInfo.meters = data.meters;
-            }
+            return data["return"]
         })
-        .catch(error => {
-            console.error('Error sending data to server:', error);
-        });
+        .catch(error => null);
 }
 
 function checkDirtyLap(FR, FL, RR, RL, time) {
@@ -632,36 +616,6 @@ function checkDirtyLap(FR, FL, RR, RL, time) {
     if (!dirty && FR > 1 && FL > 1 && RR > 1 && RL > 1) {
         dirty = true
     }
-}
-
-function getOdometer(carNumber, offset = 0) {
-    if (carNumber == 0) {
-        OdometerInfo.meters = 0;
-        OdometerInfo.carNumber = carNumber;
-        return 0;
-    }
-
-    fetch("/Odometer", {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ carNumber: carNumber, meters: null })
-    })
-        .then(response => {
-            if (response.ok) {
-                return response.json();
-            }
-        })
-        .then(data => {
-            if (data != null) {
-                OdometerInfo.carNumber = carNumber
-                OdometerInfo.meters = data.meters;
-            }
-        })
-        .catch(error => {
-            console.error('Error sending data to server:', error);
-        });
 }
 
 scaleSpeedUp = false;
