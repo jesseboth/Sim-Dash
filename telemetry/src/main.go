@@ -139,12 +139,14 @@ func main() {
     defer listener.Close()
 
     if(debugMode){
-        log.Printf("Forza data out server listening on %s:%s, waiting for Forza data...\n", util.GetOutboundIP(), port)
+        log.Printf("Telemetry data out server listening on %s:%s, waiting for data...\n", util.GetOutboundIP(), port)
     }
 
 
     if game.Forza(gameSTR) {
         go game.ForzaLoop(gameSTR, listener, telemArray, totalLength, debugMode)
+    } else {
+        go game.DefaultLoop(gameSTR, listener, telemArray, totalLength, debugMode)
     }
 
     for {}
