@@ -8,6 +8,9 @@ SCRIPT_DIR=$(realpath $(dirname "$0"))
 VOLUMES="-v ${SCRIPT_DIR}/web-server/data:/usr/src/app/web-server/data \
          -v ${SCRIPT_DIR}/telemetry/data:/usr/src/app/telemetry/data"
 
+git update-index --assume-unchanged web-server/data/scale.json
+git update-index --assume-unchanged web-server/data/config.json
+
 build(){
   if ! docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINERNAME}$"; then
     echo "Building $CONTAINERNAME"
