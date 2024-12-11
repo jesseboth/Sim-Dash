@@ -1,40 +1,19 @@
-package main
+package game
 
 import (
-    "bufio"
     "encoding/binary"
-    "flag"
+    "encoding/json"
     "fmt"
+    "io/ioutil"
     "log"
     "math"
     "net"
-
     "os"
-    "os/signal"
-    "strings"
-    "syscall"
+    "path/filepath"
     "strconv"
 
-    "encoding/json"
-    "io/ioutil"
-    "path/filepath"
+    "jesseboth/fdt/src/util"
 )
-
-const hostname = "0.0.0.0"            // Address to listen on (0.0.0.0 = all interfaces)
-const port = "9999"                   // UDP Port number to listen on
-const service = hostname + ":" + port // Combined hostname+port
-
-var jsonData string // Stores the JSON data to be sent out via the web server if enabled
-var motorsport bool = false
-
-// Telemetry struct represents a piece of telemetry as defined in the Forza data format (see the .dat files)
-type Telemetry struct {
-    position    int
-    name        string
-    dataType    string
-    startOffset int
-    endOffset   int
-}
 
 type CarDescription struct {
     CarNumber     int
@@ -52,12 +31,19 @@ type TimingData struct {
     startMeters   float32
 }
 
+type Odometer struct {
+    Odometer float32
+    carNumber int
+    offset float32
+    distance float32
+}
+
 type SplitType int
 const (
-	Unknown SplitType = iota // iota starts at 0 and increments
+    Unknown SplitType = iota // iota starts at 0 and increments
     ClassSpecific
-	CarSpecific
-	Session
+    CarSpecific
+    Session
 )
 
 var timingData = TimingData{
@@ -78,13 +64,73 @@ var timingData = TimingData{
     startMeters:   -1,           // Default value (already the zero value, so optional)
 }
 
+var odometer = Odometer{
+    Odometer: 0,
+    carNumber: 0,
+    offset: 0,
+    distance: 0,
+}
+
 const splitDistance float32 = 12.0  // Distance per split, adjust as necessary
 const maxFloat = 9999999999.0
 var wrongData int = 0;
 var splitType SplitType = Unknown;
+var motorsport bool = false;
 
-// readForzaData processes recieved UDP packets
-func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
+func ForzaLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
+    fmt.Println("Starting Telemetry:", ForzaGame(game))
+    for {
+        readData(conn, telemArray, totalLength, debug)
+    }
+}
+
+func Forza(game string) bool {
+    switch game {
+        case "FM":
+            setMotorport(true)
+        case "FM7":
+            setMotorport(true)
+        case "FH5":
+        case "FH4":
+        default:
+            return false
+        
+        }
+    return true;
+}
+
+func ForzaGame(game string) string {
+    var gameSTR string = "";
+    switch game {
+        case "FM":
+            gameSTR = "Forza Motorsport"
+        case "FM7":
+            gameSTR = "Forza Motorsport 7"
+        case "FH5":
+            gameSTR = "Forza Horizon 5"
+        case "FH4":
+            gameSTR = "Forza Horizon 4"
+        default:
+            return "Unknown"
+        
+        }
+    return gameSTR;
+}
+
+func ForzaSetSplit(split string) {
+    if split == "car" {
+        splitType = CarSpecific
+    }else if split == "class" {
+        splitType = ClassSpecific
+    }else if split == "session" {
+        splitType = Session
+   }else {
+        fmt.Errorf("Invalid split type %s", split)
+        return
+    }
+}
+
+func readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
     buffer := make([]byte, 1500)
 
     n, addr, err := conn.ReadFromUDP(buffer)
@@ -94,13 +140,13 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
         if(wrongData <= 5) {
             wrongData++;
         } else {
-            jsonData = "";
+            util.SetJson("")
         }
         return
     }
 
     wrongData = 0;
-    if isFlagPassed("d") == true {
+    if debug {
         log.Println("UDP client connected:", addr)
     }
 
@@ -112,26 +158,26 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
     s8map := make(map[string]int8)
 
     for i, T := range telemArray {
-        data := buffer[:n][T.startOffset:T.endOffset]
+        data := buffer[:n][T.StartOffset:T.EndOffset]
 
-        if isFlagPassed("d") == true {
-            log.Printf("Data chunk %d: %v (%s) (%s)", i, data, T.name, T.dataType)
+        if debug {
+            log.Printf("Data chunk %d: %v (%s) (%s)", i, data, T.Name, T.DataType)
         }
 
-        switch T.dataType {
+        switch T.DataType {
         case "s32":
-            s32map[T.name] = binary.LittleEndian.Uint32(data)
+            s32map[T.Name] = binary.LittleEndian.Uint32(data)
         case "u32":
-            u32map[T.name] = binary.LittleEndian.Uint32(data)
+            u32map[T.Name] = binary.LittleEndian.Uint32(data)
         case "f32":
-            dataFloated := Float32frombytes(data)
-            f32map[T.name] = dataFloated
+            dataFloated := util.Float32frombytes(data)
+            f32map[T.Name] = dataFloated
         case "u16":
-            u16map[T.name] = binary.LittleEndian.Uint16(data)
+            u16map[T.Name] = binary.LittleEndian.Uint16(data)
         case "u8":
-            u8map[T.name] = uint8(data[0])
+            u8map[T.Name] = uint8(data[0])
         case "s8":
-            s8map[T.name] = int8(data[0])
+            s8map[T.Name] = int8(data[0])
         }
     }
 
@@ -142,8 +188,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
         return
     }
 
-    if isFlagPassed("d") == true {
-
+    if debug {
         log.Printf("RPM: %.0f \t Gear: %d \t BHP: %.0f \t Speed: %.0f \t Total slip: %.0f \t Attitude: %s", f32map["CurrentEngineRpm"], u8map["Gear"], (f32map["Power"] / 745.7), (f32map["Speed"] * 2.237))
         log.Printf("DistanceTraveled: %.0f", f32map["DistanceTraveled"])
     }
@@ -174,28 +219,31 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
     }
 
     if isRaceOn, ok := s32map["IsRaceOn"]; ok && isRaceOn == 1  {
-        f32map["Split"] = UpdateSplit(&timingData, f32map["DistanceTraveled"], u16map["LapNumber"], f32map["CurrentLap"], f32map["LastLap"], f32map["SessionBestLap"]);
+        f32map["Split"] = updateSplit(&timingData, f32map["DistanceTraveled"], u16map["LapNumber"], f32map["CurrentLap"], f32map["LastLap"], f32map["SessionBestLap"]);
+        f32map["Odometer"] = updateOdometer(f32map["DistanceTraveled"], s32map["CarOrdinal"], f32map["Speed"]);
 
         // Set best Lap
         if(splitType == CarSpecific && len(timingData.BestSplits) > 0) {
-            f32map["BestLap"] = timingData.BestSplits[len(timingData.BestSplits)-1];
+            f32map["BestLap"] = lastVal(timingData.BestSplits);
         } else if(splitType == ClassSpecific && len(timingData.BestCarTrackSplits) > 0) {
-            f32map["BestLap"] = timingData.BestCarTrackSplits[len(timingData.BestCarTrackSplits)-1];
+            f32map["BestLap"] = lastVal(timingData.BestCarTrackSplits);
         } else if(splitType == Session && len(timingData.SessionSplits) > 0) {
-            f32map["BestLap"] = timingData.SessionSplits[len(timingData.SessionSplits)-1];
+            f32map["BestLap"] = lastVal(timingData.SessionSplits);
         } else {
             f32map["BestLap"] = 0;
         }
     }else {
-        // timingData.TimingSplits = []float32{}
-        // timingData.BestSplits = []float32{}
-        // timingData.SessionSplits = []float32{}
+
+        // Set odometer and reset car number
+        setOdometer(odometer);
+        odometer.carNumber = 0;
 
         f32map["Split"] = maxFloat;
         f32map["BestLap"] = 0;
+        f32map["Odometer"] = 0;
     }
 
-    if isFlagPassed("j") == true {
+    if true {
         // Create a single map to hold all combined data
         combinedMap := make(map[string]interface{})
 
@@ -225,7 +273,7 @@ func readForzaData(conn *net.UDPConn, telemArray []Telemetry, totalLength int) {
             log.Fatalf("Error marshalling combined JSON: %v", err)
         }
 
-        jsonData = fmt.Sprintf("%s", finalJSON)
+        util.SetJson(fmt.Sprintf("%s", finalJSON))
     }
 }
 
@@ -298,7 +346,7 @@ func getTimingSplits(car CarDescription) ([]float32, error) {
 
 var g_lap = -1
 var g_valid = false
-func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time float32, last float32, best float32) float32 {
+func updateSplit(timingData *TimingData, distance float32, lap uint16, time float32, last float32, best float32) float32 {
     // Round time to 2 decimal places
     time = float32(math.Round(float64(time*100)) / 100)
 
@@ -332,12 +380,12 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
             timingData.BestCarTrack, timingData.BestCarTrackSplits, err = getBestCarforTrack(timingData.Car)
         }
 
-        if len(timingData.TimingSplits) > 1 && timingData.TimingSplits[len(timingData.TimingSplits)-1] + 2 > last {
+        if len(timingData.TimingSplits) > 1 && lastVal(timingData.TimingSplits) + 2 > last {
             timingData.TimingSplits = append(timingData.TimingSplits, float32(math.Round(float64(last*1000)) / 1000))
 
             // Update best and session splits if last time matches best
             if timingData.TimingSplits[0] != -1 && last > 0 && last == best {
-                if len(timingData.BestSplits) == 0 || best < timingData.BestSplits[len(timingData.BestSplits)-1] {
+                if len(timingData.BestSplits) == 0 || best < lastVal(timingData.BestSplits) {
                     timingData.BestSplits = append([]float32(nil), timingData.TimingSplits...) // Copy splits to BestSplits
                     if timingData.Car.TrackNumber != -1 {
                         err := setTimingSplits(*timingData)
@@ -346,14 +394,14 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
                         }
                     }
 
-                    if last < Last(timingData.BestCarTrackSplits) {
+                    if last < lastVal(timingData.BestCarTrackSplits) {
                         timingData.BestCarTrackSplits = timingData.TimingSplits;
                         timingData.BestCarTrack = timingData.Car;
                         setBestCarForTrack(timingData.Car)
                     }
                 }
 
-                if len(timingData.SessionSplits) == 0 || best < timingData.SessionSplits[len(timingData.SessionSplits)-1] {
+                if len(timingData.SessionSplits) == 0 || best < lastVal(timingData.SessionSplits) {
                     timingData.SessionSplits = append([]float32(nil), timingData.TimingSplits...) // Copy splits to SessionSplits
                 }
             }
@@ -409,6 +457,59 @@ func UpdateSplit(timingData *TimingData, distance float32, lap uint16, time floa
     return timingData.TimingSplits[index] - targetSplits[bestIndex]
 }
 
+const odometerBounce = 25.0
+const frameTime float32 = 1.0 / 30.0
+var prevVelocity float32 = -1
+func updateOdometer(distance float32, carNumber uint32, velocity float32) float32 {
+    if(odometer.carNumber <= 0) {
+        odometer.carNumber = int(carNumber);
+
+        odometer.Odometer = getOdometer(odometer.carNumber);
+        odometer.offset = distance;
+        odometer.distance = distance;
+        prevVelocity = -1;
+    } else if (distance == 0 && velocity > 5){
+        odometer.offset = 0;
+        if(velocity != prevVelocity) {
+            odometer.distance += (velocity * frameTime)
+        }
+        prevVelocity = velocity;
+    } else if (distance == 0 && prevVelocity != -1) {
+        setOdometer(odometer);
+        odometer.Odometer += odometer.distance - odometer.offset;
+        odometer.offset = 0;
+        odometer.distance = 0;
+        prevVelocity = -1;
+    } else if (odometer.carNumber != int(carNumber)) {
+        setOdometer(odometer);
+
+        odometer.carNumber = int(carNumber);
+        odometer.Odometer = getOdometer(odometer.carNumber);
+        odometer.offset = distance;
+        odometer.distance = distance;
+        prevVelocity = -1;
+    } else if (odometer.distance-odometerBounce > distance) {
+        // rewind handling
+        setOdometer(odometer);
+        odometer.offset = distance;
+        odometer.distance = distance;
+        prevVelocity = -1;
+    } else {
+        prevVelocity = -1;
+        odometer.distance = distance;
+    }
+
+    if(distance < 0) {
+        odometer.offset = 0;
+        odometer.distance = 0;
+        return odometer.Odometer;
+    } else {
+        return odometer.Odometer + odometer.distance - odometer.offset;
+    }
+
+    return 0;
+}
+
 // ReadTopInt reads the first line of a file, trims any whitespace, and converts it to an integer.
 func getBestCarforTrack(car CarDescription) (CarDescription, []float32, error) {
     // Open the file
@@ -419,42 +520,29 @@ func getBestCarforTrack(car CarDescription) (CarDescription, []float32, error) {
     }
 
     filePath := filepath.Join("data", "splits", fmt.Sprintf("%d", car.CarClass), fmt.Sprintf("%d", car.TrackNumber))
-    file, err := os.Open(filePath)
+
+    line, err := util.ReadFileTop(filePath)
     if err != nil {
-        return trackCar, []float32{}, fmt.Errorf("failed to open file: %w", err)
-    }
-    defer file.Close()
-
-    // Read the first line using a scanner
-    scanner := bufio.NewScanner(file)
-    if scanner.Scan() {
-        line := strings.TrimSpace(scanner.Text())
-        // Convert the line to an integer
-        value, err := strconv.Atoi(line)
-        if err != nil {
-            return trackCar, []float32{}, fmt.Errorf("failed to convert to int: %w", err)
-        }
-
-        trackCar = CarDescription{
-            CarNumber: value,
-            TrackNumber: car.TrackNumber,
-            CarClass: car.CarClass,
-        }
-
-        splits, err := getTimingSplits(trackCar)
-        if len(splits) == 0 {
-            return trackCar, []float32{}, fmt.Errorf("error reading file: ", err)
-        }
-            
-        return trackCar, splits, nil
+        return trackCar, []float32{}, fmt.Errorf("error reading file: ", err)
     }
 
-    // Check for scanner errors
-    if err := scanner.Err(); err != nil {
-        return trackCar, []float32{}, fmt.Errorf("error reading file: %w", err)
+    value, err := strconv.Atoi(line)
+    if err != nil {
+        return trackCar, []float32{}, fmt.Errorf("failed to convert to int: %w", err)
     }
 
-    return trackCar, []float32{}, fmt.Errorf("file is empty")
+    trackCar = CarDescription{
+        CarNumber: value,
+        TrackNumber: car.TrackNumber,
+        CarClass: car.CarClass,
+    }
+
+    splits, err := getTimingSplits(trackCar)
+    if len(splits) == 0 {
+        return trackCar, []float32{}, fmt.Errorf("error reading file: ", err)
+    }
+        
+    return trackCar, splits, nil
 }
 
 func setBestCarForTrack(car CarDescription) error {
@@ -462,20 +550,7 @@ func setBestCarForTrack(car CarDescription) error {
     // Construct the file path
     filePath := filepath.Join("data", "splits", fmt.Sprintf("%d", car.CarClass), fmt.Sprintf("%d", car.TrackNumber))
 
-    // Create the directory if it doesn't exist
-    if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
-        return fmt.Errorf("failed to create directory: %w", err)
-    }
-
-    // Open the file for writing (create or truncate if it already exists)
-    file, err := os.Create(filePath)
-    if err != nil {
-        return fmt.Errorf("failed to open file: %w", err)
-    }
-    defer file.Close()
-
-    // Write the car number and best time to the file
-    _, err = fmt.Fprintf(file, "%d", car.CarNumber)
+    err := util.WriteFileTop(filePath, fmt.Sprintf("%d", car.CarNumber))
     if err != nil {
         return fmt.Errorf("failed to write to file: %w", err)
     }
@@ -483,225 +558,51 @@ func setBestCarForTrack(car CarDescription) error {
     return nil
 }
 
-func main() {
-    var game string;
-    var splitTypeSTR string;
+func getOdometer(CarNumber int) (float32) {
 
-    flag.StringVar(&game, "game", "FM", "Specify an abreviated game ie: FM, FH5")
-    jsonPTR := flag.Bool("j", true, "Enables JSON HTTP server on port 8888")
-    flag.StringVar(&splitTypeSTR, "split", "car", "car(overall)/class(overall)/session based splits")
-    debugModePTR := flag.Bool("d", false, "Enables extra debug information if set")
-    flag.Parse()
+    filePath := filepath.Join("data", "odometers", fmt.Sprintf("%d", CarNumber))
 
-    jsonEnabled := *jsonPTR
-
-    if splitTypeSTR == "car" {
-        splitType = CarSpecific
-    }else if splitTypeSTR == "class" {
-        splitType = ClassSpecific
-    }else if splitTypeSTR == "session" {
-        splitType = Session
-    }else {
-        fmt.Errorf("Invalid split type %s", splitTypeSTR)
-        return
-    }
-
-    if strings.HasPrefix(game, "FM") {
-        motorsport = true
-    }
-
-    debugMode := *debugModePTR
-
-    SetupCloseHandler() // handle CTRL+C
-
-    if debugMode {
-        log.Println("Debug mode enabled")
-    }
-
-    var formatFile = "packets/" + game + "_packetformat.dat"
-
-    // Load lines from packet format file
-    lines, err := readLines(formatFile)
+    line, err := util.ReadFileTop(filePath)
     if err != nil {
-        log.Fatalf("Error reading format file: %s", err)
+        return 0
     }
 
-    // Process format file into array of Telemetry structs
-    startOffset := 0
-    endOffset := 0
-    dataLength := 0
-    totalLength := 0
-    var telemArray []Telemetry
-
-    for i, line := range lines {
-        dataClean := strings.Split(line, ";")
-        dataFormat := strings.Split(dataClean[0], " ")
-        dataType := dataFormat[0]
-        dataName := dataFormat[1]
-
-        switch dataType {
-        case "s32":
-            dataLength = 4
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "u32":
-            dataLength = 4
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "f32":
-            dataLength = 4
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "u16":
-            dataLength = 2
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "u8":
-            dataLength = 1
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "s8":
-            dataLength = 1
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "hzn":
-            dataLength = 12
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        default:
-            log.Fatalf("Error: Unknown data type in %s \n", formatFile)
-        }
-        if debugMode {
-            log.Printf("Processed %s line %d: %s (%s),  Byte offset: %d:%d \n", formatFile, i, dataName, dataType, startOffset, endOffset)
-        }
-    }
-
-    if debugMode {
-        log.Printf("Logging entire telemArray: \n%v", telemArray)
-        log.Printf("Proccessed %d Telemetry types OK!", len(telemArray))
-    }
-
-
-    if jsonEnabled {
-        go serveJSON()
-    }
-
-    // Setup UDP listener
-    udpAddr, err := net.ResolveUDPAddr("udp4", service)
+    value, err := strconv.ParseFloat(line, 32)
     if err != nil {
-        log.Fatal(err)
+        return 0
     }
 
-    listener, err := net.ListenUDP("udp", udpAddr)
-    check(err)
-    defer listener.Close()
+    return float32(value)
+}
 
-    if(debugMode){
-        log.Printf("Forza data out server listening on %s:%s, waiting for Forza data...\n", GetOutboundIP(), port)
+func setOdometer(odo Odometer) error {
+    if odo.carNumber <= 0 {
+        return fmt.Errorf("Invalid car number")
     }
 
-    for {
-        readForzaData(listener, telemArray, totalLength)
+    // Construct the file path
+    filePath := filepath.Join("data", "odometers", fmt.Sprintf("%d", odo.carNumber))
+
+    store := odo.Odometer+odo.distance-odo.offset
+    if(store < 0 || odo.Odometer > store) {
+        return fmt.Errorf("Invalid odometer value")
     }
-}
 
-func init() {
-    log.SetFlags(log.Lmicroseconds)
-    if isFlagPassed("d") == true {
-        log.Println("Started Forza Data Tools")
-    }
-}
-
-// Helper functions
-
-// SetupCloseHandler performs some clean up on exit (CTRL+C)
-func SetupCloseHandler() {
-    c := make(chan os.Signal, 2)
-    signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-    go func() {
-        <-c
-        os.Exit(0)
-    }()
-}
-
-// Quick error check helper
-func check(e error) {
-    if e != nil {
-        log.Fatalln(e)
-    }
-}
-
-// Check if flag was passed
-func isFlagPassed(name string) bool {
-    found := false
-    flag.Visit(func(f *flag.Flag) {
-        if f.Name == name {
-            found = true
-        }
-    })
-    return found
-}
-
-// Float32frombytes converts bytes into a float32
-func Float32frombytes(bytes []byte) float32 {
-    bits := binary.LittleEndian.Uint32(bytes)
-    float := math.Float32frombits(bits)
-    return float
-}
-
-// readLines reads a whole file into memory and returns a slice of its lines
-func readLines(path string) ([]string, error) {
-    file, err := os.Open(path)
+    err := util.WriteFileTop(filePath, fmt.Sprintf("%f", store))
     if err != nil {
-        return nil, err
+        return fmt.Errorf("failed to write to file: %w", err)
     }
-    defer file.Close()
 
-    var lines []string
-    scanner := bufio.NewScanner(file)
-    for scanner.Scan() {
-        lines = append(lines, scanner.Text())
-    }
-    return lines, scanner.Err()
+    return nil
 }
 
-// GetOutboundIP finds preferred outbound ip of this machine
-func GetOutboundIP() net.IP {
-    conn, err := net.Dial("udp", "1.2.3.4:4321") // Destination does not need to exist, using this to see which is the primary network interface
-    if err != nil {
-        log.Fatal(err)
+func lastVal(arr []float32) float32 {
+    if len(arr) == 0 {
+        return 3.402823466e+38 // Max value for float32
     }
-    defer conn.Close()
-
-    localAddr := conn.LocalAddr().(*net.UDPAddr)
-
-    return localAddr.IP
+    return arr[len(arr)-1]
 }
 
-func Last(arr []float32) float32 {
-	if len(arr) == 0 {
-		return 3.402823466e+38 // Max value for float32
-	}
-	return arr[len(arr)-1]
+func setMotorport(value bool) {
+    motorsport = value
 }

@@ -8,6 +8,9 @@ SCRIPT_DIR=$(realpath $(dirname "$0"))
 VOLUMES="-v ${SCRIPT_DIR}/web-server/data:/usr/src/app/web-server/data \
          -v ${SCRIPT_DIR}/telemetry/data:/usr/src/app/telemetry/data"
 
+git update-index --assume-unchanged web-server/data/scale.json
+git update-index --assume-unchanged web-server/data/config.json
+
 build(){
   if ! docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINERNAME}$"; then
     echo "Building $CONTAINERNAME"
@@ -33,28 +36,7 @@ newJsonFile() {
   echo "{}" > $1
 }
 
-newScaleFile() {
-  if [ ! -d ${SCRIPT_DIR}/$(dirname "$1") ]; then
-    mkdir ${SCRIPT_DIR}/web-server/data
-  fi
-
-  if [ -f ${SCRIPT_DIR}/$1 ]; then
-    return
-  fi
-
-  touch ${SCRIPT_DIR}/$1
-echo '{
-      "default": {
-        "top": 0,
-        "zoom": 100
-    }
-}' > $1
-}
-
-
 start() {
-  newJsonFile web-server/data/odometers.json
-  newScaleFile web-server/data/scale.json
   docker run -d $PORTS $VOLUMES --network host --restart always --name "$CONTAINERNAME" "$IMAGENAME"
 }
 
@@ -76,7 +58,7 @@ elif [ "$1" == "remove" ]; then
   docker rm $CONTAINERNAME
 elif [ "$1" == "enter" ]; then
   docker exec -it $CONTAINERNAME bash
-elif [ "$1" == "logs" ]; then
+elif [[ "$1" == "logs" || "$1" == "log" ]]; then
   docker logs -f $CONTAINERNAME
 else
   build
