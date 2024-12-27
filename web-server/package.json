@@ -4,7 +4,9 @@
   "description": "Forza Telemetry Web Server",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "PORT=3001 node server.js",
+    "animate": "ANIMATE=true PORT=3001 node server.js"
   },
   "author": "Jesse Both",
   "license": "ISC",

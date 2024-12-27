@@ -46,14 +46,14 @@ body {
   overflow: hidden;
 }
 
-.status-bar-container {
+.fuel-container {
   width: 100%;
   height: 5px;
   position: absolute;
   bottom: 21%;
 }
 
-.status-bar {
+.fuel {
   width: 5%;
   height: 5px;
   background-color: #505050;
@@ -61,7 +61,7 @@ body {
   position: absolute;
 }
 
-#status-bar-fill {
+#fuel-fill {
   height: 100%;
   background-color: red;
   position: absolute;
@@ -71,7 +71,7 @@ body {
   width: 15%;
 }
 
-#status-bar-fill-white {
+#fuel-fill-white {
   height: 100%;
   background-color: white;
   position: absolute;

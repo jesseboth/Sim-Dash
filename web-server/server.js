@@ -3,7 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const { spawn } = require('child_process');
-const port = 3000; // This is the port for the Express server
+const port = process.env.PORT || 3000;
+const animate = process.env.ANIMATE || false;
 
 // Template for the return objects
 const postReturn = {
@@ -79,12 +80,9 @@ const server = http.createServer((req, res) =>  {
                 retJson.success = true;
 
                 if (data.hasOwnProperty("game")) { retJson["game"] = reqGame(data.game); }
-                else if (data.hasOwnProperty("split")) { retJson["split"] = reqSplit(data.split); }
-                else if (data.hasOwnProperty("scale")) { retJson["scale"] = reqScale(data.scale); }
-                else {
-                    retJson.success = false;
-                    retJson.error = "Invalid config request: property unknown"
-                }
+                if (data.hasOwnProperty("split")) { retJson["split"] = reqSplit(data.split); }
+                if (data.hasOwnProperty("dash")) { retJson["dash"] = reqDash(data.dash); }
+                if (data.hasOwnProperty("scale")) { retJson["scale"] = reqScale(data.scale); }
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(retJson));
@@ -140,12 +138,20 @@ const server = http.createServer((req, res) =>  {
     const fileExists = fs.existsSync(filePath);
 
     if (req.url == "/dash") {
-        serveFile(path.join(__dirname, 'views', dash + '.html'), 'text/html', res);
+        serveFile(path.join(__dirname, 'views', config.dash + '-dash.html'), 'text/html', res);
         return;
     }
 
     if (fileExists) {
-        serveFile(filePath, contentType, res);
+        if(req.url == "/src/animate.js"){
+            if(animate) {
+                serveFile(filePath, contentType, res);
+            }
+        }
+        else {
+            serveFile(filePath, contentType, res);
+        }
+
     } else {
         switch (path.parse(filePath).base) {
             case 'old-page.html':
@@ -183,8 +189,6 @@ const options = {
     cwd: '../telemetry/', // Set the working directory
 };
 
-dash = "forza-dash";
-
 function reqGame(game) {
     retVal = JSON.parse(JSON.stringify(postReturn));
     game = game.toLowerCase();
@@ -194,7 +198,6 @@ function reqGame(game) {
             telemetry.kill('SIGKILL');
             telemetry = null
             resetOdometer()
-            dash = "forza-dash"
         } else {
             retVal.error = "Telemetry not running"
         }
@@ -213,7 +216,6 @@ function reqGame(game) {
     } else {
         if (telemetry == null) {
             telemetryType = game
-            dash = "forza-dash"
             telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split], options);
 
             telemetry.stdout.on('data', (data) => {
@@ -322,6 +324,31 @@ function reqSplit(input) {
     }
     else {
         retVal.error = "Invalid split type"
+    }
+    return retVal;
+}
+
+function reqDash(input) {
+    retVal = JSON.parse(JSON.stringify(postReturn));
+
+    if (input == "get") {
+        retVal.success = true;
+        retVal.return = config.dash;
+    }
+    else {
+        const filePath = 'views/' + input + '-dash.html';
+        fs.access(filePath, fs.constants.F_OK, (err) => {
+            if (err) {
+                retVal.error = "Invalid dash type"
+            } else {
+                if(input != config.dash){
+                    config.dash = input;
+                    fs.writeFileSync('data/config.json', JSON.stringify(config, null, 4));
+                }
+                config.dash = input;
+                retVal.success = true;
+            }
+        });
     }
     return retVal;
 }

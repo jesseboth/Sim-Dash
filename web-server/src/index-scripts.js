@@ -1,7 +1,8 @@
 let config = {
     "game": undefined,
     "split": undefined,
-    "scale": undefined
+    "scale": undefined,
+    "dash": undefined
 }
 
 document.body.onload = async function() {
@@ -118,6 +119,9 @@ document.getElementById("split-car").addEventListener("click", () =>     postToS
 document.getElementById("split-class").addEventListener("click", () =>   postToServer("split", "class") && refreshBtn("split", "class"));
 document.getElementById("split-session").addEventListener("click", () => postToServer("split", "session") && refreshBtn("split", "session"));
 
+document.getElementById("dash-golfr").addEventListener("click", () => postToServer("dash", "golfr") && refreshBtn("dash", "golfr"));
+document.getElementById("dash-rally").addEventListener("click", () => postToServer("dash", "rally") && refreshBtn("dash", "rally"));
+
 document.getElementById("saveBtn").addEventListener("click", () => {
     newName = document.getElementById("scaleNameInput").value;
   
@@ -134,6 +138,7 @@ document.getElementById("saveBtn").addEventListener("click", () => {
 
 document.getElementById("config").addEventListener("click", async () => {
     await refreshBtn("split", config.split);
+    await refreshBtn("dash", config.dash);
     document.getElementById("configModal").style.display = "block";
 });
 
