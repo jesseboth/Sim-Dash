@@ -50,7 +50,8 @@ function updateTime(id, time, minutes = true) {
         document.getElementById(id).textContent = formattedTime;
     }
     else {
-        if (!config.seperateTime && id == "time" && time == null) {
+        if ((!config.seperateTime && id == "time" && time == null) 
+            || (config.seperateTime && id == "clock" && time == null)) {
             document.getElementById("container-" + id).style.display = "inline-flex";
             document.getElementById(id).textContent = getCurrentTime();
         }

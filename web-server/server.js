@@ -197,7 +197,6 @@ function reqGame(game) {
             telemetryType = "";
             telemetry.kill('SIGKILL');
             telemetry = null
-            resetOdometer()
         } else {
             retVal.error = "Telemetry not running"
         }

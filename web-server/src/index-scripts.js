@@ -209,3 +209,19 @@ async function refreshBtn(type, value=undefined) {
         document.getElementById(type+ "-" + config[type]).style.border = "3px solid #0e0e0e";
     }
 }
+
+function toggleVisibility(id) {
+  show = false;
+  const element = document.getElementById(id);
+  if (element.style.display === "none") {
+      show = true;
+  }
+
+  Array.from(document.getElementsByClassName("telescope")).forEach((element) => {
+    element.style.display = "none";
+  });
+
+    if(show) {
+        element.style.display = "block";
+    }
+}
