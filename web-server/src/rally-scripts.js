@@ -61,56 +61,27 @@ function updateColor(percentage) {
 }
 
 
-let rpmDotMax = -1;
-let rpmDotCurrent = -1;
-let activeGear = -1;
-function configureShiftLight(gear, rpm){
+rpmDotMax = -1;
+currentGear = -99;
+function configureShiftLight(gear, rpm, maxRPM){
     if (gear != -99) {
-        // First time setting the active gear
-        if (activeGear === -1) {
-            activeGear = gear;
-            lastGear = gear;
-            lastRPM = rpm;
+        if(rpm < maxRPM * 0.95 && rpm > rpmDotMax && gear >= currentGear){
+            rpmDotMax = rpm;
+            console.log(rpmDotMax);
         }
 
-        // Check for valid gear transitions
-        if (gear === activeGear) {
-            // Within the same gear, update RPM peak and redline
-            if (rpm > rpmDotCurrent) {
-                rpmDotCurrent = rpm;
-
-                // Only update redline if the RPM increase is realistic
-                if (rpm > rpmDotMax && rpm <= rpmDotMax * 1.2) { // Allow up to 20% margin
-                    rpmDotMax = rpm;
-                    console.log(`New redline detected: ${rpmDotMax}`);
-                }
-            }
-        } else if (gear === activeGear + 1) {
-            // Valid upshift: Check if the RPM spike is realistic
-            if (rpm <= rpmDotCurrent * 1.2) { // Allow small RPM increase on upshift
-                activeGear = gear;
-                rpmDotCurrent = rpm;
-            } else {
-                console.log(`Ignoring unrealistic RPM spike on upshift: ${rpm}`);
-            }
-        } else if (gear < activeGear) {
-            // Downshift detected: Ignore bad downshift spikes
-            if (rpm > rpmDotMax * 1.2) {
-                console.log(`Ignoring RPM spike due to bad downshift: ${rpm}`);
-            } else {
-                activeGear = gear;
-                rpmDotCurrent = rpm;
-            }
+        // row through gears one time exclude down shifts
+        if(gear >= currentGear){
+            currentGear = gear;
         }
-
-        // Update lastGear and lastRPM
-        lastGear = activeGear;
-        lastRPM = rpm;
+    }
+    else {
+        gear = currentGear;
     }
 }
 
 function updateShiftLight(rpm){
-    if(rpm > rpmDotMax * 0.95){
+    if(rpmDotMax != -1 && rpm > rpmDotMax * 0.975){
         document.getElementById('rpm-dot').style.backgroundColor = 'red';
     }
     else {
@@ -122,7 +93,7 @@ function updateRPM(rpm, maxRPM, gear=-99) {
     updateColor(rpm / maxRPM * 100);
     document.getElementById('rpm-num').innerText = Math.round(rpm);
 
-    configureShiftLight(gear, rpm);
+    configureShiftLight(gear, rpm, maxRPM);
     updateShiftLight(rpm)
 }
 
@@ -130,7 +101,8 @@ function updateRPM(rpm, maxRPM, gear=-99) {
 setMaxRPM = -1;
 function configureRPM(maxRPM){
     if(maxRPM != setMaxRPM) {
-        rpmDotMax = maxRPM*0.8;
+        setMaxRPM = maxRPM;
+        rpmDotMax = maxRPM*0.8; // set initial value
     }
 }
 

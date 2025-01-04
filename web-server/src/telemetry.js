@@ -145,7 +145,7 @@ async function set_display() {
 
     updateFuel(data["Fuel"] * 100)
     configureRPM(data["EngineMaxRpm"])
-    updateRPM(data["CurrentEngineRpm"], data["EngineMaxRpm"])
+    updateRPM(data["CurrentEngineRpm"], data["EngineMaxRpm"], data["Gear"])
     updateSpeed(mpstomph(data["Speed"]))
 
     checkDirtyLap(data["SurfaceRumbleFrontRight"],
