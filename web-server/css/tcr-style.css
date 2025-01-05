@@ -433,8 +433,9 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  top: 3%;
-  left: 9.5%;
+  top: 0%;
+  left: 10%;
+  z-index: 10;
   /* left: auto; */
   /* right: auto; */
 }

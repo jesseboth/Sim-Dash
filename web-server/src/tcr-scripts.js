@@ -54,7 +54,6 @@ function configureShiftLight(gear, rpm, maxRPM) {
     if (gear != -99) {
         if (rpm < maxRPM * 0.95 && rpm > rpmDotMax && gear >= currentGear) {
             rpmDotMax = rpm;
-            rpmDotMax = 7250;
         }
 
         // row through gears one time exclude down shifts
@@ -87,7 +86,7 @@ function blinkLED(enable) {
 }
 
 shiftlightflash = 0;
-shiftlightflashMax = 30;
+shiftlightflashMax = 6;
 shiftlightflashEnable = false;
 function updateShiftLight(rpm){
     if(rpmDotMax == -1){
@@ -107,7 +106,7 @@ function updateShiftLight(rpm){
         }
     }
 
-    if(rpm > rpmDotMax * (start + 6 * inc)){
+    if(rpm > rpmDotMax * (start + 7 * inc)){
         if(shiftlightflash > shiftlightflashMax){
             shiftlightflash = 0;
         }

@@ -235,7 +235,7 @@ function reqGame(game) {
 }
 
 scales = getJsonData('data/scale.json');
-scale = { ...scales["default"] };
+scale = { ...scales[config.scale] };
 
 scaleSpeedUp = false;
 scaleTime = 0;
