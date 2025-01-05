@@ -47,82 +47,6 @@ function updateColor(percentage) {
 
 }
 
-
-rpmDotMax = -1;
-currentGear = -99;
-function configureShiftLight(gear, rpm, maxRPM) {
-    if (gear != -99) {
-        if (rpm < maxRPM * 0.95 && rpm > rpmDotMax && gear >= currentGear) {
-            rpmDotMax = rpm;
-        }
-
-        // row through gears one time exclude down shifts
-        if (gear >= currentGear) {
-            currentGear = gear;
-        }
-    }
-    else {
-        gear = currentGear;
-    }
-}
-
-function enableLED(num, enable = true, blink = false) {
-    // Ensure the selector targets classes like `.light1`, `.light2`, etc.
-    const lights = document.querySelectorAll(`.light${num}`);
-
-    lights.forEach(light => {
-        // Set visibility
-        enable ? light.classList.remove('light-off') : light.classList.add('light-off');
-    });
-}
-
-function blinkLED(enable) {
-    const lights = document.querySelectorAll(`.light`);
-
-    lights.forEach(light => {
-        // Set visibility
-        enable ? light.classList.remove('light-off') : light.classList.add('light-off');
-    });
-}
-
-shiftlightflash = 0;
-shiftlightflashMax = 6;
-shiftlightflashEnable = false;
-function updateShiftLight(rpm){
-    if(rpmDotMax == -1){
-        for (let i = 1; i <= 6; i++) {
-            enableLED(i, false);
-        }
-    }
-
-    const start = 0.7;
-    const inc = .0375;
-    for (let i = 1; i <= 6; i++) {
-        if(rpm > rpmDotMax * (start + (i - 1) * inc)){
-            enableLED(i);
-        }
-        else {
-            enableLED(i, false);
-        }
-    }
-
-    if(rpm > rpmDotMax * (start + 7 * inc)){
-        if(shiftlightflash > shiftlightflashMax){
-            shiftlightflash = 0;
-        }
-        if(shiftlightflash < shiftlightflashMax/2){
-            shiftlightflashEnable = false;
-            // document.getElementById("shift-lights").style.display = "flex";
-        }
-        else {
-            shiftlightflashEnable = true;
-            // document.getElementById("shift-lights").style.display = "none";
-        }
-        blinkLED(shiftlightflashEnable);
-        shiftlightflash++;
-    }
-}
-
 function updateRPM(rpm, maxRPM, gear = -99) {
     updateColor(rpm / (Math.ceil(maxRPM / 1000) * 1000) * 100);
 
@@ -130,13 +54,8 @@ function updateRPM(rpm, maxRPM, gear = -99) {
     updateShiftLight(rpm);
 }
 
-
-setMaxRPM = -1;
 function configureRPM(maxRPM) {
-    if (maxRPM != setMaxRPM) {
-        setMaxRPM = maxRPM;
-        rpmDotMax = maxRPM * 0.8; // set initial value
-    }
+    initRPM(maxRPM);
 
     maxRPM = Math.ceil(maxRPM / 1000) * 1000
 
@@ -197,4 +116,16 @@ function configureRPM(maxRPM) {
         gridContainer.appendChild(line);
         gridContainer.appendChild(number);
     }
+}
+
+function initRPM(maxRPM) {
+    // do nothing
+}
+
+function configureShiftLight(gear, rpm, maxRPM){
+    // do nothing
+}
+
+function updateShiftLight(rpm){
+    // do nothing
 }

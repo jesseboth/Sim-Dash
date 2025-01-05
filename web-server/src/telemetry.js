@@ -1,6 +1,6 @@
 const repeat = setInterval(set_display, 25);
 const another = setInterval(get_telemetryType, 1000 * 10);
-var position = setInterval(getConfig, 1000 * 10); getConfig();
+var position = setInterval(getConfig, 1000 * 2); getConfig();
 const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) != null
     ? window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/)[1] : "localhost";
 
@@ -243,10 +243,8 @@ async function getConfig() {
 
     getDashStyle(retdata.dash);
     getDashPosition(retdata.scale);
-
 }
 
-scaleSpeedUp = false;
 async function getDashPosition(scale) {
     if (scale != null) {
         data = scale.return
@@ -254,19 +252,6 @@ async function getDashPosition(scale) {
         document.getElementById("all").style.left = data.left;
         document.getElementById("all").style.width = data.width;
         document.getElementById("all").style.zoom = data.zoom;
-        if (scaleSpeedUp != data["speedUp"]) {
-            if(data["speedUp"]){
-                scaleSpeedUp = data["speedUp"];
-            }
-            // clearInterval(position); // Clear any existing interval
-            if (scaleSpeedUp) {
-                position = setInterval(getDashPosition, 25);
-            }
-            else {
-                position = setInterval(getDashPosition, 1000 * 10);
-            }
-        }
-
     }
 }
 

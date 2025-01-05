@@ -63,7 +63,7 @@ function updateColor(percentage) {
 
 rpmDotMax = -1;
 currentGear = -99;
-function configureShiftLight(gear, rpm, maxRPM){
+function configureShiftDot(gear, rpm, maxRPM){
     if (gear != -99) {
         if(rpm < maxRPM * 0.95 && rpm > rpmDotMax && gear >= currentGear){
             rpmDotMax = rpm;
@@ -79,8 +79,8 @@ function configureShiftLight(gear, rpm, maxRPM){
     }
 }
 
-function updateShiftLight(rpm){
-    if(rpmDotMax != -1 && rpm > rpmDotMax * 0.975){
+function updateShiftDot(rpm){
+    if(rpmDotMax != -1 && rpm > rpmDotMax * 0.9625){
         document.getElementById('rpm-dot').style.backgroundColor = 'red';
     }
     else {
@@ -92,8 +92,11 @@ function updateRPM(rpm, maxRPM, gear=-99) {
     updateColor(rpm / maxRPM * 100);
     document.getElementById('rpm-num').innerText = Math.round(rpm);
 
+    configureShiftDot(gear, rpm, maxRPM);
     configureShiftLight(gear, rpm, maxRPM);
-    updateShiftLight(rpm)
+
+    updateShiftDot(rpm);
+    updateShiftLight(rpm);
 }
 
 
@@ -106,5 +109,13 @@ function configureRPM(maxRPM){
 }
 
 function updateTraction(traction){
+    // do nothing
+}
+
+function configureShiftLight(){
+    // do nothing
+}
+
+function updateShiftLight(rpm){
     // do nothing
 }

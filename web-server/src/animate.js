@@ -25,7 +25,7 @@ async function animateRPM() {
     const minRPM = 800;
 
     let i = minRPM;
-    let inc = 10;
+    let inc = 25
 
     while (true) {
         configureRPM(maxRPM); 
@@ -43,7 +43,7 @@ async function animateRPM() {
             inc = -inc;
         }
 
-        await sleep(10); // Pause for 10ms
+        await sleep(25); // Pause for 10ms
     }
 }
 
