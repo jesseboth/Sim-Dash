@@ -66,7 +66,3 @@ function configureRPM(maxRPM) {
     yellowRPMPecentage = percentage
     document.getElementById("rpm-yellow").style.left = percentage + "%"
 }
-
-function updateTraction(traction){
-    // do nothing
-}

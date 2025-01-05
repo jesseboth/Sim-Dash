@@ -18,7 +18,10 @@ function sleep(ms) {
 
 // Async function to loop with sleep
 async function animateRPM() {
-    const maxRPM = 8000;
+    const MaxRPM = 20000;
+    const MinRPM = 6000;
+    let minmaxRPM = 1000;
+    let maxRPM = 8000;
     const minRPM = 800;
 
     let i = minRPM;
@@ -27,9 +30,16 @@ async function animateRPM() {
     while (true) {
         configureRPM(maxRPM); 
         updateRPM(i, maxRPM, gear);
+        // updateRPM(6500, maxRPM, gear);
 
         i += inc;
-        if (i > maxRPM || i < minRPM) {
+        if (i > maxRPM-750 || i < minRPM) {
+            if(maxRPM >= MaxRPM || maxRPM >= MinRPM){
+                minmaxRPM = -minmaxRPM;
+            }
+            // if(i < minRPM){
+            //     maxRPM = maxRPM + minmaxRPM;
+            // }
             inc = -inc;
         }
 
@@ -120,7 +130,7 @@ async function animateFuel() {
 
 async function animateTraction(){
     while(true){
-        updateTraction(3,0)
+        updateTraction(3,0);
         await sleep(25)
     }
 }
@@ -128,11 +138,14 @@ async function animateTraction(){
 async function animateTime() {
     let i = 0;
     let inc = 1;
+    dirtyLap = false;
     while (true) {
         updateTime("time", i);
+        updateDirtyLap(dirtyLap);
         i += inc;
         if (i > 100 || i <= 0) {
             inc = -inc;
+            dirtyLap = !dirtyLap;
         }
         await sleep(100); // Wait 100ms before updating the next color
     }

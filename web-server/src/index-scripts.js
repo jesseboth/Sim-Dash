@@ -121,6 +121,7 @@ document.getElementById("split-session").addEventListener("click", () => postToS
 
 document.getElementById("dash-golfr").addEventListener("click", () => postToServer("dash", "golfr") && refreshBtn("dash", "golfr"));
 document.getElementById("dash-rally").addEventListener("click", () => postToServer("dash", "rally") && refreshBtn("dash", "rally"));
+document.getElementById("dash-tcr").addEventListener("click", () => postToServer("dash", "tcr") && refreshBtn("dash", "tcr"));
 
 document.getElementById("saveBtn").addEventListener("click", () => {
     newName = document.getElementById("scaleNameInput").value;

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap');
+</style>
+
+<head>
+  <meta charset="UTF-8">
+  <title>TCR Telemetry Data</title>
+  <link rel="stylesheet" type="text/css" href="css/tcr-style.css" />
+</head>
+
+<body style="background-color: #09080e;">
+
+  <div class="centered" id="all">
+    <div class="centered size">
+      <div class="content">
+        <div class="centered color-box-back-container">
+          <div id="color-box-back"></div>
+        </div>
+        <div class="color-box-container centered">
+          <div id="color-box"></div>
+          <img id="rpm-mask" src="img/tcr-dash.png"
+            style="background-color: inherit; filter: invert(1) brightness(0.5);" alt="dash">
+        </div>
+
+        <!-- Position  -->
+        <div class="container position-container">
+          <div id="position"></div>
+        </div>
+
+        <!-- Gas -->
+        <img id="fuel" src="img/fuel.png">
+        <div class="fuel-container">
+          <div class="fuel">
+            <div id="fuel-fill"></div>
+            <div id="fuel-fill-white"></div>
+          </div>
+        </div>
+
+        <!-- Gear -->
+        <div class="gear-container">
+          <div id="gear">N</div>
+        </div>
+
+        <div class=" container shift-lights" id="shift-lights">
+          <div class="light green light1"></div>
+          <div class="light green light2"></div>
+          <div class="light green light3"></div>
+          <div class="light yellow light4"></div>
+          <div class="light red light5"></div>
+          <div class="light blue light6"></div>
+          <div class="light blue light6"></div>
+          <div class="light red light5"></div>
+          <div class="light yellow light4"></div>
+          <div class="light green light3"></div>
+          <div class="light green light2"></div>
+          <div class="light green light1"></div>
+      </div>
+
+        <!-- time -->
+        <div class="container" id="container-time">
+          <div class="caution" id="caution-time">
+            <img id="caution" src="img/caution.png" />
+          </div>
+          <div class="time" id="time">00:00:00</div>
+        </div>
+        <div class="container" id="container-best-time">
+          <div class="time" id="best-time">00:00:00</div>
+        </div>
+        <div id="container-split" class="container container-split">
+          <div class="time split" id="split">-00:00</div>
+        </div>
+
+        <!-- speed -->
+        <div class="container container-speed">
+          <div class="reflect">
+            <div id="speed">0</div>
+          </div>
+          <div id="mph">mph</div>
+        </div>
+
+        <!-- <div class="container container-rpm-num">
+          <div class="reflect">
+          <div id="rpm-num">8888</div>
+          </div>
+        </div> -->
+
+        <!-- <div class="container" id="rpm-dot"> -->
+        <!-- </div> -->
+
+        <div id="grid" class="grid-container"></div>
+
+        <div class="container container-distance">
+          <div id="distance">0 mi</div>
+        </div>
+
+        <div class="container" id="traction">
+          <img src="img/traction.png" />
+        </div>
+
+        <div class="container tire-container-container">
+          <div class="tire-container FL" id="FL">
+            <img src="img/tire.png" class="tire" alt="tireFL">
+            <div id="FLtire-bar" class="tire-bar">
+              <div id="FLtire-bar-fill-red"></div>
+              <div id="FLtire-bar-fill-white"></div>
+            </div>
+          </div>
+          <div class="tire-container FR" id="FR">
+            <img src="img/tire.png" class="tire" alt="tireFR">
+            <div id="FRtire-bar" class="tire-bar">
+              <div id="FRtire-bar-fill-red"></div>
+              <div id="FRtire-bar-fill-white"></div>
+            </div>
+          </div>
+          <div class="tire-container RL" id="RL">
+            <img src="img/tire.png" class="tire" alt="tireRL">
+            <div id="RLtire-bar" class="tire-bar">
+              <div id="RLtire-bar-fill-red"></div>
+              <div id="RLtire-bar-fill-white"></div>
+            </div>
+          </div>
+          <div class="tire-container RR" id="RR">
+            <img src="img/tire.png" class="tire" alt="tireRR">
+            <div id="RRtire-bar" class="tire-bar">
+              <div id="RRtire-bar-fill-red"></div>
+              <div id="RRtire-bar-fill-white"></div>
+            </div>
+          </div>
+        </div>
+        <div class="container" id="container-clock">
+          <div class="time" id="clock">00:00</div>
+        </div>
+
+      </div>
+      <div id="load"></div>
+    </div>
+  </div>
+</body>
+<script src="src/dash-scripts.js"></script>
+<script src="src/tcr-scripts.js"></script>
+<script src="src/telemetry.js"></script>
+
+<script src="src/animate.js"></script>
+
+</html>

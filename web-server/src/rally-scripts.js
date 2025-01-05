@@ -67,7 +67,6 @@ function configureShiftLight(gear, rpm, maxRPM){
     if (gear != -99) {
         if(rpm < maxRPM * 0.95 && rpm > rpmDotMax && gear >= currentGear){
             rpmDotMax = rpm;
-            console.log(rpmDotMax);
         }
 
         // row through gears one time exclude down shifts
