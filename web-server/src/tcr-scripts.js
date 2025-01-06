@@ -52,10 +52,14 @@ function updateRPM(rpm, maxRPM, gear = -99) {
 
     configureShiftLight(gear, rpm, maxRPM);
     updateShiftLight(rpm);
+
+    if(gear == -99){
+        resetShiftLightRPM();
+    }
 }
 
 function configureRPM(maxRPM) {
-    initRPM(maxRPM);
+    initShiftLightRPM(maxRPM);
 
     maxRPM = Math.ceil(maxRPM / 1000) * 1000
 
@@ -116,16 +120,4 @@ function configureRPM(maxRPM) {
         gridContainer.appendChild(line);
         gridContainer.appendChild(number);
     }
-}
-
-function initRPM(maxRPM) {
-    // do nothing
-}
-
-function configureShiftLight(gear, rpm, maxRPM){
-    // do nothing
-}
-
-function updateShiftLight(rpm){
-    // do nothing
 }

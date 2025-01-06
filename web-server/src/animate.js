@@ -76,8 +76,8 @@ async function animateSpeed() {
 }
 
 async function animateTireTemp() {
-    start = coldTemperature-50;
-    end = hotTemperature;
+    let start = coldTemperature-50;
+    let end = hotTemperature;
 
     let i = start;
     let inc = 1;
@@ -104,7 +104,7 @@ async function animateTireWear() {
         updateTireWear("FL", i);
         updateTireWear("RR", i);
         updateTireWear("RL", i);
-        
+
         i += inc;
         if (i > 100 || i < 0) {
             inc = -inc;

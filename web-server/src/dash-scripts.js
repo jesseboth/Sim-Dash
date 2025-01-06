@@ -312,3 +312,21 @@ function getCurrentTimeUnformatted() {
     const minutes = now.getMinutes();
     return hours + (minutes / 100);
 }
+
+
+// Override functions for the dash
+function initShiftLightRPM(maxRPM){
+    // do nothing
+}
+
+function configureShiftLight(){
+    // do nothing
+}
+
+function updateShiftLight(rpm){
+    // do nothing
+}
+
+function resetShiftLightRPM() {
+    // do nothing
+}

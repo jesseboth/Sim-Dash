@@ -77,11 +77,16 @@ function updateShiftLight(rpm) {
     }
 }
 
-function initRPM(maxRPM) {
+function initShiftLightRPM(maxRPM) {
     if (maxRPM != setMaxRPM) {
         setMaxRPM = maxRPM;
         rpmDotMax = maxRPM * 0.8; // set initial value
     }
+}
+
+function resetShiftLightRPM() {
+    rpmDotMax = -1;
+    setMaxRPM = -1;
 }
 
 function loadShiftLights() {

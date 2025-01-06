@@ -97,25 +97,30 @@ function updateRPM(rpm, maxRPM, gear=-99) {
 
     updateShiftDot(rpm);
     updateShiftLight(rpm);
+
+    if(gear == -99){
+        resetShiftLightRPM();
+    }
 }
 
-
-setMaxRPM = -1;
 function configureRPM(maxRPM){
-    if(maxRPM != setMaxRPM) {
-        setMaxRPM = maxRPM;
-        rpmDotMax = maxRPM*0.8; // set initial value
-    }
+    initShiftLightRPM(maxRPM);
 }
 
 function updateTraction(traction){
     // do nothing
 }
 
-function configureShiftLight(){
-    // do nothing
+setMaxRPM = -1;
+rpmDotMax = -1;
+function initShiftLightRPM(maxRPM) {
+    if (maxRPM != setMaxRPM) {
+        setMaxRPM = maxRPM;
+        rpmDotMax = maxRPM * 0.8; // set initial value
+    }
 }
 
-function updateShiftLight(rpm){
-    // do nothing
+function resetShiftLightRPM() {
+    rpmDotMax = -1;
+    setMaxRPM = -1;
 }

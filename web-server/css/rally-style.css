@@ -240,8 +240,8 @@ body {
 #container-time {
   height: 18;
   width: 200px;
-  right: 75%;
-  top: 0%;
+  right: 50.5%;
+  top: 8%;
   display: none;
 }
 
@@ -250,11 +250,12 @@ body {
   width: 200px;
   right: 76.5%;
   top: 75%;
+  font-size: 90%;
   display: none;
 }
 
 .time {
-  font-size: 220%;
+  font-size: 300%;
   color: #d0c5c3;
   font-family: "Noto Sans";
   font-weight: 600;
@@ -264,8 +265,8 @@ body {
 #container-best-time {
   height: 18;
   width: 200px;
-  right: 50.5%;
-  top: 0%;
+  right: 75%;
+  top: 8%;
   display: none;
 }
 
@@ -338,21 +339,21 @@ body {
 #container-split {
   height: 18;
   width: auto;
-  top: 6%;
+  top: 15%;
   position: absolute;
   
 }
 
 .container-split-showMinutes {
-  right: 77.5%;
+  right: 51%;
 }
 
 .container-split {
-  right: 77.5%;
+  right: 51%;
 }
 
 .split {
-  font-size: 180%;
+  font-size: 220%;
   /* display: none; */
   width: 100%;
 }
