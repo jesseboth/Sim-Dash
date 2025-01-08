@@ -2,7 +2,8 @@ let config = {
     "game": undefined,
     "split": undefined,
     "scale": undefined,
-    "dash": undefined
+    "dash": undefined,
+    "shift": undefined
 }
 
 document.body.onload = async function() {
@@ -123,6 +124,11 @@ document.getElementById("dash-golfr").addEventListener("click", () => postToServ
 document.getElementById("dash-rally").addEventListener("click", () => postToServer("dash", "rally") && refreshBtn("dash", "rally"));
 document.getElementById("dash-tcr").addEventListener("click", () => postToServer("dash", "tcr") && refreshBtn("dash", "tcr"));
 
+document.getElementById("shift-off").addEventListener("click", () =>       postToServer("shift", "off") && refreshBtn("shift", "off"));
+document.getElementById("shift-leftRight").addEventListener("click", () => postToServer("shift", "leftRight") && refreshBtn("shift", "leftRight"));
+document.getElementById("shift-outsideIn").addEventListener("click", () => postToServer("shift", "outsideIn") && refreshBtn("shift", "outsideIn"));
+
+
 document.getElementById("saveBtn").addEventListener("click", () => {
     newName = document.getElementById("scaleNameInput").value;
   
@@ -140,6 +146,7 @@ document.getElementById("saveBtn").addEventListener("click", () => {
 document.getElementById("config").addEventListener("click", async () => {
     await refreshBtn("split", config.split);
     await refreshBtn("dash", config.dash);
+    await refreshBtn("shift", config.shift);
     document.getElementById("configModal").style.display = "block";
 });
 

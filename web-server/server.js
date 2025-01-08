@@ -79,10 +79,18 @@ const server = http.createServer((req, res) =>  {
                 const data = JSON.parse(body);
                 retJson.success = true;
 
-                if (data.hasOwnProperty("game")) { retJson["game"] = reqGame(data.game); }
-                if (data.hasOwnProperty("split")) { retJson["split"] = reqSplit(data.split); }
-                if (data.hasOwnProperty("dash")) { retJson["dash"] = reqDash(data.dash); }
-                if (data.hasOwnProperty("scale")) { retJson["scale"] = reqScale(data.scale); }
+                let x = 0;
+                if (data.hasOwnProperty("game")) { retJson["game"] = reqGame(data.game); delete data.game;}
+                if (data.hasOwnProperty("split")) { retJson["split"] = reqSplit(data.split); delete data.split;}
+                if (data.hasOwnProperty("dash")) { retJson["dash"] = reqDash(data.dash); delete data.dash;}
+                if (data.hasOwnProperty("scale")) { retJson["scale"] = reqScale(data.scale); delete data.scale;}
+                if (data.hasOwnProperty("shift")) { retJson["shift"] = reqShift(data.shift); delete data.shift;}
+
+                // Handle invalid data
+                if (Object.keys(data).length > 0) {
+                    retJson.success = false;
+                    retJson.error = "Invalid data: " + Object.keys(data).map(key => `${key}: ${data[key]}`).join(", ");
+                }
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(retJson));
@@ -366,5 +374,27 @@ function reqFavoriteOdometer() {
         retVal.error = err.message;
     }
 
+    return retVal;
+}
+
+function reqShift(input) {
+    retVal = JSON.parse(JSON.stringify(postReturn));
+
+    const valid = ["off", "outsideIn", "leftRight"];
+
+    if (valid.includes(input)) {
+        if(input != config.shift){
+            config.shift = input;
+            fs.writeFileSync('data/config.json', JSON.stringify(config, null, 4));
+        }
+        retVal.success = true;
+    }
+    else if (input == "get") {
+        retVal.success = true;
+        retVal.return = config.shift;
+    }
+    else {
+        retVal.error = "Invalid shift type: " + input;
+    }
     return retVal;
 }

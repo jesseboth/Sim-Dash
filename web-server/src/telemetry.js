@@ -238,11 +238,12 @@ async function set_display() {
 }
 
 async function getConfig() {
-    const types = ["scale", "dash"];
+    const types = ["scale", "dash", "shift"];
     const retdata = await fetchConfig(types);
 
     getDashStyle(retdata.dash);
     getDashPosition(retdata.scale);
+    setShiftLight(retdata.shift.return);
 }
 
 async function getDashPosition(scale) {

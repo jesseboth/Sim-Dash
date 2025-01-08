@@ -1,6 +1,7 @@
 rpmDotMax = -1;
 currentGear = -99;
 setMaxRPM = -1;
+shiftSteps = -1;
 
 loadShiftLights();
 
@@ -50,8 +51,10 @@ function updateShiftLight(rpm) {
     }
 
     const start = 0.7;
-    const inc = .0375;
-    for (let i = 1; i <= 6; i++) {
+    const end = 1-.0375;
+    const steps = shiftSteps+1;
+    const inc = (end-start)/steps;
+    for (let i = 1; i < steps; i++) {
         if (rpm > rpmDotMax * (start + (i - 1) * inc)) {
             enableLED(i);
         }
@@ -60,7 +63,7 @@ function updateShiftLight(rpm) {
         }
     }
 
-    if (rpm > rpmDotMax * (start + 7 * inc)) {
+    if (rpm > rpmDotMax * (start + steps * inc)) {
         if (shiftlightflash > shiftlightflashMax) {
             shiftlightflash = 0;
         }
@@ -89,24 +92,8 @@ function resetShiftLightRPM() {
     setMaxRPM = -1;
 }
 
-function loadShiftLights() {
-    document.getElementById('shift-light-container').innerHTML = `
-<div class="centered content">
-    <div class=" container shift-lights" id="shift-lights">
-        <div class="light green light1"></div>
-        <div class="light green light2"></div>
-        <div class="light green light3"></div>
-        <div class="light yellow light4"></div>
-        <div class="light red light5"></div>
-        <div class="light blue light6"></div>
-        <div class="light blue light6"></div>
-        <div class="light red light5"></div>
-        <div class="light yellow light4"></div>
-        <div class="light green light3"></div>
-        <div class="light green light2"></div>
-        <div class="light green light1"></div>
-    </div>
-</div>
+function shiftLightCSS(){
+    return `
 <style>
     .light {
         background-color: aqua;
@@ -147,5 +134,64 @@ function loadShiftLights() {
         background-color: #303030;
     }
 </style>
-    `;
+`;
+}
+
+function outsideIn() {
+    return `
+<div class="centered content">
+    <div class=" container shift-lights" id="shift-lights">
+        <div class="light green light1"></div>
+        <div class="light green light2"></div>
+        <div class="light green light3"></div>
+        <div class="light yellow light4"></div>
+        <div class="light red light5"></div>
+        <div class="light blue light6"></div>
+        <div class="light blue light6"></div>
+        <div class="light red light5"></div>
+        <div class="light yellow light4"></div>
+        <div class="light green light3"></div>
+        <div class="light green light2"></div>
+        <div class="light green light1"></div>
+    </div>
+</div>
+`
+}
+
+function leftToRight() {
+    return `
+<div class="centered content">
+    <div class=" container shift-lights" id="shift-lights">
+        <div class="light green light1"></div>
+        <div class="light green light2"></div>
+        <div class="light green light3"></div>
+        <div class="light green light4"></div>
+        <div class="light green light5"></div>
+        <div class="light green light6"></div>
+        <div class="light yellow light7"></div>
+        <div class="light yellow light8"></div>
+        <div class="light yellow light9"></div>
+        <div class="light yellow light10"></div>
+        <div class="light red light11"></div>
+        <div class="light red light12"></div>
+    </div>
+`
+}
+
+function loadShiftLights() {
+    if(shiftLightType == "outsideIn"){
+        shiftSteps = 6;
+        document.getElementById('shift-light-container').innerHTML = outsideIn + shiftLightCSS;
+    }
+    else if(shiftLightType == "leftRight"){
+        shiftSteps = 12;
+        document.getElementById('shift-light-container').innerHTML = leftToRight + shiftLightCSS;
+    }
+
+    else if(shiftLightType == "off"){
+        document.getElementById('shift-light-container').innerHTML = "";
+    }
+    else {
+        console.error("Error: shiftLightType is invalid: ", shiftLightType);
+    }
 }

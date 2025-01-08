@@ -313,6 +313,14 @@ function getCurrentTimeUnformatted() {
     return hours + (minutes / 100);
 }
 
+shiftLightType = "off";
+function setShiftLight(type) {
+    if(type != shiftLightType){
+        console.log(type)
+        shiftLightType = type;
+        loadShiftLights();
+    }
+}
 
 // Override functions for the dash
 function initShiftLightRPM(maxRPM){
