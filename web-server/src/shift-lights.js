@@ -5,7 +5,7 @@ shiftSteps = -1;
 
 loadShiftLights();
 
-function configureShiftLight(gear, rpm, maxRPM) {
+function configureShiftLight(rpm, maxRPM, gear = -99) {
     if (gear != -99) {
         if (rpm < maxRPM * 0.95 && rpm > rpmDotMax && gear >= currentGear) {
             rpmDotMax = rpm;
@@ -17,7 +17,7 @@ function configureShiftLight(gear, rpm, maxRPM) {
         }
     }
     else {
-        gear = currentGear;
+        currentGear = -99;
     }
 }
 
@@ -54,6 +54,12 @@ function updateShiftLight(rpm) {
     const end = 1-.0375;
     const steps = shiftSteps+1;
     const inc = (end-start)/steps;
+
+    if(rpmDotMax == -1 || steps == 0){
+        blinkLED(false);
+        return;
+    }
+
     for (let i = 1; i < steps; i++) {
         if (rpm > rpmDotMax * (start + (i - 1) * inc)) {
             enableLED(i);
@@ -194,4 +200,6 @@ function loadShiftLights() {
     else {
         console.error("Error: shiftLightType is invalid: ", shiftLightType);
     }
+
+    updateShiftLight(0);
 }

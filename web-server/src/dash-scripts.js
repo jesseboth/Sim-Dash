@@ -208,6 +208,20 @@ function updateLaunchControl(speed) {
     }
 }
 
+function updateRpm(rpm, maxRPM, gear = -99) {
+    initShiftLightRPM(maxRPM);
+    configureRPM(maxRPM);
+
+    configureShiftLight(rpm, maxRPM, gear);
+    
+    updateRPM(rpm, maxRPM, gear);
+    updateShiftLight(rpm);
+
+    if(gear == -99) {
+        resetShiftLightRPM();
+    }
+}
+
 function updateSplit(split) {
     if (split >= invalidSplit) {
         document.getElementById("split").style.display = "none"
@@ -316,7 +330,6 @@ function getCurrentTimeUnformatted() {
 shiftLightType = "off";
 function setShiftLight(type) {
     if(type != shiftLightType){
-        console.log(type)
         shiftLightType = type;
         loadShiftLights();
     }

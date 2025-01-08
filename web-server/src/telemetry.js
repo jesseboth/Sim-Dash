@@ -49,8 +49,7 @@ function set_default() {
         updateDistance(0)
         updateFuel(100)
         updateGear(11)
-        configureRPM(7200)
-        updateRPM(1200, 7200)
+        updateRpm(1200, 7200)
         updateSpeed(0)
         updateTime("time", null)
         updateDirtyLap(false);
@@ -144,8 +143,7 @@ async function set_display() {
     updateDistance(data["Odometer"])
 
     updateFuel(data["Fuel"] * 100)
-    configureRPM(data["EngineMaxRpm"])
-    updateRPM(data["CurrentEngineRpm"], data["EngineMaxRpm"], data["Gear"])
+    updateRpm(data["CurrentEngineRpm"], data["EngineMaxRpm"], data["Gear"])
     updateSpeed(mpstomph(data["Speed"]))
 
     checkDirtyLap(data["SurfaceRumbleFrontRight"],

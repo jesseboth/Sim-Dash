@@ -93,18 +93,10 @@ function updateRPM(rpm, maxRPM, gear=-99) {
     document.getElementById('rpm-num').innerText = Math.round(rpm);
 
     configureShiftDot(gear, rpm, maxRPM);
-    configureShiftLight(gear, rpm, maxRPM);
-
     updateShiftDot(rpm);
-    updateShiftLight(rpm);
-
-    if(gear == -99){
-        resetShiftLightRPM();
-    }
 }
 
 function configureRPM(maxRPM){
-    initShiftLightRPM(maxRPM);
 }
 
 function updateTraction(traction){

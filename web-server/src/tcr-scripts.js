@@ -49,18 +49,9 @@ function updateColor(percentage) {
 
 function updateRPM(rpm, maxRPM, gear = -99) {
     updateColor(rpm / (Math.ceil(maxRPM / 1000) * 1000) * 100);
-
-    configureShiftLight(gear, rpm, maxRPM);
-    updateShiftLight(rpm);
-
-    if(gear == -99){
-        resetShiftLightRPM();
-    }
 }
 
 function configureRPM(maxRPM) {
-    initShiftLightRPM(maxRPM);
-
     maxRPM = Math.ceil(maxRPM / 1000) * 1000
 
     function calculateBottom(x) {
@@ -112,7 +103,6 @@ function configureRPM(maxRPM) {
         number.style.left = `${numberLeft}%`;
         // starting pt = 0
         if (numberLeft < 25) {
-            // console.log(i, i / steps * 100, calculateBottom(numberLeft))
             number.style.bottom = `${calculateBottom(numberLeft)}rem`;
         }   
 

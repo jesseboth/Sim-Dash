@@ -25,11 +25,10 @@ async function animateRPM() {
     const minRPM = 800;
 
     let i = minRPM;
-    let inc = 25
+    let inc = 40
 
     while (true) {
-        configureRPM(maxRPM); 
-        updateRPM(i, maxRPM, gear);
+        updateRpm(i, maxRPM, gear);
         // updateRPM(6500, maxRPM, gear);
 
         i += inc;
