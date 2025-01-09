@@ -3,6 +3,88 @@ currentGear = -99;
 setMaxRPM = -1;
 shiftSteps = -1;
 
+const shiftLightConfigs = {
+    "off": "",
+    "outsideIn": `
+<div class="centered content">
+    <div class=" container shift-lights" id="shift-lights">
+        <div class="light green light1"></div>
+        <div class="light green light2"></div>
+        <div class="light green light3"></div>
+        <div class="light yellow light4"></div>
+        <div class="light red light5"></div>
+        <div class="light blue light6"></div>
+        <div class="light blue light6"></div>
+        <div class="light red light5"></div>
+        <div class="light yellow light4"></div>
+        <div class="light green light3"></div>
+        <div class="light green light2"></div>
+        <div class="light green light1"></div>
+    </div>
+</div>
+`,
+    "leftRight": `
+<div class="centered content">
+    <div class=" container shift-lights" id="shift-lights">
+        <div class="light green light1"></div>
+        <div class="light green light2"></div>
+        <div class="light green light3"></div>
+        <div class="light green light4"></div>
+        <div class="light green light5"></div>
+        <div class="light yellow light6"></div>
+        <div class="light yellow light7"></div>
+        <div class="light yellow light8"></div>
+        <div class="light yellow light9"></div>
+        <div class="light red light10"></div>
+        <div class="light red light11"></div>
+        <div class="light blue light12"></div>
+</div>
+`
+}
+
+const shiftLightCSS = `
+<style>
+    .light {
+        background-color: aqua;
+        width: 2%;
+        border-radius: 100%;
+        height: 30%;
+        border: #9d9d9d 2px solid;
+    }
+
+    .shift-lights {
+        position: absolute;
+        width: 80%;
+        height: 10%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        top: -1%;
+        left: 10%;
+        z-index: 10;
+        /* left: auto; */
+        /* right: auto; */
+    }
+
+    .green {
+        background-color: #00ff00;
+    }
+    .yellow {
+        background-color: #ffff00;
+    }
+    .red {
+        background-color: #ff0000;
+    }
+    .blue {
+        background-color: #0000ff;
+    }
+
+    .light-off {
+        background-color: #303030;
+    }
+</style>
+`;
+
 loadShiftLights();
 
 function configureShiftLight(rpm, maxRPM, gear = -99) {
@@ -98,104 +180,10 @@ function resetShiftLightRPM() {
     setMaxRPM = -1;
 }
 
-function shiftLightCSS(){
-    return `
-<style>
-    .light {
-        background-color: aqua;
-        width: 2%;
-        border-radius: 100%;
-        height: 30%;
-        border: #9d9d9d 2px solid;
-    }
-
-    .shift-lights {
-        position: absolute;
-        width: 80%;
-        height: 10%;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        top: -1%;
-        left: 10%;
-        z-index: 10;
-        /* left: auto; */
-        /* right: auto; */
-    }
-
-    .green {
-        background-color: #00ff00;
-    }
-    .yellow {
-        background-color: #ffff00;
-    }
-    .red {
-        background-color: #ff0000;
-    }
-    .blue {
-        background-color: #0000ff;
-    }
-
-    .light-off {
-        background-color: #303030;
-    }
-</style>
-`;
-}
-
-function outsideIn() {
-    return `
-<div class="centered content">
-    <div class=" container shift-lights" id="shift-lights">
-        <div class="light green light1"></div>
-        <div class="light green light2"></div>
-        <div class="light green light3"></div>
-        <div class="light yellow light4"></div>
-        <div class="light red light5"></div>
-        <div class="light blue light6"></div>
-        <div class="light blue light6"></div>
-        <div class="light red light5"></div>
-        <div class="light yellow light4"></div>
-        <div class="light green light3"></div>
-        <div class="light green light2"></div>
-        <div class="light green light1"></div>
-    </div>
-</div>
-`
-}
-
-function leftToRight() {
-    return `
-<div class="centered content">
-    <div class=" container shift-lights" id="shift-lights">
-        <div class="light green light1"></div>
-        <div class="light green light2"></div>
-        <div class="light green light3"></div>
-        <div class="light green light4"></div>
-        <div class="light green light5"></div>
-        <div class="light green light6"></div>
-        <div class="light yellow light7"></div>
-        <div class="light yellow light8"></div>
-        <div class="light yellow light9"></div>
-        <div class="light yellow light10"></div>
-        <div class="light red light11"></div>
-        <div class="light red light12"></div>
-    </div>
-`
-}
-
 function loadShiftLights() {
-    if(shiftLightType == "outsideIn"){
-        shiftSteps = 6;
-        document.getElementById('shift-light-container').innerHTML = outsideIn + shiftLightCSS;
-    }
-    else if(shiftLightType == "leftRight"){
-        shiftSteps = 12;
-        document.getElementById('shift-light-container').innerHTML = leftToRight + shiftLightCSS;
-    }
-
-    else if(shiftLightType == "off"){
-        document.getElementById('shift-light-container').innerHTML = "";
+    if(shiftLightConfigs.hasOwnProperty(shiftLightType)){
+        shiftSteps = getShiftLightSteps(shiftLightConfigs[shiftLightType]);
+        document.getElementById('shift-light-container').innerHTML = shiftLightConfigs[shiftLightType] + shiftLightCSS;
     }
     else {
         console.error("Error: shiftLightType is invalid: ", shiftLightType);
@@ -203,3 +191,21 @@ function loadShiftLights() {
 
     updateShiftLight(0);
 }
+
+function getShiftLightSteps(htmlString) {
+    let maxLightNumber = -1;
+
+    if (htmlString) {
+        // Extract all "lightX" matches from the HTML string
+        const matches = htmlString.match(/light(\d+)/g);
+        if (matches) {
+            matches.forEach(match => {
+                const number = parseInt(match.replace('light', ''), 10);
+                maxLightNumber = Math.max(maxLightNumber, number);
+            });
+        }
+    }
+
+    return maxLightNumber;
+}
+
