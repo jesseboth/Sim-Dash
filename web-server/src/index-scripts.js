@@ -1,9 +1,6 @@
 let config = {
     "game": undefined,
-    "split": undefined,
     "scale": undefined,
-    "dash": undefined,
-    "shift": undefined
 }
 
 document.body.onload = async function() {
@@ -89,11 +86,10 @@ function createRedirect(name) {
   });
 }
 
-gameBtn("fm");
-gameBtn("fh5");
-gameBtn("fm7");
-gameBtn("fh4");
-gameBtn("stop");
+document.querySelectorAll('.gameBtn').forEach(element => {
+  gameBtn(element.id.split("-")[1]);
+});
+
 createRedirect("dash");
 
 const modal = document.getElementById("fdtModal");
@@ -116,18 +112,10 @@ document.getElementById("scaleDownBtn").addEventListener("click", () => postToSe
 document.getElementById("moveUpBtn").addEventListener("click", () =>    postToServer("scale", {"move": -1}));
 document.getElementById("moveDownBtn").addEventListener("click", () =>  postToServer("scale", {"move": 1}));
 
-document.getElementById("split-car").addEventListener("click", () =>     postToServer("split", "car") && refreshBtn("split", "car"));
-document.getElementById("split-class").addEventListener("click", () =>   postToServer("split", "class") && refreshBtn("split", "class"));
-document.getElementById("split-session").addEventListener("click", () => postToServer("split", "session") && refreshBtn("split", "session"));
-
-document.getElementById("dash-golfr").addEventListener("click", () => postToServer("dash", "golfr") && refreshBtn("dash", "golfr"));
-document.getElementById("dash-rally").addEventListener("click", () => postToServer("dash", "rally") && refreshBtn("dash", "rally"));
-document.getElementById("dash-tcr").addEventListener("click", () => postToServer("dash", "tcr") && refreshBtn("dash", "tcr"));
-
-document.getElementById("shift-off").addEventListener("click", () =>       postToServer("shift", "off") && refreshBtn("shift", "off"));
-document.getElementById("shift-leftRight").addEventListener("click", () => postToServer("shift", "leftRight") && refreshBtn("shift", "leftRight"));
-document.getElementById("shift-outsideIn").addEventListener("click", () => postToServer("shift", "outsideIn") && refreshBtn("shift", "outsideIn"));
-
+// Loop through and create buttons
+document.querySelectorAll('.configBtn').forEach(element => {
+  newButton(element.id);
+});
 
 document.getElementById("saveBtn").addEventListener("click", () => {
     newName = document.getElementById("scaleNameInput").value;
@@ -144,9 +132,7 @@ document.getElementById("saveBtn").addEventListener("click", () => {
 });
 
 document.getElementById("config").addEventListener("click", async () => {
-    await refreshBtn("split", config.split);
-    await refreshBtn("dash", config.dash);
-    await refreshBtn("shift", config.shift);
+    await refreshConfigButtons();
     document.getElementById("configModal").style.display = "block";
 });
 
@@ -232,4 +218,26 @@ function toggleVisibility(id) {
     if(show) {
         element.style.display = "block";
     }
+}
+
+function newButton(name) {
+  const split = name.split("-");
+  document.getElementById(name).addEventListener("click", () => postToServer(split[0], split[1]) && refreshBtn(split[0], split[1]));
+  document.getElementById(name).classList.add(split[0]+"Btn");
+  if(!config.hasOwnProperty(split[0])){
+    config[split[0]] = undefined;
+  }
+}
+
+async function refreshConfigButtons() {
+  let buttons = [];
+  const elements = document.querySelectorAll('.configBtn');
+  
+  for (const element of elements) {
+    const key = element.id.split("-")[0];
+    if (!buttons.includes(key)) {
+      buttons.push(key);
+      await refreshBtn(key, config[key]); // Await works correctly here
+    }
+  }
 }
