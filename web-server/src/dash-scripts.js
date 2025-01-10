@@ -13,6 +13,14 @@ var countDelay = 0;
 const invalidSplit = 9999999999.0
 
 function updateFuel(percentage) {
+    const container = document.getElementById("fuel-container");
+    if(container == null){
+        return
+    } else if(percentage == null){
+        container.style.display = "none"
+        return
+    }
+
     var redWidth = Math.min(percentage, 15); // Limit to 15%
     document.getElementById("fuel-fill").style.width = redWidth + "%";
     var fillWhite = document.getElementById("fuel-fill-white");
@@ -27,6 +35,14 @@ function updateFuel(percentage) {
 }
 
 function updateGear(gear) {
+    const container = document.getElementById("gear-container");
+    if(container == null){
+        return
+    } else if(gear == null){
+        container.style.display = "none"
+        return
+    }
+
     var gearElement = document.getElementById("gear");
     if (gear == 0) {
         gearElement.style.color = "red"
@@ -44,28 +60,55 @@ function updateGear(gear) {
 }
 
 function updateTime(id, time, minutes = true) {
+    const container = document.getElementById("container-" + id);
+    const elem = document.getElementById(id);
+    if(container == null || elem == null){
+        return
+    } else if(time == null){
+        container.style.display = "none"
+        return
+    }
+
+
     formattedTime = formatTime(time, minutes)
     if (time != null && time != 0) {
-        document.getElementById("container-" + id).style.display = "inline-flex";
-        document.getElementById(id).textContent = formattedTime;
+        container.style.display = "inline-flex";
+        elem.textContent = formattedTime;
     }
     else {
         if ((!config.seperateTime && id == "time" && time == null) 
             || (config.seperateTime && id == "clock" && time == null)) {
-            document.getElementById("container-" + id).style.display = "inline-flex";
-            document.getElementById(id).textContent = getCurrentTime();
+            container.style.display = "inline-flex";
+            elem.textContent = getCurrentTime();
         }
         else {
-            document.getElementById("container-" + id).style.display = "none";
+            container.style.display = "none"
+        return;
         }
     }
 }
 
 function updateSpeed(speed) {
+    const container = document.getElementById("speed-container");
+    if(container == null){
+        return
+    } else if(speed == null){
+        container.style.display = "none"
+        return
+    }
+
     document.getElementById("speed").textContent = parseInt(speed)
 }
 
 function updateDistance(_distance) {
+    const container = document.getElementById("distance-container");
+    if(container == null){
+        return
+    } else if(_distance == null){
+        container.style.display = "none"
+        return
+    }
+
     distance = Math.max(0, parseInt(_distance));
     if (_distance == 0.0) {
         document.getElementById("distance").textContent = "- mi"
@@ -76,6 +119,14 @@ function updateDistance(_distance) {
 }
 
 function updateTireWear(tire, percentage) {
+    const container = document.getElementById(tire+"tire-bar");
+    if(container == null){
+        return
+    } else if(percentage == null){
+        container.style.display = "none"
+        return
+    }
+
     if (percentage == null) {
         document.getElementById(tire + "tire-bar").style.display = "none"
         return;
@@ -98,6 +149,14 @@ function updateTireWear(tire, percentage) {
 }
 
 function updateTireTemp(tire, temp) {
+    const container = document.getElementById(tire);
+    if(container == null){
+        return
+    } else if(temp == null){
+        container.style.display = "none"
+        return
+    }
+
     const temperature = parseInt(temp);
     const tireDiv = document.getElementById(tire);
     const r = 167;
@@ -124,6 +183,14 @@ function updateTireTemp(tire, temp) {
 }
 
 function updatePosition(pos) {
+    const container = document.getElementById("position-container");
+    if(container == null){
+        return
+    } else if(pos == null){
+        container.style.display = "none"
+        return
+    }
+
     if (pos == 0) {
         document.getElementById("position").style.display = "none"
         return;
@@ -134,6 +201,14 @@ function updatePosition(pos) {
 
 dirty = false;
 function updateDirtyLap(showdirty) {
+    const container = document.getElementById("caution-container");
+    if(container == null){
+        return
+    } else if(showdirty == null){
+        container.style.display = "none"
+        return
+    }
+
     if (showdirty) {
         document.getElementById("caution").style.display = "inline-block"
     }
@@ -144,6 +219,14 @@ function updateDirtyLap(showdirty) {
 
 tractionBlink = 0;
 function updateTraction(tireSlipFront, tireSlipRear) {
+    const container = document.getElementById("traction");
+    if(container == null){
+        return
+    } else if(tireSlipFront == null || tireSlipRear == null){
+        container.style.display = "none"
+        return
+    }
+
     const Blinkon = 20;
     const Blinkoff = 40;
     if (tireSlipFront > 2 || tireSlipRear > 2) {
@@ -181,6 +264,11 @@ launchControlBlink = 0;
 launchControlComplete = false;
 launchControlSpeed = 0;
 function updateLaunchControl(speed) {
+ 
+    if(speed == null){
+        return
+    }
+
     if (!launchControlComplete && speed > .1 && speed < 60) {
         launchControlTime += .025;
         updateTime("best-time", launchControlTime);
@@ -209,6 +297,15 @@ function updateLaunchControl(speed) {
 }
 
 function updateRpm(rpm, maxRPM, gear = -99) {
+    const container = document.getElementById("rpm-container");
+    if(container == null){
+        return
+    } else if(rpm == null || maxRPM == null){
+        container.style.display = "none"
+        return
+    }
+
+
     initShiftLightRPM(maxRPM);
     configureRPM(maxRPM);
 
@@ -223,6 +320,14 @@ function updateRpm(rpm, maxRPM, gear = -99) {
 }
 
 function updateSplit(split) {
+    const container = document.getElementById("split-container");
+    if(container == null){
+        return
+    } else if(split == null){
+        container.style.display = "none"
+        return
+    }
+
     if (split >= invalidSplit) {
         document.getElementById("split").style.display = "none"
         return;
@@ -240,17 +345,21 @@ function updateSplit(split) {
     }
 
     if(ShowMinutes){
-        document.getElementById("container-split").classList.remove("container-split")
-        document.getElementById("container-split").classList.add("container-split-showMinutes")
+        document.getElementById("split-container").classList.remove("split-container")
+        document.getElementById("split-container").classList.add("split-container-showMinutes")
     }
     else {
-        document.getElementById("container-split").classList.remove("container-split-showMinutes")
-        document.getElementById("container-split").classList.add("container-split")
+        document.getElementById("split-container").classList.remove("split-container-showMinutes")
+        document.getElementById("split-container").classList.add("split-container")
     }
     document.getElementById("split").style.display = "contents"
 }
 
 function checkDirtyLap(FR, FL, RR, RL, time) {
+    if (FR == null || FL == null || RR == null || RL == null || time == null) {
+        return;
+    }
+
     if (dirty && time < 1.0) {
         dirty = false;
     }

@@ -1,3 +1,6 @@
+// indicates if RPM max should increase or be constant
+const incRPM = false;
+
 animateRPM();
 animateGears();
 animateSpeed();
@@ -9,12 +12,12 @@ animateTime();
 animageBestTime();
 animateSplit();
 animateDistance();
+animatePosition();
 
 // Sleep function using Promises
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
-
 
 // Async function to loop with sleep
 async function animateRPM() {
@@ -29,16 +32,15 @@ async function animateRPM() {
 
     while (true) {
         updateRpm(i, maxRPM, gear);
-        // updateRPM(6500, maxRPM, gear);
 
         i += inc;
         if (i > maxRPM-750 || i < minRPM) {
             if(maxRPM >= MaxRPM || maxRPM >= MinRPM){
                 minmaxRPM = -minmaxRPM;
             }
-            // if(i < minRPM){
-            //     maxRPM = maxRPM + minmaxRPM;
-            // }
+            if(incRPM && i < minRPM){
+                maxRPM = maxRPM + minmaxRPM;
+            }
             inc = -inc;
         }
 
@@ -189,5 +191,19 @@ async function animateDistance(){
         updateDistance(i);
         i += inc;
         await sleep(10); // Wait 100ms before updating the next color
+    }
+}
+
+async function animatePosition(){
+    let i = 0;
+    let inc = 1;
+    const max = 20;
+    while (true) {
+        updatePosition(i);
+        i += inc;
+        if(i > max || i < 0){
+            inc = -inc;
+        }
+        await sleep(1000);
     }
 }

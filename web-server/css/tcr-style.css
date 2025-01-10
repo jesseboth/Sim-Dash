@@ -338,13 +338,13 @@ body {
   display: none;
 }
 
-/* #container-split {
+/* #split-container {
   height: 18;
   width: 200px;
   top: 5%;
 } */
 
-#container-split {
+#split-container {
   height: 18;
   width: auto;
   top: 43%;

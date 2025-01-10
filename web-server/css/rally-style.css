@@ -240,8 +240,8 @@ body {
 #container-time {
   height: 18;
   width: 200px;
-  right: 50.5%;
-  top: 8%;
+  right: 60.5%;
+  top: 10%;
   display: none;
 }
 
@@ -254,20 +254,16 @@ body {
   display: none;
 }
 
+#clock {
+  font-size: 250%;
+}
+
 .time {
-  font-size: 300%;
+  font-size: 320%;
   color: #d0c5c3;
   font-family: "Noto Sans";
   font-weight: 600;
   display: contents;
-}
-
-#container-best-time {
-  height: 18;
-  width: 200px;
-  right: 75%;
-  top: 8%;
-  display: none;
 }
 
 .container-speed {
@@ -330,26 +326,26 @@ body {
 
 }
 
-/* #container-split {
+/* #split-container {
   height: 18;
   width: 200px;
   top: 5%;
 } */
 
-#container-split {
+#split-container {
   height: 18;
   width: auto;
-  top: 15%;
+  top: 18%;
   position: absolute;
   
 }
 
 .container-split-showMinutes {
-  right: 51%;
+  right: 60.5%;
 }
 
 .container-split {
-  right: 51%;
+  right: 60.5%;
 }
 
 .split {
