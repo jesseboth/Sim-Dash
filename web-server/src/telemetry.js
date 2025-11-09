@@ -127,17 +127,22 @@ async function set_display() {
 
     defaultTicks = 0;
     gear = data["Gear"];
+
+    gearMax = data["GearMax"];
+    gearNeutral = data["GearNeutral"];
+    gearReverse = data["GearReverse"];
+
     if (gear == 11) {
         gearChangeTicks++;
     }
     else {
         gearChangeTicks = 0;
-        updateGear(gear, data["Gear"])
+        updateGear(gear, gearMax, gearNeutral, gearReverse)
     }
 
     if (gearChangeTicks >= 10) {
         gearChangeTicks = 0;
-        updateGear(gear, data["Gear"])
+        updateGear(gear, gearMax, gearNeutral, gearReverse)
     }
 
     updateDistance(data["Odometer"])
@@ -153,43 +158,50 @@ async function set_display() {
         data["CurrentLap"])
 
     // figure out if delay is required
-    if (data["CurrentLap"] == 0 || data["DistanceTraveled"] < 0) {
-        countDelay++;
-    }
+    if(data["DistanceTraveled"] != null){
+        if (data["CurrentLap"] == 0 || data["DistanceTraveled"] < 0) {
+            countDelay++;
+        }
 
-    if (data["DistanceTraveled"] > 0) {
-        updateTime("clock", getCurrentTimeUnformatted(), false)
-        if (countDelay < 2 && data["CurrentLap"] < timeDelay) {
-            updateTime("time", data["LastLap"])
-            if (bestLap > 0) {
-                updateSplit(data["LastLap"] - bestLap);
+        if (data["DistanceTraveled"] > 0) {
+            updateTime("clock", getCurrentTimeUnformatted(), false)
+            if (countDelay < 2 && data["CurrentLap"] < timeDelay) {
+                updateTime("time", data["LastLap"])
+                if (bestLap > 0) {
+                    updateSplit(data["LastLap"] - bestLap);
+                }
+            }
+            else {
+                updateTime("time", data["CurrentLap"])
+                updateSplit(data["Split"]);
+                updateDirtyLap(dirty);
             }
         }
-        else {
-            updateTime("time", data["CurrentLap"])
-            updateSplit(data["Split"]);
-            updateDirtyLap(dirty);
+        else if (data["DistanceTraveled"] < 0) {
+            updateTime("clock", getCurrentTimeUnformatted(), false)
+            updateTime("time", 0);
+            updateSplit(invalidSplit);
+            updateDirtyLap(false);
         }
-    }
-    else if (data["DistanceTraveled"] < 0) {
+        else if (data["DistanceTraveled"] == 0) {
+            updateTime("time", null);
+            updateTime("clock", null);
+            updateSplit(invalidSplit);
+            updateDirtyLap(false);
+        }
+
+        // reset delay
+        if (data["DistanceTraveled"] > 0 && data["CurrentLap"] >= timeDelay) {
+            countDelay = 0;
+            bestLap = data["BestLap"];
+        }
+    } 
+    else {
         updateTime("clock", getCurrentTimeUnformatted(), false)
-        updateTime("time", 0);
-        updateSplit(invalidSplit);
-        updateDirtyLap(false);
-    }
-    else if (data["DistanceTraveled"] == 0) {
-        updateTime("time", null);
-        updateTime("clock", null);
-        updateSplit(invalidSplit);
-        updateDirtyLap(false);
+        updateTime("time", data["CurrentLap"])
     }
 
-    // reset delay
-    if (data["DistanceTraveled"] > 0 && data["CurrentLap"] >= timeDelay) {
-        countDelay = 0;
-        bestLap = data["BestLap"];
-    }
-
+    
     if (data["SessionBestLap"] == 0 && data["Speed"] < .01 && data["CurrentEngineRpm"] > 2100 &&
         (data["Clutch"] == 255 || data["HandBrake"] == 255 || data["Accel"] > 128)) {
         launchControl = true;

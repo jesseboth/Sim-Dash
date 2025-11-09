@@ -18,102 +18,135 @@ func DefaultLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, to
 }
 
 func Default(game string) bool {
-    return true;
+    return true
 }
 
 func DefaultGame(game string) string {
-    var gameSTR string = "";
     switch game {
-        case "DR2":
-            gameSTR = "Dirt Rally 2.0"
-        default:
-            return "Generic Telemetry" // still requires packet data
-        
-        }
-    return gameSTR;
+    case "DR2":
+        return "Dirt Rally 2.0"
+    case "WRC":
+        return "EA WRC"
+    default:
+        return "Generic Telemetry"
+    }
 }
 
 func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
     buffer := make([]byte, 1500)
 
     n, addr, err := conn.ReadFromUDP(buffer)
+
     if err != nil {
         log.Fatal("Error reading UDP data:", err, addr)
     } else if n < totalLength {
-        if(wrongData <= 5) {
-            wrongData++;
+        if util.WrongData <= 5 {
+            util.WrongData++
         } else {
             util.SetJson("")
         }
         return
     }
 
-    wrongData = 0;
+    util.WrongData = 0
     if debug {
         log.Println("UDP client connected:", addr)
     }
 
-    s32map := make(map[string]uint32)
+    // Maps for all types
+    s32map := make(map[string]int32)
     u32map := make(map[string]uint32)
     f32map := make(map[string]float32)
     u16map := make(map[string]uint16)
     u8map := make(map[string]uint8)
     s8map := make(map[string]int8)
+    u64map := make(map[string]uint64)
+    f64map := make(map[string]float64)
+    boolmap := make(map[string]bool)
+
+    var gameTotalTime float32
+    var speed float32
 
     for i, T := range telemArray {
         data := buffer[:n][T.StartOffset:T.EndOffset]
-
         if debug {
             log.Printf("Data chunk %d: %v (%s) (%s)", i, data, T.Name, T.DataType)
         }
 
         switch T.DataType {
         case "s32":
-            s32map[T.Name] = binary.LittleEndian.Uint32(data)
+            s32map[T.Name] = int32(binary.LittleEndian.Uint32(data))
         case "u32":
             u32map[T.Name] = binary.LittleEndian.Uint32(data)
         case "f32":
-            dataFloated := util.Float32frombytes(data)
-            f32map[T.Name] = dataFloated
+            val := util.Float32frombytes(data)
+            f32map[T.Name] = val
+
+            // Capture values for isRaceOn calculation
+            if T.Name == "GameTotalTime" {
+                gameTotalTime = val
+            } else if T.Name == "Speed" {
+                speed = val
+            }
         case "u16":
             u16map[T.Name] = binary.LittleEndian.Uint16(data)
         case "u8":
             u8map[T.Name] = uint8(data[0])
         case "s8":
             s8map[T.Name] = int8(data[0])
+        case "u64":
+            u64map[T.Name] = binary.LittleEndian.Uint64(data)
+        case "f64":
+            f64map[T.Name] = util.Float64frombytes(data)
+        case "bool":
+            boolmap[T.Name] = data[0] != 0
         }
     }
 
-    if true {
-        // Create a single map to hold all combined data
-        combinedMap := make(map[string]interface{})
+    // Determine if the race is on
+    isRaceOn := gameTotalTime > 0 && speed > 0
 
-        // Add each original map's contents to the combined map
-        for k, v := range s32map {
-            combinedMap[k] = v
-        }
-        for k, v := range u32map {
-            combinedMap[k] = v
-        }
-        for k, v := range f32map {
-            combinedMap[k] = v
-        }
-        for k, v := range u16map {
-            combinedMap[k] = v
-        }
-        for k, v := range u8map {
-            combinedMap[k] = v
-        }
-        for k, v := range s8map {
-            combinedMap[k] = v
-        }
-
-        // Marshal the combined map into a single JSON object
-        finalJSON, err := json.Marshal(combinedMap)
-        if err != nil {
-            log.Fatalf("Error marshalling combined JSON: %v", err)
-        }
-
-        util.SetJson(fmt.Sprintf("%s", finalJSON))
+    // Combine all maps into a single map
+    combinedMap := make(map[string]interface{})
+    for k, v := range s32map {
+        combinedMap[k] = v
     }
+    for k, v := range u32map {
+        combinedMap[k] = v
+    }
+    for k, v := range f32map {
+        combinedMap[k] = v
+    }
+    for k, v := range u16map {
+        combinedMap[k] = v
+    }
+    for k, v := range u8map {
+        combinedMap[k] = v
+    }
+    for k, v := range s8map {
+        combinedMap[k] = v
+    }
+    for k, v := range u64map {
+        combinedMap[k] = v
+    }
+    for k, v := range f64map {
+        combinedMap[k] = v
+    }
+    for k, v := range boolmap {
+        combinedMap[k] = v
+    }
+
+    // Add the derived field
+    combinedMap["IsRaceOn"] = isRaceOn
+
+    finalJSON, err := json.Marshal(combinedMap)
+    if err != nil {
+        log.Fatalf("Error marshalling combined JSON: %v", err)
+    }
+
+    if debug {
+        log.Println(string(finalJSON))
+    }
+
+    util.SetJson(string(finalJSON))
 }

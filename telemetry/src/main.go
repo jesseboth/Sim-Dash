@@ -4,7 +4,6 @@ import (
     "flag"
     "log"
     "net"
-
     "os"
     "os/signal"
     "strings"
@@ -19,16 +18,16 @@ const port = "9999"                   // UDP Port number to listen on
 const service = hostname + ":" + port // Combined hostname+port
 
 func main() {
-    var gameSTR string;
-    var splitTypeSTR string;
+    var gameSTR string
+    var splitTypeSTR string
 
-    flag.StringVar(&gameSTR, "game", "FM", "Specify an abreviated game ie: FM, FH5")
+    flag.StringVar(&gameSTR, "game", "FM", "Specify an abbreviated game ie: FM, FH5")
     flag.StringVar(&splitTypeSTR, "split", "car", "car(overall)/class(overall)/session based splits")
     debugModePTR := flag.Bool("d", false, "Enables extra debug information if set")
     flag.Parse()
 
     if game.Forza(gameSTR) {
-        game.ForzaSetSplit(splitTypeSTR);
+        game.ForzaSetSplit(splitTypeSTR)
     }
 
     debugMode := *debugModePTR
@@ -50,7 +49,6 @@ func main() {
     // Process format file into array of util.Telemetry structs
     startOffset := 0
     endOffset := 0
-    dataLength := 0
     totalLength := 0
     var telemArray []util.Telemetry
 
@@ -60,69 +58,40 @@ func main() {
         dataType := dataFormat[0]
         dataName := dataFormat[1]
 
+        var dataLength int
+
         switch dataType {
-        case "s32":
+        case "s32", "u32", "f32":
             dataLength = 4
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := util.Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "u32":
-            dataLength = 4
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := util.Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "f32":
-            dataLength = 4
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := util.Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
         case "u16":
             dataLength = 2
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := util.Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "u8":
+        case "u8", "s8", "bool":
             dataLength = 1
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := util.Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
-        case "s8":
-            dataLength = 1
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := util.Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
+        case "u64", "f64":
+            dataLength = 8
         case "hzn":
             dataLength = 12
-            endOffset = endOffset + dataLength
-            startOffset = endOffset - dataLength
-            totalLength = totalLength + dataLength
-            telemItem := util.Telemetry{i, dataName, dataType, startOffset, endOffset}
-            telemArray = append(telemArray, telemItem)
         default:
-            log.Fatalf("Error: Unknown data type in %s \n", formatFile)
+            log.Fatalf("Error: Unknown data type '%s' in %s \n", dataType, formatFile)
         }
+
+        // Compute offsets and append telemetry item
+        endOffset += dataLength
+        startOffset = endOffset - dataLength
+        totalLength += dataLength
+        telemItem := util.Telemetry{i, dataName, dataType, startOffset, endOffset}
+        telemArray = append(telemArray, telemItem)
+
         if debugMode {
-            log.Printf("Processed %s line %d: %s (%s),  Byte offset: %d:%d \n", formatFile, i, dataName, dataType, startOffset, endOffset)
+            log.Printf("Processed %s line %d: %s (%s),  Byte offset: %d:%d \n",
+                formatFile, i, dataName, dataType, startOffset, endOffset)
         }
     }
 
     if debugMode {
         log.Printf("Logging entire telemArray: \n%v", telemArray)
-        log.Printf("Proccessed %d util.Telemetry types OK!", len(telemArray))
+        log.Printf("Processed %d util.Telemetry types OK!", len(telemArray))
     }
-
 
     go util.ServeJson()
 
@@ -133,15 +102,14 @@ func main() {
     }
 
     listener, err := net.ListenUDP("udp", udpAddr)
-    if(err != nil){
+    if err != nil {
         log.Fatal(err)
     }
     defer listener.Close()
 
-    if(debugMode){
+    if debugMode {
         log.Printf("Telemetry data out server listening on %s:%s, waiting for data...\n", util.GetOutboundIP(), port)
     }
-
 
     if game.Forza(gameSTR) {
         go game.ForzaLoop(gameSTR, listener, telemArray, totalLength, debugMode)
@@ -160,6 +128,3 @@ func setupCloseHandler() {
         os.Exit(0)
     }()
 }
-
-
-

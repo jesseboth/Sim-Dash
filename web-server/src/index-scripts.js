@@ -150,8 +150,7 @@ async function refreshBtn(type, value=undefined) {
     });
 
     if(config[type] != undefined && config[type] != "") {
-        document.getElementById(type+ "-" + config[type]).style.border = "4px solid #67e088";
-        document.getElementById(type+ "-" + config[type]).style.border = "3px solid #0e0e0e";
+      document.getElementById(type+ "-" + config[type]).style.border = "4px solid #67e088";
     }
 }
 

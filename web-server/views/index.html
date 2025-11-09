@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
+  <link rel="manifest" href="data/manifest.json">
   <link rel="stylesheet" type="text/css" href="css/index-style.css" />
 </head>
 
@@ -79,6 +80,13 @@
     <li><button id="game-fh5" class="large-button gameBtn">Forza Horizon 5</button></li>
     <li><button id="game-fm7" class="large-button gameBtn">Forza Motorsport 7</button></li>
     <li><button id="game-fh4" class="large-button gameBtn">Forza Horizon 4</button></li>
+  </ul>
+
+  <li>
+    <button class="large-button" onclick="toggleVisibility('Rally')">Rally</a>
+  </li>
+  <ul id="Rally" class="telescope" style="display: none;">
+    <li><button id="game-wrc" class="large-button gameBtn">EA WRC</button></li>
   </ul>
 
   <!-- <li>

@@ -73,7 +73,6 @@ var odometer = Odometer{
 
 const splitDistance float32 = 12.0  // Distance per split, adjust as necessary
 const maxFloat = 9999999999.0
-var wrongData int = 0;
 var splitType SplitType = Unknown;
 var motorsport bool = false;
 
@@ -137,15 +136,15 @@ func readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, d
     if err != nil {
         log.Fatal("Error reading UDP data:", err, addr)
     } else if n < totalLength {
-        if(wrongData <= 5) {
-            wrongData++;
+        if(util.WrongData <= 5) {
+            util.WrongData++;
         } else {
             util.SetJson("")
         }
         return
     }
 
-    wrongData = 0;
+    util.WrongData = 0;
     if debug {
         log.Println("UDP client connected:", addr)
     }
