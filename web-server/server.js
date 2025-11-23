@@ -5,6 +5,7 @@ const fsPromises = require('fs').promises;
 const { spawn } = require('child_process');
 const port = process.env.PORT || 3000;
 const animate = process.env.ANIMATE || false;
+const debug = process.env.DEBUG || false;
 
 // Template for the return objects
 const postReturn = {
@@ -223,7 +224,12 @@ function reqGame(game) {
     } else {
         if (telemetry == null) {
             telemetryType = game
-            telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split], options);
+
+            if (debug) {
+                telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split, "-d"], options);
+            } else {
+                telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split], options);
+            }
 
             telemetry.stdout.on('data', (data) => {
                 process.stdout.write(`FDT: ${data}`);

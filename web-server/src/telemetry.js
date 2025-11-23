@@ -104,8 +104,14 @@ async function set_display() {
 
     data = telemetry
     if (data == null || data["IsRaceOn"] != 1) {
+        console.log("No data")
+
+        // wait 30 seconds to set default
+        if (data == null && defaultTicks >= 30) {
+            set_default();
+        }
         // wait 2 minutes to set default
-        if (!defaultData && defaultTicks >= 1200) {
+        else if (!defaultData && defaultTicks >= 1200) {
             set_default();
         }
         else if (!defaultData) {

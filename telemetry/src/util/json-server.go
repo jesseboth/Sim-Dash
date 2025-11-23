@@ -3,28 +3,34 @@ package util
 import (
     "fmt"
     "log"
-    "net/http"
     "net"
+    "net/http"
     "sync"
+    "time"
 )
 
 var (
-        mu sync.Mutex
-        jsonData string
-    )
+        mu          sync.Mutex
+        jsonData    string
+        lastUpdated time.Time
+        staleTime   = 5 * time.Second // mark stale if no update in 5s
+)
 
 const jsonServerPort = ":8888"
-
 
 func responder(w http.ResponseWriter, r *http.Request) {
     switch r.Method {
     case "GET":
         enableCors(&w)
-        
-        // Lock the mutex before reading jsonData
+
         mu.Lock()
         data := jsonData
+        age := time.Since(lastUpdated)
         mu.Unlock()
+
+        if age > staleTime || data == "" {
+            data = "null" // or "{}" if you prefer empty JSON
+        }
 
         w.Write([]byte(data))
     default:
@@ -40,23 +46,24 @@ func ServeJson() {
     log.Fatal(http.ListenAndServe(jsonServerPort, nil))
 }
 
-// GetOutboundIP finds preferred outbound ip of this machine
+// GetOutboundIP finds preferred outbound IP of this machine
 func GetOutboundIP() net.IP {
-    conn, err := net.Dial("udp", "1.2.3.4:4321") // Destination does not need to exist, using this to see which is the primary network interface
+    conn, err := net.Dial("udp", "1.2.3.4:4321") // dummy address to determine interface
     if err != nil {
         log.Fatal(err)
     }
     defer conn.Close()
 
     localAddr := conn.LocalAddr().(*net.UDPAddr)
-
     return localAddr.IP
 }
-    
-func SetJson(str string){
+
+// SetJson updates the telemetry JSON and timestamps it
+func SetJson(str string) {
     mu.Lock()
     defer mu.Unlock()
     jsonData = str
+    lastUpdated = time.Now()
 }
 
 func enableCors(w *http.ResponseWriter) {

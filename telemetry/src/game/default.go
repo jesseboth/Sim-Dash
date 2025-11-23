@@ -28,7 +28,7 @@ func DefaultGame(game string) string {
     case "WRC":
         return "EA WRC"
     default:
-        return "Generic Telemetry"
+        return game + " Generic"
     }
 }
 
@@ -64,9 +64,6 @@ func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLengt
     f64map := make(map[string]float64)
     boolmap := make(map[string]bool)
 
-    var gameTotalTime float32
-    var speed float32
-
     for i, T := range telemArray {
         data := buffer[:n][T.StartOffset:T.EndOffset]
         if debug {
@@ -82,12 +79,6 @@ func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLengt
             val := util.Float32frombytes(data)
             f32map[T.Name] = val
 
-            // Capture values for isRaceOn calculation
-            if T.Name == "GameTotalTime" {
-                gameTotalTime = val
-            } else if T.Name == "Speed" {
-                speed = val
-            }
         case "u16":
             u16map[T.Name] = binary.LittleEndian.Uint16(data)
         case "u8":
@@ -102,9 +93,6 @@ func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLengt
             boolmap[T.Name] = data[0] != 0
         }
     }
-
-    // Determine if the race is on
-    isRaceOn := gameTotalTime > 0 && speed > 0
 
     // Combine all maps into a single map
     combinedMap := make(map[string]interface{})
@@ -136,8 +124,8 @@ func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLengt
         combinedMap[k] = v
     }
 
-    // Add the derived field
-    combinedMap["IsRaceOn"] = isRaceOn
+    // Add the IsRaceOn field
+    combinedMap["IsRaceOn"] = true
 
     finalJSON, err := json.Marshal(combinedMap)
     if err != nil {
@@ -147,6 +135,5 @@ func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLengt
     if debug {
         log.Println(string(finalJSON))
     }
-
     util.SetJson(string(finalJSON))
 }
