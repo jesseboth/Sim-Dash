@@ -65,6 +65,12 @@ const server = http.createServer((req, res) =>  {
         res.end(JSON.stringify(retVal));
         return;
     }
+    else if (req.url == "/games" && req.method === 'GET') {
+        const games = getJsonData('data/games.json');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(games));
+        return;
+    }
 
     else if (req.url === '/config' && req.method === 'POST') {
         retJson = JSON.parse(JSON.stringify(postReturn));
@@ -85,6 +91,7 @@ const server = http.createServer((req, res) =>  {
                 if (data.hasOwnProperty("dash")) { retJson["dash"] = reqDash(data.dash); delete data.dash;}
                 if (data.hasOwnProperty("scale")) { retJson["scale"] = reqScale(data.scale); delete data.scale;}
                 if (data.hasOwnProperty("shift")) { retJson["shift"] = reqShift(data.shift); delete data.shift;}
+                if (data.hasOwnProperty("port")) { retJson["port"] = reqPort(data.port); delete data.port;}
 
                 // Handle invalid data
                 if (Object.keys(data).length > 0) {
@@ -223,7 +230,11 @@ function reqGame(game) {
     } else {
         if (telemetry == null) {
             telemetryType = game
-            telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split], options);
+
+            // Determine which port to use
+            const port = (config.useCustomPort && config.customPort) ? config.customPort.toString() : "9999";
+
+            telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split, '-port', port], options);
 
             telemetry.stdout.on('data', (data) => {
                 process.stdout.write(`FDT: ${data}`);
@@ -396,5 +407,35 @@ function reqShift(input) {
     else {
         retVal.error = "Invalid shift type: " + input;
     }
+    return retVal;
+}
+
+function reqPort(input) {
+    retVal = JSON.parse(JSON.stringify(postReturn));
+
+    if (input == "get") {
+        retVal.success = true;
+        retVal.return = {
+            useCustom: config.useCustomPort || false,
+            customPort: config.customPort || 20778
+        };
+    }
+    else if (typeof input === 'object' && input.hasOwnProperty('useCustom')) {
+        config.useCustomPort = input.useCustom;
+        config.customPort = input.customPort || 20778;
+
+        // Validate port range
+        if (config.customPort < 1024 || config.customPort > 65535) {
+            retVal.error = "Port must be between 1024 and 65535";
+            return retVal;
+        }
+
+        fs.writeFileSync('data/config.json', JSON.stringify(config, null, 4));
+        retVal.success = true;
+    }
+    else {
+        retVal.error = "Invalid port configuration";
+    }
+
     return retVal;
 }

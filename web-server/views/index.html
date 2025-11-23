@@ -70,34 +70,30 @@
     </div>
   </div>
 
+  <div id="portModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <div class="container"></div>
+      <div class="text">Port Configuration</div>
+      <br>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin: 20px 0;">
+        <div class="text" style="margin: 0;">Use Custom Port:</div>
+        <label class="switch">
+          <input type="checkbox" id="portToggle">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <br>
+      <div class="text">Port Number (default: 9999):</div>
+      <input type="number" id="portInput" placeholder="20778" min="1024" max="65535"
+        style="width: 80%; padding: 10px; font-size: 16px; margin-top: 10px;">
+      <br>
+      <button id="portSaveBtn" class="modalButton saveButton">Save</button>
+    </div>
+  </div>
 
-  <!-- Game Buttons -->
-  <li>
-    <button class="large-button" onclick="toggleVisibility('Forza')">Forza</a>
-  </li>
-  <ul id="Forza" class="telescope" style="display: none;">
-    <li><button id="game-fm" class="large-button gameBtn">Forza Motorsport</button></li>
-    <li><button id="game-fh5" class="large-button gameBtn">Forza Horizon 5</button></li>
-    <li><button id="game-fm7" class="large-button gameBtn">Forza Motorsport 7</button></li>
-    <li><button id="game-fh4" class="large-button gameBtn">Forza Horizon 4</button></li>
-  </ul>
 
-  <li>
-    <button class="large-button" onclick="toggleVisibility('Rally')">Rally</a>
-  </li>
-  <ul id="Rally" class="telescope" style="display: none;">
-    <li><button id="game-wrc" class="large-button gameBtn">EA WRC</button></li>
-  </ul>
-
-  <!-- <li>
-    <button class="large-button" onclick="toggleVisibility('Rally')">Rally</a>
-  </li>
-  <ul id="Rally" class="telescope" style="display: none;">
-    <li><button id="game-eawrc" class="large-button gameBtn">WRC</button></li>
-    <li><button id="game-dirt2" class="large-button gameBtn">Dirt Rally 2.0</button></li>
-  </ul> -->
-
-  <!-- Game Buttons -->
+  <!-- Game Buttons - Dynamically loaded from games.json -->
 
 
   <button id="game-stop" class="large-button gameBtn" style="background-color: red; border: 2px solid red;">Stop</button>
@@ -105,6 +101,7 @@
   <div class="bottom-buttons">
     <button id="scale" class="small-button">Scale Dash</button>
     <button id="config" class="small-button">Config</button>
+    <button id="portConfig" class="small-button">Port Config</button>
   </div>
   <button id="dash" class="redirect"></button>
 </body>

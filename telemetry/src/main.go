@@ -14,17 +14,19 @@ import (
 )
 
 const hostname = "0.0.0.0"            // Address to listen on (0.0.0.0 = all interfaces)
-const port = "9999"                   // UDP Port number to listen on
-const service = hostname + ":" + port // Combined hostname+port
 
 func main() {
     var gameSTR string
     var splitTypeSTR string
+    var portSTR string
 
     flag.StringVar(&gameSTR, "game", "FM", "Specify an abbreviated game ie: FM, FH5")
     flag.StringVar(&splitTypeSTR, "split", "car", "car(overall)/class(overall)/session based splits")
+    flag.StringVar(&portSTR, "port", "9999", "UDP port number to listen on")
     debugModePTR := flag.Bool("d", false, "Enables extra debug information if set")
     flag.Parse()
+
+    service := hostname + ":" + portSTR // Combined hostname+port
 
     if game.Forza(gameSTR) {
         game.ForzaSetSplit(splitTypeSTR)
@@ -41,7 +43,12 @@ func main() {
     var formatFile = "packets/" + gameSTR + "_packetformat.dat"
 
     // Load lines from packet format file
-    lines, err := util.ReadLines(formatFile)
+    var lines []string
+    var telemArray []util.Telemetry
+    var totalLength int
+    var err error
+
+    lines, err = util.ReadLines(formatFile)
     if err != nil {
         log.Fatalf("Error reading format file: %s", err)
     }
@@ -49,8 +56,6 @@ func main() {
     // Process format file into array of util.Telemetry structs
     startOffset := 0
     endOffset := 0
-    totalLength := 0
-    var telemArray []util.Telemetry
 
     for i, line := range lines {
         dataClean := strings.Split(line, ";")
@@ -108,7 +113,7 @@ func main() {
     defer listener.Close()
 
     if debugMode {
-        log.Printf("Telemetry data out server listening on %s:%s, waiting for data...\n", util.GetOutboundIP(), port)
+        log.Printf("Telemetry data out server listening on %s:%s, waiting for data...\n", util.GetOutboundIP(), portSTR)
     }
 
     if game.Forza(gameSTR) {
