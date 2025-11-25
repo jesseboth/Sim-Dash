@@ -37,6 +37,8 @@ func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLengt
 
     n, addr, err := conn.ReadFromUDP(buffer)
 
+    log.Println("Received data length:", n)
+
     if err != nil {
         log.Fatal("Error reading UDP data:", err, addr)
     } else if n < totalLength {

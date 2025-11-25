@@ -66,6 +66,12 @@ const server = http.createServer((req, res) =>  {
         res.end(JSON.stringify(retVal));
         return;
     }
+    else if (req.url == "/games" && req.method === 'GET') {
+        const games = getJsonData('data/games.json');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(games));
+        return;
+    }
 
     else if (req.url === '/config' && req.method === 'POST') {
         retJson = JSON.parse(JSON.stringify(postReturn));
@@ -86,6 +92,8 @@ const server = http.createServer((req, res) =>  {
                 if (data.hasOwnProperty("dash")) { retJson["dash"] = reqDash(data.dash); delete data.dash;}
                 if (data.hasOwnProperty("scale")) { retJson["scale"] = reqScale(data.scale); delete data.scale;}
                 if (data.hasOwnProperty("shift")) { retJson["shift"] = reqShift(data.shift); delete data.shift;}
+                if (data.hasOwnProperty("simHub")) { retJson["simHub"] = reqSimHub(data.simHub); delete data.simHub;}
+                if (data.hasOwnProperty("refresh")) { retJson["refresh"] = reqRefresh(data.refresh); delete data.refresh;}
 
                 // Handle invalid data
                 if (Object.keys(data).length > 0) {
@@ -225,11 +233,15 @@ function reqGame(game) {
         if (telemetry == null) {
             telemetryType = game
 
+            // Determine which port to use
+            const port = (config.useCustomPort && config.customPort) ? config.customPort.toString() : "9999";
+
             if (debug) {
-                telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split, "-d"], options);
+                telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split, "-d", '-port', port], options);
             } else {
-                telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split], options);
+                telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split, '-port', port], options);
             }
+
 
             telemetry.stdout.on('data', (data) => {
                 process.stdout.write(`FDT: ${data}`);
@@ -402,5 +414,70 @@ function reqShift(input) {
     else {
         retVal.error = "Invalid shift type: " + input;
     }
+    return retVal;
+}
+
+function reqSimHub(input) {
+    retVal = JSON.parse(JSON.stringify(postReturn));
+
+    if (input == "get") {
+        retVal.success = true;
+        retVal.return = {
+            useCustom: config.useCustomPort || false,
+            customPort: config.customPort || 20778,
+            simHubURL: config.simHubURL || ""
+        };
+    }
+    else if (typeof input === 'object' && input.hasOwnProperty('useCustom')) {
+        config.useCustomPort = input.useCustom;
+        config.customPort = input.customPort || 20778;
+        config.simHubURL = input.simHubURL || "";
+
+        // Validate port range
+        if (config.customPort < 1024 || config.customPort > 65535) {
+            retVal.error = "Port must be between 1024 and 65535";
+            return retVal;
+        }
+
+        // Validate simHubURL (basic validation)
+        if (config.simHubURL && !/^https?:\/\/.+/.test(config.simHubURL)) {
+            retVal.error = "Invalid SimHub URL";
+            return retVal;
+        }
+
+        fs.writeFileSync('data/config.json', JSON.stringify(config, null, 4));
+        retVal.success = true;
+    }
+    else {
+        retVal.error = "Invalid port configuration";
+    }
+
+    return retVal;
+}
+
+
+refresh = false;
+function reqRefresh(input) {
+    retVal = JSON.parse(JSON.stringify(postReturn));
+
+    if (input == "get") {
+        retVal.success = true;
+        retVal.return = {
+            refresh: refresh
+        }
+    }
+    else if (typeof input === 'object' && input.hasOwnProperty('refresh')) {
+        refresh = input.refresh;
+        retVal.success = true;
+
+        // make sure refresh is set back to false after 3 seconds
+        setTimeout(() => {
+            refresh = false;
+        }, 3000);
+    }
+    else {
+        retVal.error = "Invalid refresh configuration";
+    }
+
     return retVal;
 }

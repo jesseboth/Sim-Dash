@@ -1,0 +1,55 @@
+{
+  "categories": [
+    {
+      "name": "Forza",
+      "games": [
+        {
+          "name": "Forza Motorsport",
+          "id": "FM"
+        },
+        {
+          "name": "Forza Horizon 5",
+          "id": "FH5"
+        },
+        {
+          "name": "Forza Motorsport 7",
+          "id": "FM7"
+        },
+        {
+          "name": "Forza Horizon 4",
+          "id": "FH4"
+        }
+      ]
+    },
+    {
+      "name": "Rally",
+      "games": [
+        {
+          "name": "EA WRC",
+          "id": "WRC"
+        },
+        {
+          "name": "Dirt Rally 2.0",
+          "id": "DR2"
+        },
+        {
+          "name": "Dirt Rally",
+          "id": "DR"
+        }
+      ]
+    },
+    {
+      "name": "Assetto Corsa",
+      "games": [
+        {
+          "name": "Assetto Corsa",
+          "id": "AC"
+        },
+        {
+          "name": "Assetto Corsa Competizione",
+          "id": "ACC"
+        }
+      ]
+    }
+  ]
+}

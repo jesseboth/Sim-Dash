@@ -1,7 +1,7 @@
 
-# Forza-Dash
+# Sim-Dash
 
-Telemetry dashboard gauge cluster for Forza games in the style of the Mk8 Golf R gauge cluster. Includes timing splits on a class/car/track basis along with an odometer for each car make/model.
+A customizable telemetry dashboard system for racing and rally simulation games. Features multiple dash styles (Golf R, Rally, TCR), real-time telemetry visualization, timing splits, and per-car odometers.
 
 <div align="center">
    <img src="images/dash.png" alt="Dash" width="75%">
@@ -11,10 +11,20 @@ Telemetry dashboard gauge cluster for Forza games in the style of the Mk8 Golf R
 
 ## Supported Games
 
+### Forza
 - **Forza Motorsport**
 - **Forza Horizon 5**
-- **Forza Motorsport 7** *(untested)*
-- **Forza Horizon 4** *(untested)*
+- **Forza Motorsport 7**
+- **Forza Horizon 4**
+
+### Rally
+- **EA WRC**
+- **Dirt Rally 2.0**
+- **Dirt Rally**
+
+### Assetto Corsa
+- **Assetto Corsa**
+- **Assetto Corsa Competizione**
 
 ---
 
@@ -71,24 +81,31 @@ Telemetry dashboard gauge cluster for Forza games in the style of the Mk8 Golf R
 1. **Game Selection**:
    - Open a web browser and go to `http://<IP>:3000` (replace `<IP>` with the actual IP address of the machine running the Docker container).
    - This page allows you to select the game you want to use with the telemetry system.
-   - You can also scale/move the dash to adjust for setup.
 
 2. **Dashboard Gauge Cluster**:
    - Access the telemetry dashboard at `http://<IP>:3000/dash`.
-   - This page displays real-time telemetry data in a gauge cluster format.
+   - This page displays real-time telemetry data in your selected dash style.
 
 #### Game Selection
 
-- Buttons are provided for:
-  - Forza Motorsport (`FM`)
-  - Forza Horizon 5 (`FH5`)
-  - Forza Motorsport 7 (`FM7`)
-  - Forza Horizon 4 (`FH4`)
-- Click the corresponding button to load the appropriate settings for the selected game.
+- Games are organized by category (Forza, Rally, Assetto Corsa)
+- Click a category to expand and see available games
+- Click a game to start telemetry streaming
+- Games are dynamically loaded from `web-server/data/games.json` for easy configuration
 
-#### Stop Button
+#### Configuration Options
 
-- Clicking the **"Stop"** button halts the telemetry process and resets the dashboard.
+**Config Button** - Opens configuration modal:
+- **Dash Style**: Choose between Golf R, Rally, or TCR dash layouts
+- **Shift Light Type**: Off, Left-Right, or Outside-In patterns
+- **Split Type**: Class, Car, or Session-based timing splits
+
+**Port Config Button** - Configure UDP port settings:
+- **Toggle**: Enable/disable custom port (default: 9999)
+- **Port Number**: Set custom UDP port (1024-65535)
+- Useful for PortConfig integration or custom telemetry setups
+
+**Stop Button** - Halts the telemetry process and resets the dashboard
 
 #### Dashboard Scaling and Positioning
 
@@ -117,18 +134,66 @@ Telemetry dashboard gauge cluster for Forza games in the style of the Mk8 Golf R
 ---
 
 <details>
-<summary>Forza Setup</summary>
+<summary>Game Setup</summary>
 
-### Setting Forza to Stream Data
+### Forza (Motorsport/Horizon)
 
-To configure Forza Motorsport or Forza Horizon to stream data to your `sim-telemetry` dashboard:
+1. **Open Forza** on your gaming platform
+2. Navigate to **Settings > HUD and Gameplay**
+3. Locate **Data Out** or **UDP Telemetry** settings
+4. Set **IP address** to the machine running the Docker container
+5. Set **Port** to `9999` (or your custom port)
 
-1. **Open Forza on your gaming platform**.
-2. Navigate to **Settings > HUD and Gameplay** or a similar section with telemetry options.
-3. Locate the **Data Out** or **UDP Telemetry** settings.
-4. Set the **IP address** to the IP of the machine running the Docker container.
-5. Set the **Port** to `9999`.
+### Dirt Rally / EA WRC
 
-This will enable Forza to stream real-time telemetry data to the `sim-telemetry` dashboard via port `9999`.
+1. **Navigate to game installation directory**
+2. Find `hardware_settings_config.xml` (usually in Documents/My Games/)
+3. Configure UDP settings:
+   ```xml
+   <udp enabled="true" extradata="3" ip="127.0.0.1" port="9999" delay="1" />
+   ```
+4. Replace IP with your Docker host machine IP
+5. Set `extradata="3"` for full telemetry data
+
+### Assetto Corsa
+
+1. **Enable UDP telemetry** in game settings
+2. Set **UDP Port** to `9999` (or your custom port)
+3. Set **UDP IP** to the Docker host machine IP
+
+### Assetto Corsa Competizione
+
+1. Navigate to game installation folder
+2. Edit broadcasting configuration
+3. Configure UDP output to Docker host IP and port
+
+---
+
+### Adding New Games
+
+Games are configured in `web-server/data/games.json`:
+
+```json
+{
+  "categories": [
+    {
+      "name": "Category Name",
+      "games": [
+        {
+          "name": "Display Name",
+          "id": "GAMECODE"
+        }
+      ]
+    }
+  ]
+}
+```
+
+The `id` field is the game code that serves as the prefix for the packet format file.
+
+**Example:** If `"id": "FM"`, create the packet format file at:
+- `telemetry/packets/FM_packetformat.dat`
+
+This file defines the UDP packet structure for the game's telemetry data.
 
 </details>
