@@ -1,7 +1,6 @@
 package util
 
 import (
-    "fmt"
     "log"
     "net"
     "net/http"
@@ -35,14 +34,14 @@ func responder(w http.ResponseWriter, r *http.Request) {
         w.Write([]byte(data))
     default:
         w.WriteHeader(http.StatusMethodNotAllowed)
-        fmt.Fprintf(w, "Not supported.")
+        log.Printf("Not supported.")
     }
 }
 
 func ServeJson() {
     http.HandleFunc("/telemetry", responder)
 
-    fmt.Printf("JSON data at http://%s%s\n", GetOutboundIP(), jsonServerPort)
+    log.Printf("JSON data at http://%s%s\n", GetOutboundIP(), jsonServerPort)
     log.Fatal(http.ListenAndServe(jsonServerPort, nil))
 }
 

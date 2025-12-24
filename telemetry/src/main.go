@@ -60,10 +60,27 @@ func main() {
     for i, line := range lines {
         dataClean := strings.Split(line, ";")
         dataFormat := strings.Split(dataClean[0], " ")
+        
+        // check if dataFormat has at least 2 elements if not, skip this line
+        if len(dataFormat) < 2 {
+            if debugMode {
+                log.Printf("Warning: Skipping malformed line %d in %s: %s", i, formatFile, line)
+            }
+            continue
+        } else if (strings.HasPrefix(dataFormat[0], "//")) {
+            // make sure line is not a comment
+            if debugMode {
+                log.Printf("Skipping comment line %d in %s", i, formatFile)
+            }
+            continue
+        }
+        
         dataType := dataFormat[0]
         dataName := dataFormat[1]
 
-        log.Printf("DataType: %s, DataName: %s", dataType, dataName)
+        if debugMode {
+            log.Printf("DataType: %s, DataName: %s", dataType, dataName)
+        }
 
         var dataLength int
 
@@ -116,12 +133,16 @@ func main() {
 
     if debugMode {
         log.Printf("Telemetry data out server listening on %s:%s, waiting for data...\n", util.GetOutboundIP(), portSTR)
+        log.Printf("Length of telemetry packet: %d bytes\n", totalLength)
+    } else {
+        log.Printf("Reading data on port %s\n", portSTR)
     }
 
-    log.Printf("Length of telemetry packet: %d bytes\n", totalLength)
 
     if game.Forza(gameSTR) {
         go game.ForzaLoop(gameSTR, listener, telemArray, totalLength, debugMode)
+    } else if game.Dirt(gameSTR) {
+        go game.DirtLoop(gameSTR, listener, telemArray, totalLength, debugMode)
     } else {
         go game.DefaultLoop(gameSTR, listener, telemArray, totalLength, debugMode)
     }

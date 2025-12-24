@@ -431,7 +431,9 @@ function reqSimHub(input) {
     else if (typeof input === 'object' && input.hasOwnProperty('useCustom')) {
         config.useCustomPort = input.useCustom;
         config.customPort = input.customPort || 20778;
-        config.simHubURL = input.simHubURL || "";
+        if(input.hasOwnProperty('simHubURL') && input.simHubURL != "") {
+            config.simHubURL = input.simHubURL;
+        }
 
         // Validate port range
         if (config.customPort < 1024 || config.customPort > 65535) {

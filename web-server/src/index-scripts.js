@@ -265,7 +265,7 @@ async function loadPortConfig() {
       document.getElementById("portInput").value = portConfig.customPort || "20778";
       document.getElementById("portInput").disabled = !portConfig.useCustom;
 
-      document.getElementById("simHubInput").value = portConfig.simHubURL || "";
+      document.getElementById("simHubInput").placeholder = portConfig.simHubURL || "";
     }
   } catch (error) {
     console.error("Error loading port config:", error);

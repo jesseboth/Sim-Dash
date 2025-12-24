@@ -72,7 +72,7 @@ function updateTime(id, time, minutes = true) {
     const elem = document.getElementById(id);
     if(container == null || elem == null){
         return
-    } else if(time == null){
+    } else if(time == null && !config["seperateTime"]){
         container.style.display = "none"
         return
     }
@@ -309,7 +309,6 @@ function updateRpm(rpm, maxRPM, gear = -99) {
     if(container == null){
         return
     } else if(rpm == null || maxRPM == null){
-        container.style.display = "none"
         return
     }
 
