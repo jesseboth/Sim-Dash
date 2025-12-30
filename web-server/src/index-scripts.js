@@ -3,9 +3,67 @@ let config = {
 }
 
 document.body.onload = async function() {
+    await loadGamesFromJSON();
     await refreshBtn("game", config.game);
     if(config.game == undefined) {
         config.game = "";
+    }
+}
+
+async function loadGamesFromJSON() {
+    try {
+        const response = await fetch('/games');
+        const gamesData = await response.json();
+
+        // Find the container where game buttons should be inserted
+        const stopButton = document.getElementById('game-stop');
+        const container = stopButton.parentElement;
+
+        // Clear existing game buttons (except stop button)
+        const existingButtons = container.querySelectorAll('li, ul');
+        existingButtons.forEach(elem => elem.remove());
+
+        // Generate game category buttons dynamically
+        gamesData.categories.forEach(category => {
+            // Generate ID from category name (remove spaces)
+            const categoryId = category.name.replace(/\s+/g, '');
+
+            // Create category button
+            const categoryLi = document.createElement('li');
+            const categoryBtn = document.createElement('button');
+            categoryBtn.className = 'large-button';
+            categoryBtn.textContent = category.name;
+            categoryBtn.onclick = () => toggleVisibility(categoryId);
+            categoryLi.appendChild(categoryBtn);
+            container.insertBefore(categoryLi, stopButton);
+
+            // Create games list for this category
+            const gamesUl = document.createElement('ul');
+            gamesUl.id = categoryId;
+            gamesUl.className = 'telescope';
+            gamesUl.style.display = 'none';
+
+            category.games.forEach(game => {
+                const gameLi = document.createElement('li');
+                const gameBtn = document.createElement('button');
+                gameBtn.id = `game-${game.id.toLowerCase()}`;
+                gameBtn.className = 'large-button gameBtn';
+                gameBtn.textContent = game.name;
+                gameBtn.setAttribute('data-game-code', game.id);
+                gameLi.appendChild(gameBtn);
+                gamesUl.appendChild(gameLi);
+            });
+
+            container.insertBefore(gamesUl, stopButton);
+        });
+
+        // Re-attach event listeners for dynamically created game buttons
+        document.querySelectorAll('.gameBtn').forEach(element => {
+            gameBtn(element.id.split("-")[1]);
+        });
+
+    } catch (error) {
+        console.error('Error loading games:', error);
     }
 }
 
@@ -55,9 +113,12 @@ async function createButtonListener(action, name) {
 }
 
 async function gameBtn(name) {
-    document.getElementById(`game-${name}`).addEventListener('click', async function () {
+    const btnElement = document.getElementById(`game-${name}`);
+    btnElement.addEventListener('click', async function () {
         try {
-            const data = await postToServer("game", name);
+            // Get the game code from data attribute, fallback to uppercase name
+            const gameCode = btnElement.getAttribute('data-game-code') || name.toUpperCase();
+            const data = await postToServer("game", gameCode);
 
             if(name == "stop") {
                 refreshBtn("game", "");
@@ -68,10 +129,10 @@ async function gameBtn(name) {
                 if(data.error != undefined) {
                     console.error(data.error);
                 }
-                config.game = name;
+                config.game = gameCode;
                 modal.style.display = "block";
             } else {
-                refreshBtn("game", name);
+                refreshBtn("game", gameCode);
             }
         } catch (error) {
             console.error("Error while posting to server:", error);
@@ -85,9 +146,7 @@ function createRedirect(name) {
   });
 }
 
-document.querySelectorAll('.gameBtn').forEach(element => {
-  gameBtn(element.id.split("-")[1]);
-});
+// Game buttons are now dynamically loaded from games.json in loadGamesFromJSON()
 
 createRedirect("dash");
 
@@ -112,6 +171,11 @@ document.querySelectorAll('.configBtn').forEach(element => {
 document.getElementById("config").addEventListener("click", async () => {
     await refreshConfigButtons();
     document.getElementById("configModal").style.display = "block";
+});
+
+document.getElementById("portConfig").addEventListener("click", async () => {
+    await loadPortConfig();
+    document.getElementById("portModal").style.display = "block";
 });
 
 // Add event listeners to Yes and No buttons
@@ -150,8 +214,7 @@ async function refreshBtn(type, value=undefined) {
     });
 
     if(config[type] != undefined && config[type] != "") {
-        document.getElementById(type+ "-" + config[type]).style.border = "4px solid #67e088";
-        document.getElementById(type+ "-" + config[type]).style.border = "3px solid #0e0e0e";
+      document.getElementById(type+ "-" + config[type].toLowerCase()).style.border = "4px solid #67e088";
     }
 }
 
@@ -183,7 +246,7 @@ function newButton(name) {
 async function refreshConfigButtons() {
   let buttons = [];
   const elements = document.querySelectorAll('.configBtn');
-  
+
   for (const element of elements) {
     const key = element.id.split("-")[0];
     if (!buttons.includes(key)) {
@@ -192,3 +255,49 @@ async function refreshConfigButtons() {
     }
   }
 }
+
+async function loadPortConfig() {
+  try {
+    const data = await postToServer("simHub", "get");
+    if (data.success) {
+      const portConfig = data.return;
+      document.getElementById("portToggle").checked = portConfig.useCustom || false;
+      document.getElementById("portInput").value = portConfig.customPort || "20778";
+      document.getElementById("portInput").disabled = !portConfig.useCustom;
+
+      document.getElementById("simHubInput").placeholder = portConfig.simHubURL || "";
+    }
+  } catch (error) {
+    console.error("Error loading port config:", error);
+  }
+}
+
+document.getElementById("portToggle").addEventListener("change", function() {
+  document.getElementById("portInput").disabled = !this.checked;
+});
+
+document.getElementById("portSaveBtn").addEventListener("click", async function() {
+  const useCustom = document.getElementById("portToggle").checked;
+  const customPort = parseInt(document.getElementById("portInput").value) || 20778;
+  const simHubURL = document.getElementById("simHubInput").value || "";
+
+  try {
+    const data = await postToServer("simHub", { useCustom, customPort, simHubURL });
+    if (data.success) {
+      document.getElementById("portModal").style.display = "none";
+
+      postToServer("refresh", { refresh: true });
+
+      // wait half a second and reset
+      setTimeout(() => {
+        postToServer("refresh", { refresh: false });
+      }, 2000);
+      
+      console.log("Port configuration saved successfully");
+    } else {
+      console.error("Failed to save port config:", data.error);
+    }
+  } catch (error) {
+    console.error("Error saving port config:", error);
+  }
+});

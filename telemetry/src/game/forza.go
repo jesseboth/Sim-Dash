@@ -3,9 +3,9 @@ package game
 import (
     "encoding/binary"
     "encoding/json"
-    "fmt"
     "io/ioutil"
     "log"
+    "fmt"
     "math"
     "net"
     "os"
@@ -73,14 +73,13 @@ var odometer = Odometer{
 
 const splitDistance float32 = 12.0  // Distance per split, adjust as necessary
 const maxFloat = 9999999999.0
-var wrongData int = 0;
 var splitType SplitType = Unknown;
 var motorsport bool = false;
 
 func ForzaLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
-    fmt.Println("Starting Telemetry:", ForzaGame(game))
+    log.Println("Starting Telemetry:", ForzaGame(game))
     for {
-        readData(conn, telemArray, totalLength, debug)
+        ForzaReadData(conn, telemArray, totalLength, debug)
     }
 }
 
@@ -130,22 +129,22 @@ func ForzaSetSplit(split string) {
     }
 }
 
-func readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
+func ForzaReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
     buffer := make([]byte, 1500)
 
     n, addr, err := conn.ReadFromUDP(buffer)
     if err != nil {
         log.Fatal("Error reading UDP data:", err, addr)
     } else if n < totalLength {
-        if(wrongData <= 5) {
-            wrongData++;
+        if(util.WrongData <= 5) {
+            util.WrongData++;
         } else {
             util.SetJson("")
         }
         return
     }
 
-    wrongData = 0;
+    util.WrongData = 0;
     if debug {
         log.Println("UDP client connected:", addr)
     }
@@ -315,7 +314,7 @@ func setTimingSplits(data TimingData) error {
         return fmt.Errorf("failed to write JSON data: %v", err)
     }
 
-    fmt.Printf("Timing data successfully written to %s\n", filePath)
+    log.Printf("Timing data successfully written to %s\n", filePath)
     return nil
 }
 
@@ -375,7 +374,7 @@ func updateSplit(timingData *TimingData, distance float32, lap uint16, time floa
             var err error
             timingData.BestSplits, err = getTimingSplits(timingData.Car)
             if err != nil {
-                fmt.Println("Error getting timing splits:", err)
+                log.Println("Error getting timing splits:", err)
             }
             timingData.BestCarTrack, timingData.BestCarTrackSplits, err = getBestCarforTrack(timingData.Car)
         }
@@ -390,7 +389,7 @@ func updateSplit(timingData *TimingData, distance float32, lap uint16, time floa
                     if timingData.Car.TrackNumber != -1 {
                         err := setTimingSplits(*timingData)
                         if err != nil {
-                            fmt.Println("Error storing timing data:", err)
+                            log.Println("Error storing timing data:", err)
                         }
                     }
 
@@ -433,7 +432,7 @@ func updateSplit(timingData *TimingData, distance float32, lap uint16, time floa
     } else if index < len(timingData.TimingSplits) {
         // Do nothing if the index is within range but not needing updates
     } else {
-        fmt.Println("Error: Split index out of range", index, len(timingData.TimingSplits))
+        log.Println("Error: Split index out of range", index, len(timingData.TimingSplits))
         return maxFloat
     }
 

@@ -5,6 +5,7 @@ const fsPromises = require('fs').promises;
 const { spawn } = require('child_process');
 const port = process.env.PORT || 3000;
 const animate = process.env.ANIMATE || false;
+const debug = process.env.DEBUG || false;
 
 // Template for the return objects
 const postReturn = {
@@ -41,6 +42,30 @@ const serveFile = async (filePath, contentType, response) => {
     }
 }
 
+// look in view and get array of all html files 
+const collectDashboards = () => {
+    const dashboards = [];
+    const files = fs.readdirSync(path.join(__dirname, 'views'));
+    files.forEach(file => {
+        if (file.endsWith('-dash.html')) {
+            dashboards.push(file.replace('-dash.html', ''));
+        }
+    });
+    return dashboards;
+}
+dashboardList = collectDashboards();
+
+const dashboardIdx = () => {
+    return dashboardList.indexOf(config.dash);
+}
+
+const dashboardNext = () => {
+    let idx = dashboardIdx();
+    idx = (idx + 1) % dashboardList.length;
+    config.dash = dashboardList[idx];
+    return config.dash;
+}
+
 const server = http.createServer((req, res) =>  {
     myEmitter.emit('log', `${req.url}\t${req.method}`, 'reqLog.txt');
 
@@ -65,6 +90,12 @@ const server = http.createServer((req, res) =>  {
         res.end(JSON.stringify(retVal));
         return;
     }
+    else if (req.url == "/games" && req.method === 'GET') {
+        const games = getJsonData('data/games.json');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(games));
+        return;
+    }
 
     else if (req.url === '/config' && req.method === 'POST') {
         retJson = JSON.parse(JSON.stringify(postReturn));
@@ -83,8 +114,11 @@ const server = http.createServer((req, res) =>  {
                 if (data.hasOwnProperty("game")) { retJson["game"] = reqGame(data.game); delete data.game;}
                 if (data.hasOwnProperty("split")) { retJson["split"] = reqSplit(data.split); delete data.split;}
                 if (data.hasOwnProperty("dash")) { retJson["dash"] = reqDash(data.dash); delete data.dash;}
+                if (data.hasOwnProperty("toggleDash")) { retJson["toggleDash"] = reqDash(dashboardNext()); delete data.toggleDash;}
                 if (data.hasOwnProperty("scale")) { retJson["scale"] = reqScale(data.scale); delete data.scale;}
                 if (data.hasOwnProperty("shift")) { retJson["shift"] = reqShift(data.shift); delete data.shift;}
+                if (data.hasOwnProperty("simHub")) { retJson["simHub"] = reqSimHub(data.simHub); delete data.simHub;}
+                if (data.hasOwnProperty("refresh")) { retJson["refresh"] = reqRefresh(data.refresh); delete data.refresh;}
 
                 // Handle invalid data
                 if (Object.keys(data).length > 0) {
@@ -223,7 +257,16 @@ function reqGame(game) {
     } else {
         if (telemetry == null) {
             telemetryType = game
-            telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split], options);
+
+            // Determine which port to use
+            const port = (config.useCustomPort && config.customPort) ? config.customPort.toString() : "9999";
+
+            if (debug) {
+                telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split, "-d", '-port', port], options);
+            } else {
+                telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split, '-port', port], options);
+            }
+
 
             telemetry.stdout.on('data', (data) => {
                 process.stdout.write(`FDT: ${data}`);
@@ -396,5 +439,72 @@ function reqShift(input) {
     else {
         retVal.error = "Invalid shift type: " + input;
     }
+    return retVal;
+}
+
+function reqSimHub(input) {
+    retVal = JSON.parse(JSON.stringify(postReturn));
+
+    if (input == "get") {
+        retVal.success = true;
+        retVal.return = {
+            useCustom: config.useCustomPort || false,
+            customPort: config.customPort || 20778,
+            simHubURL: config.simHubURL || ""
+        };
+    }
+    else if (typeof input === 'object' && input.hasOwnProperty('useCustom')) {
+        config.useCustomPort = input.useCustom;
+        config.customPort = input.customPort || 20778;
+        if(input.hasOwnProperty('simHubURL') && input.simHubURL != "") {
+            config.simHubURL = input.simHubURL;
+        }
+
+        // Validate port range
+        if (config.customPort < 1024 || config.customPort > 65535) {
+            retVal.error = "Port must be between 1024 and 65535";
+            return retVal;
+        }
+
+        // Validate simHubURL (basic validation)
+        if (config.simHubURL && !/^https?:\/\/.+/.test(config.simHubURL)) {
+            retVal.error = "Invalid SimHub URL";
+            return retVal;
+        }
+
+        fs.writeFileSync('data/config.json', JSON.stringify(config, null, 4));
+        retVal.success = true;
+    }
+    else {
+        retVal.error = "Invalid port configuration";
+    }
+
+    return retVal;
+}
+
+
+refresh = false;
+function reqRefresh(input) {
+    retVal = JSON.parse(JSON.stringify(postReturn));
+
+    if (input == "get") {
+        retVal.success = true;
+        retVal.return = {
+            refresh: refresh
+        }
+    }
+    else if (typeof input === 'object' && input.hasOwnProperty('refresh')) {
+        refresh = input.refresh;
+        retVal.success = true;
+
+        // make sure refresh is set back to false after 3 seconds
+        setTimeout(() => {
+            refresh = false;
+        }, 3000);
+    }
+    else {
+        retVal.error = "Invalid refresh configuration";
+    }
+
     return retVal;
 }

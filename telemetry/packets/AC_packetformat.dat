@@ -1,0 +1,61 @@
+u8 Identifier; AC RTCarInfo packet identifier (usually 'a' = 97)
+s32 Size; Packet size
+f32 SpeedKmh; Speed in km/h
+f32 Speed; Speed in mph (converted from km/h)
+f32 SpeedMs; Speed in m/s
+u8 IsAbsEnabled; ABS enabled flag
+u8 IsAbsInAction; ABS currently active
+u8 IsTcEnabled; Traction control enabled
+u8 IsTcInAction; Traction control active
+u8 IsInPit; Car is in pit lane
+u8 IsEngineLimiterOn; Engine limiter active
+f32 AccelerationY; Vertical G-force
+f32 AccelerationX; Horizontal G-force
+f32 AccelerationZ; Frontal G-force
+s32 CurrentLap; Current lap time in milliseconds
+s32 LastLap; Last lap time in milliseconds
+s32 BestLap; Best lap time in milliseconds
+s32 LapNumber; Current lap number
+f32 Accel; Gas pedal position (0.0-1.0)
+f32 Brake; Brake pedal position (0.0-1.0)
+f32 Clutch; Clutch pedal position (0.0-1.0)
+f32 CurrentEngineRpm; Current engine RPM
+s32 Gear; Current gear (-1=R, 0=N, 1+=gears)
+f32 Steer; Steering input (-1.0 to 1.0)
+f32 WheelRotationSpeedFrontLeft; Front left wheel angular speed
+f32 WheelRotationSpeedFrontRight; Front right wheel angular speed
+f32 WheelRotationSpeedRearLeft; Rear left wheel angular speed
+f32 WheelRotationSpeedRearRight; Rear right wheel angular speed
+f32 TireSlipAngleFrontLeft; Front left tire slip angle
+f32 TireSlipAngleFrontRight; Front right tire slip angle
+f32 TireSlipAngleRearLeft; Rear left tire slip angle
+f32 TireSlipAngleRearRight; Rear right tire slip angle
+f32 TireSlipRatioFrontLeft; Front left tire slip ratio
+f32 TireSlipRatioFrontRight; Front right tire slip ratio
+f32 TireSlipRatioRearLeft; Rear left tire slip ratio
+f32 TireSlipRatioRearRight; Rear right tire slip ratio
+f32 TireCombinedSlipFrontLeft; Front left combined slip
+f32 TireCombinedSlipFrontRight; Front right combined slip
+f32 TireCombinedSlipRearLeft; Rear left combined slip
+f32 TireCombinedSlipRearRight; Rear right combined slip
+f32 WheelLoadFrontLeft; Front left wheel load
+f32 WheelLoadFrontRight; Front right wheel load
+f32 WheelLoadRearLeft; Rear left wheel load
+f32 WheelLoadRearRight; Rear right wheel load
+f32 CamberFrontLeft; Front left camber angle (radians)
+f32 CamberFrontRight; Front right camber angle (radians)
+f32 CamberRearLeft; Rear left camber angle (radians)
+f32 CamberRearRight; Rear right camber angle (radians)
+f32 TyreRadiusFrontLeft; Front left tire radius
+f32 TyreRadiusFrontRight; Front right tire radius
+f32 TyreRadiusRearLeft; Rear left tire radius
+f32 TyreRadiusRearRight; Rear right tire radius
+f32 SuspensionTravelMetersFrontLeft; Front left suspension travel
+f32 SuspensionTravelMetersFrontRight; Front right suspension travel
+f32 SuspensionTravelMetersRearLeft; Rear left suspension travel
+f32 SuspensionTravelMetersRearRight; Rear right suspension travel
+f32 CarPositionNormalized; Normalized position on track (0.0-1.0)
+f32 CarSlope; Track slope at car position
+f32 PositionX; World position X coordinate
+f32 PositionY; World position Y coordinate
+f32 PositionZ; World position Z coordinate

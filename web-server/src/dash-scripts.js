@@ -34,7 +34,7 @@ function updateFuel(percentage) {
     }
 }
 
-function updateGear(gear) {
+function updateGear(gear, gearMax= null, gearNeutral= null, gearReverse= null) {
     const container = document.getElementById("gear-container");
     if(container == null){
         return
@@ -44,9 +44,17 @@ function updateGear(gear) {
     }
 
     var gearElement = document.getElementById("gear");
-    if (gear == 0) {
+    if ((gearNeutral != null && gear == gearNeutral)) {
+        gearElement.style.color = "#207dde"
+        gearElement.textContent = "N"
+    }
+    else if ((gearReverse != null && gear == gearReverse) || gear == 0) {
         gearElement.style.color = "red"
         gearElement.textContent = "R"
+    }
+    else if (gearMax != null && gear > 0 && gear <= gearMax) {
+        gearElement.style.color = "#dedede"
+        gearElement.textContent = gear
     }
     else if (gear > 0 && gear < 11) {
         gearElement.style.color = "#dedede"
@@ -55,8 +63,8 @@ function updateGear(gear) {
     else {
         gearElement.style.color = "#207dde"
         gearElement.textContent = "N"
-        return;
     }
+    return;
 }
 
 function updateTime(id, time, minutes = true) {
@@ -64,7 +72,7 @@ function updateTime(id, time, minutes = true) {
     const elem = document.getElementById(id);
     if(container == null || elem == null){
         return
-    } else if(time == null){
+    } else if(time == null && !config["seperateTime"]){
         container.style.display = "none"
         return
     }
@@ -301,7 +309,6 @@ function updateRpm(rpm, maxRPM, gear = -99) {
     if(container == null){
         return
     } else if(rpm == null || maxRPM == null){
-        container.style.display = "none"
         return
     }
 

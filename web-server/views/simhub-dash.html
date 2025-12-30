@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Sim Hub Data</title>
+  <link rel="stylesheet" type="text/css" href="css/rally-style.css" />
+</head>
+
+<body style="background-color: #000000;">
+  <div class="centered" id="all">
+    <div class="centered size">
+      <div class="content">
+        <iframe src="" frameborder="0" style="z-index: 1000; width:94%; margin-left: 3%; height: 90%;"></iframe>
+      </div>
+    </div>
+
+</body>
+
+<script>
+  document.addEventListener("DOMContentLoaded", async () => {
+    try {
+      // const response = await postToServer("simHub", "get");
+      const types = ["simHub"];
+      
+      const data = await fetchConfig(types);
+      console.log("Fetched SimHub config:", data.simHub);
+      if (data.success) {
+        const simHubURL = data.simHub.return.simHubURL || "";
+        const iframe = document.querySelector('iframe');
+        iframe.src = simHubURL;
+        console.log("SimHub URL loaded successfully:", simHubURL);
+      } else {
+        console.error("Failed to retrieve SimHub URL:", data.error);
+      }
+    } catch (error) {
+      console.error("Error fetching SimHub URL:", error);
+    }
+  });
+</script>
+
+<script src="src/config.js"></script>
+
+<script>
+  var position = setInterval(getConfig, 1000 * 2); getConfig();
+</script>
+
+</html>

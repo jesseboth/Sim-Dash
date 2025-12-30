@@ -9,29 +9,46 @@ import (
     "jesseboth/fdt/src/util"
 )
 
-func DefaultLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
-    log.Println("Starting Telemetry:", DefaultGame(game))
+func DirtLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
+    log.Println("Starting Telemetry:", DirtGame(game))
     for {
-        default_readData(conn, telemArray, totalLength, debug)
+        DirtReadData(conn, telemArray, totalLength, debug)
     }
 }
 
-func Default(game string) bool {
-    return true
-}
-
-func DefaultGame(game string) string {
+func Dirt(game string) bool {
     switch game {
-    case "DR2":
-        return "Dirt Rally 2.0"
-    case "WRC":
-        return "EA WRC"
-    default:
-        return game + " Generic"
-    }
+        case "DR2":
+        case "DR":
+        case "Dirt5":
+        case "Dirt4":
+        case "Dirt3":
+        default:
+            return false
+        }
+    return true;
 }
 
-func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
+func DirtGame(game string) string {
+    var gameSTR string = "";
+    switch game {
+        case "DR2":
+            gameSTR = "Dirt Rally 2.0"
+        case "DR":
+            gameSTR = "Dirt Rally"
+        case "Dirt5":
+            gameSTR = "Dirt 5"
+        case "Dirt4":
+            gameSTR = "Dirt 4"
+        case "Dirt3":
+            gameSTR = "Dirt 3"
+        default:
+            return "Unknown"
+        }
+    return gameSTR;
+}
+
+func DirtReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
     buffer := make([]byte, 1500)
 
     n, addr, err := conn.ReadFromUDP(buffer)
@@ -129,6 +146,17 @@ func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLengt
 
     // Add the IsRaceOn field
     combinedMap["IsRaceOn"] = true
+
+    combinedMap["CurrentEngineRpm"] = combinedMap["CurrentEngineRpm"].(float32) * 10
+    combinedMap["EngineMaxRpm"] = combinedMap["EngineMaxRpm"].(float32) * 10
+    combinedMap["EngineIdleRpm"] = combinedMap["EngineIdleRpm"].(float32) * 10
+
+    combinedMap["GearNeutral"] = 0
+    combinedMap["GearReverse"] =  -1
+
+    combinedMap["LapNumber"] = combinedMap["LapNumber"].(float32) + 1
+
+    // Fuel? = capacity / level
 
     finalJSON, err := json.Marshal(combinedMap)
     if err != nil {

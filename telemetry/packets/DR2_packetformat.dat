@@ -1,0 +1,110 @@
+// Telemetry Packet Format
+// All values are little-endian IEEE 754 floats unless noted
+// Offsets match incoming UDP stream exactly
+
+f32 CurrentRaceTime;         // 0
+f32 LapTime;                 // 4
+f32 StageCurrentDistance;    // 8
+f32 StageProgress;           // 12 (0..1)
+
+// Position (world space)
+f32 PositionX;               // 16
+f32 PositionY;               // 20
+f32 PositionZ;               // 24
+
+// Speed
+f32 Speed;                   // 28 (m/s)
+
+// Velocity (world space)
+f32 VelocityX;               // 32
+f32 VelocityY;               // 36
+f32 VelocityZ;               // 40
+
+// Roll vector
+f32 RollX;                   // 44
+f32 RollY;                   // 48
+f32 RollZ;                   // 52
+
+// Pitch vector
+f32 PitchX;                  // 56
+f32 PitchY;                  // 60
+f32 PitchZ;                  // 64
+
+// Suspension travel
+f32 HubPositionRL;           // 68
+f32 HubPositionRR;           // 72
+f32 HubPositionFL;           // 76
+f32 HubPositionFR;           // 80
+
+// Suspension velocity
+f32 HubVelocityRL;           // 84
+f32 HubVelocityRR;           // 88
+f32 HubVelocityFL;           // 92
+f32 HubVelocityFR;           // 96
+
+// Wheel speeds
+f32 WheelSpeedRL;            // 100
+f32 WheelSpeedRR;            // 104
+f32 WheelSpeedFL;            // 108
+f32 WheelSpeedFR;            // 112
+
+// Driver inputs
+f32 Accel;                   // 116 (0..1)
+f32 Steer;                   // 120 (-1..1)
+f32 Brake;                   // 124 (0..1)
+f32 Clutch;                  // 128 (0..1)
+
+// Gearbox
+f32 Gear;                    // 132 (neutral = 0)
+
+// G-forces
+f32 GForceLat;               // 136
+f32 GForceLon;               // 140
+
+// Lap info
+f32 CurrentLap;              // 144 (starts at 0)
+
+// Engine
+f32 CurrentEngineRpm;        // 148 (×10)
+f32 SliProSupport;           // 152 (unused)
+f32 RacePosition;            // 156
+
+// Hybrid / assists (unused but present)
+f32 KersLevel;               // 160
+f32 KersMaxLevel;            // 164
+f32 Drs;                     // 168
+f32 TractionControl;         // 172
+f32 AntiLockBrakes;          // 176
+
+// Fuel / pit (unused)
+f32 FuelInTank;              // 180
+f32 FuelCapacity;            // 184
+f32 InPit;                   // 188
+
+// Sector timing
+f32 Sector;                  // 192
+f32 Sector1Time;             // 196
+f32 Sector2Time;             // 200
+
+// Brake temperatures
+f32 BrakeTemperatureRL;      // 204
+f32 BrakeTemperatureRR;      // 208
+f32 BrakeTemperatureFL;      // 212
+f32 BrakeTemperatureFR;      // 216
+
+// Tyre pressures
+f32 TyrePressureRL;          // 220
+f32 TyrePressureRR;          // 224
+f32 TyrePressureFL;          // 228
+f32 TyrePressureFR;          // 232
+
+// Session info
+f32 LapNumber;               // 236
+f32 TotalLaps;               // 240
+f32 StageLength;             // 244
+f32 LastLap;             // 248
+
+// Engine limits
+f32 EngineMaxRpm;            // 252 (×10)
+f32 EngineIdleRpm;           // 256 (×10)
+f32 GearMax;                 // 260
