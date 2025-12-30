@@ -42,6 +42,30 @@ const serveFile = async (filePath, contentType, response) => {
     }
 }
 
+// look in view and get array of all html files 
+const collectDashboards = () => {
+    const dashboards = [];
+    const files = fs.readdirSync(path.join(__dirname, 'views'));
+    files.forEach(file => {
+        if (file.endsWith('-dash.html')) {
+            dashboards.push(file.replace('-dash.html', ''));
+        }
+    });
+    return dashboards;
+}
+dashboardList = collectDashboards();
+
+const dashboardIdx = () => {
+    return dashboardList.indexOf(config.dash);
+}
+
+const dashboardNext = () => {
+    let idx = dashboardIdx();
+    idx = (idx + 1) % dashboardList.length;
+    config.dash = dashboardList[idx];
+    return config.dash;
+}
+
 const server = http.createServer((req, res) =>  {
     myEmitter.emit('log', `${req.url}\t${req.method}`, 'reqLog.txt');
 
@@ -90,6 +114,7 @@ const server = http.createServer((req, res) =>  {
                 if (data.hasOwnProperty("game")) { retJson["game"] = reqGame(data.game); delete data.game;}
                 if (data.hasOwnProperty("split")) { retJson["split"] = reqSplit(data.split); delete data.split;}
                 if (data.hasOwnProperty("dash")) { retJson["dash"] = reqDash(data.dash); delete data.dash;}
+                if (data.hasOwnProperty("toggleDash")) { retJson["toggleDash"] = reqDash(dashboardNext()); delete data.toggleDash;}
                 if (data.hasOwnProperty("scale")) { retJson["scale"] = reqScale(data.scale); delete data.scale;}
                 if (data.hasOwnProperty("shift")) { retJson["shift"] = reqShift(data.shift); delete data.shift;}
                 if (data.hasOwnProperty("simHub")) { retJson["simHub"] = reqSimHub(data.simHub); delete data.simHub;}
