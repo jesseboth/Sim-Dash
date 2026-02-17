@@ -4,3 +4,4 @@ fdt
 .DS_Store
 */node_modules
 telemetry/data/*
+*.md

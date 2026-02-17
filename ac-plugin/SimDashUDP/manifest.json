@@ -1,0 +1,6 @@
+{
+  "name": "SimDash UDP",
+  "version": "1.0.0",
+  "author": "Jesse Both",
+  "description": "Broadcasts telemetry data via UDP for SimDash autocross tracking"
+}

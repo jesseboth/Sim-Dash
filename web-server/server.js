@@ -69,6 +69,11 @@ const dashboardNext = () => {
 const server = http.createServer((req, res) =>  {
     myEmitter.emit('log', `${req.url}\t${req.method}`, 'reqLog.txt');
 
+    // Handle autocross route early
+    if (req.url === '/autocross') {
+        req.url = '/autocross.html';
+    }
+
     const extension = path.extname(req.url);
 
     let contentType;
@@ -97,6 +102,26 @@ const server = http.createServer((req, res) =>  {
         return;
     }
 
+    else if (req.url === '/autocross/api' && req.method === 'POST') {
+        const autocrossAPI = require('./lib/autocross-api');
+        let body = '';
+        req.on('data', (chunk) => {
+            body += chunk.toString();
+        });
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body);
+                const result = await autocrossAPI.handleRequest(data);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+            } catch (error) {
+                console.error('Autocross API error:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
+        return;
+    }
     else if (req.url === '/config' && req.method === 'POST') {
         retJson = JSON.parse(JSON.stringify(postReturn));
 

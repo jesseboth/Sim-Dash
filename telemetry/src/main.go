@@ -143,6 +143,8 @@ func main() {
         go game.ForzaLoop(gameSTR, listener, telemArray, totalLength, debugMode)
     } else if game.Dirt(gameSTR) {
         go game.DirtLoop(gameSTR, listener, telemArray, totalLength, debugMode)
+    } else if gameSTR == "AC" || gameSTR == "ASSETTO" {
+        go game.AssettoLoop(gameSTR, listener, telemArray, totalLength, debugMode)
     } else {
         go game.DefaultLoop(gameSTR, listener, telemArray, totalLength, debugMode)
     }

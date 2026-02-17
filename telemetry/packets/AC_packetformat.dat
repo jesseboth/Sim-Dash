@@ -59,3 +59,5 @@ f32 CarSlope; Track slope at car position
 f32 PositionX; World position X coordinate
 f32 PositionY; World position Y coordinate
 f32 PositionZ; World position Z coordinate
+s32 CarID; Hashed car name identifier
+s32 TrackID; Hashed track name + config identifier

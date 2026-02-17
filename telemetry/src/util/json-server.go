@@ -40,6 +40,7 @@ func responder(w http.ResponseWriter, r *http.Request) {
 
 func ServeJson() {
     http.HandleFunc("/telemetry", responder)
+    SetupAutocrossRoutes()
 
     log.Printf("JSON data at http://%s%s\n", GetOutboundIP(), jsonServerPort)
     log.Fatal(http.ListenAndServe(jsonServerPort, nil))

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autocross Telemetry Analyzer</title>
+    <link rel="stylesheet" href="/css/autocross-style.css">
+    <link rel="stylesheet" href="https://unpkg.com/uplot@1.6.24/dist/uPlot.min.css">
+</head>
+<body>
+    <!-- Header Section -->
+    <header class="header">
+        <div class="header-left">
+            <h1>Autocross Telemetry</h1>
+            <select id="courseSelector" class="course-selector">
+                <option value="">Select course...</option>
+            </select>
+            <button id="nameIdentifiersBtn" class="btn btn-secondary" style="font-size: 0.85rem;" title="Name current car/track">🏷️ Name Car/Track</button>
+        </div>
+        <div class="header-right">
+            <div id="recordingStatus" class="recording-status">Ready</div>
+            <button id="toggleRecordingBtn" class="btn btn-start">Start</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <!-- Left Panel: Map and Video -->
+        <section class="left-panel">
+            <!-- Track Map -->
+            <div class="track-map-section">
+                <div class="section-header">
+                    <h2>Track Map</h2>
+                    <div class="map-controls">
+                        <button id="mapPlayBtn" class="btn-icon" title="Play/Pause">▶</button>
+                        <button id="zoomInBtn" class="btn-icon" title="Zoom In">+</button>
+                        <button id="zoomOutBtn" class="btn-icon" title="Zoom Out">-</button>
+                        <button id="fitBtn" class="btn-icon" title="Fit to View">⊡</button>
+                        <label class="toggle-label" style="margin-left: 8px; font-size: 0.85rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                            <input type="checkbox" id="mostRecentOnTopToggle" checked style="cursor: pointer;">
+                            <span>Recent on top</span>
+                        </label>
+                    </div>
+                </div>
+                <canvas id="trackMapCanvas" class="track-map-canvas"></canvas>
+                <div id="mapLegend" class="map-legend"></div>
+            </div>
+
+            <!-- Scrubber -->
+            <div class="scrubber-section">
+                <canvas id="scrubberCanvas" class="scrubber-canvas"></canvas>
+                <div class="scrubber-controls">
+                    <button id="playPauseBtn" class="btn-icon">▶</button>
+                    <span id="timeDisplay" class="time-display">00:00.000</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Panel: Scrollable Charts -->
+        <section class="right-panel">
+            <div class="charts-scroll-container">
+                <div class="chart-wrapper">
+                    <h3>Speed (mph)</h3>
+                    <div id="speedChart" class="chart"></div>
+                    <div id="speedValues" class="chart-values"></div>
+                </div>
+                <div class="chart-wrapper">
+                    <h3>Throttle (%)</h3>
+                    <div id="throttleChart" class="chart"></div>
+                    <div id="throttleValues" class="chart-values"></div>
+                </div>
+                <div class="chart-wrapper">
+                    <h3>Brake (%)</h3>
+                    <div id="brakeChart" class="chart"></div>
+                    <div id="brakeValues" class="chart-values"></div>
+                </div>
+                <div class="chart-wrapper">
+                    <h3>G-Forces (Lateral & Longitudinal)</h3>
+                    <div id="gForceChart" class="chart"></div>
+                    <div id="gForceValues" class="chart-values"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Bottom Panel: Run List -->
+    <section class="runs-section">
+        <div class="runs-collapsed-header">
+            <button id="runsToggle" class="runs-toggle" aria-label="Toggle runs list">
+                <span class="toggle-icon">▲</span>
+            </button>
+            <h2>Runs</h2>
+            <span id="runCountCollapsed" class="run-count">0 runs</span>
+        </div>
+        <div class="runs-header">
+            <div class="runs-header-left">
+                <button id="runsToggleExpanded" class="runs-toggle" aria-label="Toggle runs list">
+                    <span class="toggle-icon">▲</span>
+                </button>
+                <h2>Runs</h2>
+                <span id="runCount" class="run-count">0 runs</span>
+            </div>
+            <div class="runs-header-right">
+                <button id="exportBtn" class="btn btn-secondary" disabled>Export</button>
+                <button id="importBtn" class="btn btn-secondary">Import</button>
+                <button id="archiveBtn" class="btn btn-secondary">Archive</button>
+                <button id="clearSelectionsBtn" class="btn btn-secondary">Clear</button>
+                <button id="deleteRunBtn" class="btn btn-danger" disabled>Delete</button>
+            </div>
+        </div>
+
+        <!-- Top 10 Panel -->
+        <div id="top10Panel" class="top10-panel hidden">
+            <h3>🏆 Top 10 Fastest Runs</h3>
+            <div id="top10List" class="top10-list"></div>
+        </div>
+
+        <!-- All Runs List -->
+        <div id="runsList" class="runs-list">
+            <div class="empty-state">No runs recorded yet. Click Start to begin recording.</div>
+        </div>
+    </section>
+
+    <!-- Modal: Rename Run -->
+    <div id="renameModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Rename Run</h2>
+            <form id="renameRunForm">
+                <div class="form-group">
+                    <label for="runName">Run Name:</label>
+                    <input type="text" id="runName" name="runName" placeholder="e.g., Perfect Run, Morning Session">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="cancelRename" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Rename</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Name Car/Track -->
+    <div id="nameIdentifiersModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Name Car & Track</h2>
+            <form id="nameIdentifiersForm">
+                <div class="form-group">
+                    <label for="carIdDisplay">Car ID:</label>
+                    <input type="text" id="carIdDisplay" readonly style="background-color: #f5f5f5;">
+                </div>
+                <div class="form-group">
+                    <label for="carNameInput">Car Name:</label>
+                    <input type="text" id="carNameInput" name="carName" placeholder="e.g., Mazda Miata, BMW M3">
+                </div>
+                <div class="form-group">
+                    <label for="trackIdDisplay">Track ID:</label>
+                    <input type="text" id="trackIdDisplay" readonly style="background-color: #f5f5f5;">
+                </div>
+                <div class="form-group">
+                    <label for="trackNameInput">Track Name:</label>
+                    <input type="text" id="trackNameInput" name="trackName" placeholder="e.g., Laguna Seca, Silverstone">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="cancelNameIdentifiers" class="btn btn-secondary">Skip</button>
+                    <button type="submit" class="btn btn-primary">Save & Continue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Archive Course -->
+    <div id="archiveModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Archive Course</h2>
+            <p style="color: #888; margin-bottom: 1rem;">Archive this course to start a new session for the same track.</p>
+            <form id="archiveForm">
+                <div class="form-group">
+                    <label for="archiveCarName">Car Used:</label>
+                    <input type="text" id="archiveCarName" name="carName" placeholder="e.g., Mazda Miata NA" required>
+                </div>
+                <div class="form-group">
+                    <label for="archiveEventName">Event Name:</label>
+                    <input type="text" id="archiveEventName" name="eventName" placeholder="e.g., Spring 2026 Autocross #3" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="cancelArchive" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Archive</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hidden file input for import -->
+    <input type="file" id="importFileInput" accept=".json" style="display: none;">
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="loading-indicator hidden">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/uplot@1.6.24/dist/uPlot.iife.min.js"></script>
+    <script src="/src/autocross-scripts.js"></script>
+    <script src="/src/autocross-recorder.js"></script>
+    <script src="/src/autocross-charts.js"></script>
+    <script src="/src/autocross-map.js"></script>
+    <script src="/src/autocross-scrubber.js"></script>
+</body>
+</html>
