@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Autocross Telemetry Analyzer</title>
     <link rel="stylesheet" href="/css/autocross-style.css">
-    <link rel="stylesheet" href="https://unpkg.com/uplot@1.6.24/dist/uPlot.min.css">
+    <!-- Chart.js CSS not needed, it uses canvas -->
 </head>
 <body>
     <!-- Header Section -->
@@ -61,22 +61,22 @@
             <div class="charts-scroll-container">
                 <div class="chart-wrapper">
                     <h3>Speed (mph)</h3>
-                    <div id="speedChart" class="chart"></div>
+                    <canvas id="speedChart" class="chart"></canvas>
                     <div id="speedValues" class="chart-values"></div>
                 </div>
                 <div class="chart-wrapper">
                     <h3>Throttle (%)</h3>
-                    <div id="throttleChart" class="chart"></div>
+                    <canvas id="throttleChart" class="chart"></canvas>
                     <div id="throttleValues" class="chart-values"></div>
                 </div>
                 <div class="chart-wrapper">
                     <h3>Brake (%)</h3>
-                    <div id="brakeChart" class="chart"></div>
+                    <canvas id="brakeChart" class="chart"></canvas>
                     <div id="brakeValues" class="chart-values"></div>
                 </div>
                 <div class="chart-wrapper">
                     <h3>G-Forces (Lateral & Longitudinal)</h3>
-                    <div id="gForceChart" class="chart"></div>
+                    <canvas id="gForceChart" class="chart"></canvas>
                     <div id="gForceValues" class="chart-values"></div>
                 </div>
             </div>
@@ -202,7 +202,7 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <!-- Scripts -->
-    <script src="https://unpkg.com/uplot@1.6.24/dist/uPlot.iife.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="/src/autocross-scripts.js"></script>
     <script src="/src/autocross-recorder.js"></script>
     <script src="/src/autocross-charts.js"></script>
