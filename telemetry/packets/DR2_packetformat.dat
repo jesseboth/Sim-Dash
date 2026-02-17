@@ -3,8 +3,8 @@
 // Offsets match incoming UDP stream exactly
 
 f32 CurrentRaceTime;         // 0
-f32 LapTime;                 // 4
-f32 StageCurrentDistance;    // 8
+f32 CurrentLap;              // 4
+f32 Odometer;                // 8
 f32 StageProgress;           // 12 (0..1)
 
 // Position (world space)
@@ -62,7 +62,7 @@ f32 GForceLat;               // 136
 f32 GForceLon;               // 140
 
 // Lap info
-f32 CurrentLap;              // 144 (starts at 0)
+f32 LapNumber;              // 144 (starts at 0)
 
 // Engine
 f32 CurrentEngineRpm;        // 148 (×10)
@@ -99,10 +99,10 @@ f32 TyrePressureFL;          // 228
 f32 TyrePressureFR;          // 232
 
 // Session info
-f32 LapNumber;               // 236
-f32 TotalLaps;               // 240
+f32 LapsCompleted;           // 236 unknown
+f32 LapNumber;               // 240
 f32 StageLength;             // 244
-f32 LastLap;             // 248
+f32 LastLap;                 // 248
 
 // Engine limits
 f32 EngineMaxRpm;            // 252 (×10)

@@ -409,8 +409,8 @@ function mpstomph(mps) {
     return mps * 2.23694;
 }
 
-function metersToMiles(meters) {
-    return (meters * 0.000621371).toFixed(0);
+function metersToMiles(meters, precision=0) {
+    return (meters * 0.000621371).toFixed(precision);
 }
 
 function getPositionSuffix(position) {
