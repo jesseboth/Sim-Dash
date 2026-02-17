@@ -1,5 +1,6 @@
 config = {};
 config["seperateTime"] = true;
+config["dash"] = "tcr";
 
 const colorStops = [
     { percentage: 0, color: [0xff, 0xff, 0xff] },

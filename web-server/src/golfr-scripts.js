@@ -1,5 +1,6 @@
 config = {};
 config["seperateTime"] = true;
+config["dash"] = "golfr";
 
 yellowRPMPecentage = 0;
 function updateRPM(rpm, maxRPM) {

@@ -1,5 +1,6 @@
 config = {};
 config["seperateTime"] = true;
+config["dash"] = "rally";
 
 // const colorStops = [
 //     { percentage: 0, color: [0, 0, 255] },  // Blue
@@ -115,4 +116,14 @@ function initShiftLightRPM(maxRPM) {
 function resetShiftLightRPM() {
     rpmDotMax = -1;
     setMaxRPM = -1;
+}
+
+function updateDistance(_distance) {
+    if (_distance == 0.0 || _distance == null || isNaN(_distance)) {
+        document.getElementById("distance").textContent = "- mi"
+    }
+    else {
+        distance = Math.max(0, parseInt(_distance));
+        document.getElementById("distance").textContent = String(metersToMiles(distance, 2)) + " mi"
+    }
 }

@@ -353,3 +353,24 @@ body {
   /* display: none; */
   width: 100%;
 }
+
+.container-distance {
+  height: 5%;
+  width: 15%;
+  position: absolute;
+  top: 75.5%;
+  right: 62.5%;
+
+  display: flex;
+  justify-content: flex-end; /* horizontal */
+  align-items: center;       /* vertical */
+}
+
+#distance {
+  font-size: 190%;
+  color: #d0c5c3;
+  font-family: "Noto Sans";
+  font-weight: 500;
+  /* display: contents; */
+  text-align: right;
+}

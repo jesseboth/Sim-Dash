@@ -1,4 +1,4 @@
-const repeat = setInterval(set_display, 25);
+let repeat = setInterval(set_display, 25);
 const another = setInterval(get_telemetryType, 1000 * 10);
 var position = setInterval(getConfig, 1000 * 2); getConfig();
 const ipAddress = window.location.href.match(/(?:https?|ftp):\/\/([^:/]+).*/) != null
@@ -66,8 +66,18 @@ function set_default() {
         updateTraction(0, 0);
         updatePosition(0)
         updateSplit(invalidSplit)
-        get_favoriteOdometer()
+        if (config.dash == "golfr"){
+            get_favoriteOdometer()
+        }
         LapNumber = -1;
+
+        // change update interval to 1 second
+        clearInterval(repeat);
+        repeat = setInterval(set_display, 1000);
+
+    } else {
+        updateTime("time", null)
+        updateTime("clock", null)
     }
 }
 
@@ -105,8 +115,8 @@ async function set_display() {
     data = telemetry
     if (data == null || data["IsRaceOn"] != 1) {
 
-        // wait 30 seconds to set default
-        if (data == null && defaultTicks >= 30) {
+        // wait 15 seconds to set default
+        if (data == null && defaultTicks >= 150) {
             set_default();
         }
         // wait 2 minutes to set default
@@ -128,6 +138,10 @@ async function set_display() {
     }
     else if (defaultData) {
         defaultData = false;
+
+        // set interval back to 25 ms
+        clearInterval(repeat);
+        repeat = setInterval(set_display, 25);
     }
 
     defaultTicks = 0;

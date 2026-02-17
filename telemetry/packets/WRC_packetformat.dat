@@ -55,5 +55,5 @@ f32 Clutch;
 f32 Steer;
 f32 Handbrake;
 f32 CurrentLap;
-f64 StageCurrentDistance;
+f64 Odometer;
 f64 StageLength;
