@@ -284,12 +284,13 @@ function reqGame(game) {
             telemetryType = game
 
             // Determine which port to use
+            const gameUpper = game.toUpperCase();
             const port = (config.useCustomPort && config.customPort) ? config.customPort.toString() : "9999";
 
             if (debug) {
-                telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split, "-d", '-port', port], options);
+                telemetry = spawn('../telemetry/fdt', ['-game', gameUpper, '-split', config.split, "-d", '-port', port], options);
             } else {
-                telemetry = spawn('../telemetry/fdt', ['-game', game.toUpperCase(), '-split', config.split, '-port', port], options);
+                telemetry = spawn('../telemetry/fdt', ['-game', gameUpper, '-split', config.split, '-port', port], options);
             }
 
 

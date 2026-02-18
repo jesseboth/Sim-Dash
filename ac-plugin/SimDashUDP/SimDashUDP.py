@@ -5,11 +5,15 @@ Broadcasts telemetry data via UDP in custom format for SimDash integration
 
 import ac
 import acsys
-import socket
-import struct
 import sys
 import platform
 import os
+
+# Add AC's Python stdlib zip to path so we can import socket etc.
+sys.path.insert(0, os.path.dirname(__file__) + '/Python33.zip')
+
+import socket
+import struct
 
 # Configuration
 UDP_IP = "127.0.0.1"         # Change to your telemetry server IP
@@ -50,6 +54,7 @@ def acMain(ac_version):
         car_id = hash_to_s32(car_name)
         track_id = hash_to_s32(track_full)
 
+        ac.log("SimDash UDP Plugin Loaded")
         ac.console("SimDash UDP Plugin Loaded")
         ac.console("Car: {} (ID: {})".format(car_name, car_id))
         ac.console("Track: {} (ID: {})".format(track_full, track_id))
@@ -108,44 +113,44 @@ def send_telemetry():
 
     try:
         # Get car state data
-        speed_kmh = ac.getCarState(0, acsys.CS_SpeedKMH)
+        speed_kmh = ac.getCarState(0, acsys.CS.SpeedKMH)
         speed_mph = speed_kmh * 0.621371  # Convert to mph
         speed_ms = speed_kmh / 3.6        # Convert to m/s
 
         # Get input states
-        gas = ac.getCarState(0, acsys.CS_Gas)
-        brake = ac.getCarState(0, acsys.CS_Brake)
-        clutch = ac.getCarState(0, acsys.CS_Clutch)
-        steer = ac.getCarState(0, acsys.CS_Steer)
+        gas = ac.getCarState(0, acsys.CS.Gas)
+        brake = ac.getCarState(0, acsys.CS.Brake)
+        clutch = ac.getCarState(0, acsys.CS.Clutch)
+        steer = ac.getCarState(0, acsys.CS.Steer)
 
         # Get engine/gear data
-        rpm = ac.getCarState(0, acsys.CS_RPM)
-        gear = ac.getCarState(0, acsys.CS_Gear)
+        rpm = ac.getCarState(0, acsys.CS.RPM)
+        gear = ac.getCarState(0, acsys.CS.Gear)
 
         # Get lap timing (in milliseconds)
-        current_lap_ms = ac.getCarState(0, acsys.CS_LapTime)
-        last_lap_ms = ac.getCarState(0, acsys.CS_LastLap)
-        best_lap_ms = ac.getCarState(0, acsys.CS_BestLap)
-        lap_count = ac.getCarState(0, acsys.CS_LapCount)
+        current_lap_ms = ac.getCarState(0, acsys.CS.LapTime)
+        last_lap_ms = ac.getCarState(0, acsys.CS.LastLap)
+        best_lap_ms = ac.getCarState(0, acsys.CS.BestLap)
+        lap_count = ac.getCarState(0, acsys.CS.LapCount)
 
         # Get assists and pit status
-        is_abs_enabled = 1 if ac.getCarState(0, acsys.CS_AbsEnabled) else 0
-        is_abs_in_action = 1 if ac.getCarState(0, acsys.CS_AbsInAction) else 0
-        is_tc_enabled = 1 if ac.getCarState(0, acsys.CS_TractionControlEnabled) else 0
-        is_tc_in_action = 1 if ac.getCarState(0, acsys.CS_TractionControlInAction) else 0
+        is_abs_enabled = 1 if ac.getCarState(0, acsys.CS.AbsEnabled) else 0
+        is_abs_in_action = 1 if ac.getCarState(0, acsys.CS.AbsInAction) else 0
+        is_tc_enabled = 1 if ac.getCarState(0, acsys.CS.TractionControlEnabled) else 0
+        is_tc_in_action = 1 if ac.getCarState(0, acsys.CS.TractionControlInAction) else 0
         is_in_pit = 1 if ac.isCarInPitline(0) else 0
         is_limiter_on = 0  # Not directly available via API
 
         # Get acceleration data (G-forces)
-        accel_x = ac.getCarState(0, acsys.CS_AccG)[0]  # Lateral
-        accel_y = ac.getCarState(0, acsys.CS_AccG)[1]  # Vertical
-        accel_z = ac.getCarState(0, acsys.CS_AccG)[2]  # Longitudinal
+        accel_x = ac.getCarState(0, acsys.CS.AccG)[0]  # Lateral
+        accel_y = ac.getCarState(0, acsys.CS.AccG)[1]  # Vertical
+        accel_z = ac.getCarState(0, acsys.CS.AccG)[2]  # Longitudinal
 
         # Get normalized track position (0.0 to 1.0)
-        norm_pos = ac.getCarState(0, acsys.CS_NormalizedSplinePosition)
+        norm_pos = ac.getCarState(0, acsys.CS.NormalizedSplinePosition)
 
         # Get world position
-        pos = ac.getCarState(0, acsys.CS_WorldPosition)
+        pos = ac.getCarState(0, acsys.CS.WorldPosition)
         pos_x = pos[0]
         pos_y = pos[1]
         pos_z = pos[2]
@@ -161,14 +166,14 @@ def send_telemetry():
         suspension_travel = [0.0] * 4
 
         for i in range(4):
-            wheel_speeds[i] = ac.getCarState(0, acsys.CS_TyreAngularSpeedKMH, i)
-            slip_angles[i] = ac.getCarState(0, acsys.CS_TyreSlipAngle, i)
-            slip_ratios[i] = ac.getCarState(0, acsys.CS_TyreSlip, i)
-            combined_slip[i] = ac.getCarState(0, acsys.CS_TyreCombinedSlip, i)
-            wheel_loads[i] = ac.getCarState(0, acsys.CS_Load, i)
-            cambers[i] = ac.getCarState(0, acsys.CS_CamberRAD, i)
-            tire_radii[i] = ac.getCarState(0, acsys.CS_TyreRadius, i)
-            suspension_travel[i] = ac.getCarState(0, acsys.CS_SuspensionTravel, i)
+            wheel_speeds[i] = ac.getCarState(0, acsys.CS.TyreAngularSpeedKMH, i)
+            slip_angles[i] = ac.getCarState(0, acsys.CS.TyreSlipAngle, i)
+            slip_ratios[i] = ac.getCarState(0, acsys.CS.TyreSlip, i)
+            combined_slip[i] = ac.getCarState(0, acsys.CS.TyreCombinedSlip, i)
+            wheel_loads[i] = ac.getCarState(0, acsys.CS.Load, i)
+            cambers[i] = ac.getCarState(0, acsys.CS.CamberRAD, i)
+            tire_radii[i] = ac.getCarState(0, acsys.CS.TyreRadius, i)
+            suspension_travel[i] = ac.getCarState(0, acsys.CS.SuspensionTravel, i)
 
         # Car slope (not directly available, set to 0)
         car_slope = 0.0
@@ -250,6 +255,7 @@ def send_telemetry():
         # Send UDP packet to all configured ports
         for port in UDP_PORTS:
             sock.sendto(packet, (UDP_IP, port))
+        ac.log("SimDash UDP sent {} bytes to ports {}".format(len(packet), UDP_PORTS))
 
     except Exception as e:
         ac.console("SimDash UDP Error in send_telemetry: {}".format(str(e)))
