@@ -22,8 +22,6 @@ type AssettoState struct {
 	telemetryBuffer  []util.TelemetrySample
 	lastLapValue     float32
 	lastLapTime      time.Time
-	carID            int32
-	trackID          int32
 }
 
 // AssettoLoop is the main loop for Assetto Corsa telemetry
@@ -96,21 +94,13 @@ func updateJSONEndpoint(f32map map[string]float32, u8map map[string]uint8, s32ma
 	combinedMap := make(map[string]interface{})
 
 	for k, v := range f32map {
-		combinedMap[k] = v
+		combinedMap[k] = math.Round(float64(v)*100) / 100
 	}
 	for k, v := range u8map {
 		combinedMap[k] = v
 	}
 	for k, v := range s32map {
 		combinedMap[k] = v
-	}
-
-	// Add CarID and TrackID explicitly
-	if carID, ok := s32map["CarID"]; ok {
-		combinedMap["CarID"] = carID
-	}
-	if trackID, ok := s32map["TrackID"]; ok {
-		combinedMap["TrackID"] = trackID
 	}
 
 	finalJSON, err := json.Marshal(combinedMap)
@@ -135,17 +125,9 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		state.telemetryBuffer = state.telemetryBuffer[:0]
 		state.lastLapValue = -1
 
-		// Capture CarID and TrackID from telemetry
-		if carID, ok := s32map["CarID"]; ok {
-			state.carID = carID
-		}
-		if trackID, ok := s32map["TrackID"]; ok {
-			state.trackID = trackID
-		}
-
 		if debug {
-			log.Printf("Recording started for course: %s (CarID: %d, TrackID: %d)",
-				state.currentCourseID, state.carID, state.trackID)
+			log.Printf("Recording started for course: %s",
+				state.currentCourseID)
 		}
 	}
 
@@ -325,8 +307,8 @@ func prepareRunData(state *AssettoState) util.AutocrossRun {
 		CourseID:  state.currentCourseID,
 		Timestamp: time.Now().Format(time.RFC3339),
 		LapTime:   finalLapTime,
-		CarID:     fmt.Sprintf("%d", state.carID),
-		TrackID:   fmt.Sprintf("%d", state.trackID),
+		CarID:     "",
+		TrackID:   "",
 		Cones:     0,
 		Name:      "",
 		IsValid:   true,
