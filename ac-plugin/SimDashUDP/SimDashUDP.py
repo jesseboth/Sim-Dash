@@ -5,11 +5,15 @@ Broadcasts telemetry data via UDP in custom format for SimDash integration
 
 import ac
 import acsys
-import socket
-import struct
 import sys
 import platform
 import os
+
+# Add AC's Python stdlib zip to path so we can import socket etc.
+sys.path.insert(0, os.path.dirname(__file__) + '/Python33.zip')
+
+import socket
+import struct
 
 # Configuration
 UDP_IP = "127.0.0.1"         # Change to your telemetry server IP
@@ -50,6 +54,7 @@ def acMain(ac_version):
         car_id = hash_to_s32(car_name)
         track_id = hash_to_s32(track_full)
 
+        ac.log("SimDash UDP Plugin Loaded")
         ac.console("SimDash UDP Plugin Loaded")
         ac.console("Car: {} (ID: {})".format(car_name, car_id))
         ac.console("Track: {} (ID: {})".format(track_full, track_id))
@@ -250,6 +255,7 @@ def send_telemetry():
         # Send UDP packet to all configured ports
         for port in UDP_PORTS:
             sock.sendto(packet, (UDP_IP, port))
+        ac.log("SimDash UDP sent {} bytes to ports {}".format(len(packet), UDP_PORTS))
 
     except Exception as e:
         ac.console("SimDash UDP Error in send_telemetry: {}".format(str(e)))
