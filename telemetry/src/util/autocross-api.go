@@ -86,15 +86,7 @@ func handleStartRecording(w http.ResponseWriter, r *http.Request) {
 	recordingMutex.Lock()
 	defer recordingMutex.Unlock()
 
-	if recordingState.IsRecording {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "Already recording",
-		})
-		return
-	}
-
-	// Signal to game loop to start recording
+	// Allow re-arming (e.g. different course) — just update state
 	recordingState.IsRecording = true
 	recordingState.CourseID = req.CourseID
 	recordingState.Elapsed = 0
@@ -125,16 +117,9 @@ func handleStopRecording(w http.ResponseWriter, r *http.Request) {
 	recordingMutex.Lock()
 	defer recordingMutex.Unlock()
 
-	if !recordingState.IsRecording {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "Not recording",
-		})
-		return
-	}
-
-	// Signal to game loop to stop recording
+	// Always disarm, even if already stopped (handles out-of-sync state)
 	recordingState.IsRecording = false
+	recordingState.RunActive = false
 	recordingState.Elapsed = 0
 	saveArmedState(false, "")
 
