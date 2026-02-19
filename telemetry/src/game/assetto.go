@@ -16,12 +16,14 @@ import (
 
 // AssettoState holds the recording state for Assetto Corsa
 type AssettoState struct {
-	isRecording      bool
-	recordingStarted time.Time
+	runActive        bool      // currently buffering a run
+	recordingEnabled bool      // auto-detection enabled via API
+	runStarted       time.Time // wall clock when run buffer began
 	currentCourseID  string
 	telemetryBuffer  []util.TelemetrySample
-	lastLapValue     float32
-	lastLapTime      time.Time
+	prevLapValue     float32   // previous CurrentLap value to detect transitions
+	lapFreezeValue   float32   // last non-zero lap value seen (for freeze detection)
+	lapFreezeTime    time.Time // when lapFreezeValue last changed
 	lastCarID        int32
 	lastTrackID      int32
 }
@@ -31,9 +33,8 @@ func AssettoLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, to
 	log.Println("Starting Assetto Corsa Telemetry")
 
 	state := &AssettoState{
-		isRecording:     false,
 		telemetryBuffer: make([]util.TelemetrySample, 0, 24000), // 10 min @ 40Hz
-		lastLapValue:    -1,
+		prevLapValue:    -1,
 	}
 
 	for {
@@ -116,35 +117,7 @@ func updateJSONEndpoint(f32map map[string]float32, u8map map[string]uint8, s32ma
 
 // handleRecording manages the recording state machine
 func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[string]int32, debug bool) {
-	// Get recording state from API
-	recordingState := util.GetRecordingState()
-
-	// Check if we should start recording
-	if recordingState.IsRecording && !state.isRecording {
-		state.isRecording = true
-		state.recordingStarted = time.Now()
-		state.currentCourseID = recordingState.CourseID
-		state.telemetryBuffer = state.telemetryBuffer[:0]
-		state.lastLapValue = -1
-
-		if debug {
-			log.Printf("Recording started for course: %s",
-				state.currentCourseID)
-		}
-	}
-
-	// Check if we should stop recording via API
-	if !recordingState.IsRecording && state.isRecording {
-		if debug {
-			log.Println("Recording stopped by user")
-		}
-		saveRun(state, debug)
-		state.isRecording = false
-		state.telemetryBuffer = state.telemetryBuffer[:0]
-		return
-	}
-
-	// Always track car/track IDs from the live packet
+	// Always track car/track IDs from every packet
 	if carID, ok := s32map["CarId"]; ok && carID != 0 {
 		state.lastCarID = carID
 	}
@@ -152,38 +125,87 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		state.lastTrackID = trackID
 	}
 
-	// Only record if explicitly started via API
-	if !state.isRecording {
+	// Sync enabled state from API
+	apiState := util.GetRecordingState()
+	if apiState.IsRecording && !state.recordingEnabled {
+		state.recordingEnabled = true
+		state.currentCourseID = apiState.CourseID
+		state.telemetryBuffer = state.telemetryBuffer[:0]
+		state.prevLapValue = -1
+		if debug {
+			log.Printf("Auto-detection enabled for course: %s", state.currentCourseID)
+		}
+	} else if !apiState.IsRecording && state.recordingEnabled {
+		// User stopped - discard any in-progress run, do NOT save
+		state.recordingEnabled = false
+		state.runActive = false
+		state.telemetryBuffer = state.telemetryBuffer[:0]
+		if debug {
+			log.Println("Auto-detection disabled, in-progress run discarded")
+		}
 		return
 	}
 
-	// Buffer telemetry sample
-	var currentLap float32 = 0
+	if !state.recordingEnabled {
+		return
+	}
+
+	// Read current lap timer (milliseconds → seconds)
+	var currentLap float32
 	if currentLapMs, ok := s32map["CurrentLap"]; ok {
 		currentLap = float32(currentLapMs) / 1000.0
 	}
-	sample := createTelemetrySample(f32map, s32map, state.recordingStarted)
+
+	// Detect run start: timer transitions from 0 to >0
+	if !state.runActive && currentLap > 0 && state.prevLapValue == 0 {
+		state.runActive = true
+		state.runStarted = time.Now()
+		state.telemetryBuffer = state.telemetryBuffer[:0]
+		state.lapFreezeValue = currentLap
+		state.lapFreezeTime = time.Now()
+		if debug {
+			log.Println("Run started - lap timer began")
+		}
+	}
+
+	state.prevLapValue = currentLap
+
+	if !state.runActive {
+		return
+	}
+
+	// Buffer sample
+	sample := createTelemetrySample(f32map, s32map, state.runStarted)
 	state.telemetryBuffer = append(state.telemetryBuffer, sample)
 
-	// Update recording elapsed time
-	util.UpdateRecordingElapsed(time.Since(state.recordingStarted).Seconds())
+	// Update elapsed time shown in UI
+	util.UpdateRecordingElapsed(time.Since(state.runStarted).Seconds())
 
-	// Check for run completion (lap timer stopped for 2s)
-	if currentLap != state.lastLapValue {
-		state.lastLapValue = currentLap
-		state.lastLapTime = time.Now()
-	} else if state.lastLapValue > 0 {
-		// Lap hasn't changed and is > 0
-		if time.Since(state.lastLapTime) > 2*time.Second {
-			// Run complete - save and reset
-			if debug {
-				log.Println("Run complete - auto-detected stop")
-			}
-			saveRun(state, debug)
-			state.isRecording = false
-			state.telemetryBuffer = state.telemetryBuffer[:0]
-			util.StopRecording()
+	// Detect run end: timer resets to 0 (finish line / next lap)
+	if currentLap == 0 && state.prevLapValue > 0 {
+		if debug {
+			log.Println("Run complete - lap timer reset to 0")
 		}
+		saveRun(state, debug)
+		state.runActive = false
+		state.telemetryBuffer = state.telemetryBuffer[:0]
+		util.NotifyRunSaved()
+		return
+	}
+
+	// Fallback: freeze detection (timer stopped for 2s mid-run)
+	if currentLap != state.lapFreezeValue {
+		state.lapFreezeValue = currentLap
+		state.lapFreezeTime = time.Now()
+	} else if currentLap > 0 && time.Since(state.lapFreezeTime) > 2*time.Second {
+		if debug {
+			log.Println("Run complete - lap timer froze")
+		}
+		saveRun(state, debug)
+		state.runActive = false
+		state.telemetryBuffer = state.telemetryBuffer[:0]
+		util.NotifyRunSaved()
+		return
 	}
 
 	// Buffer overflow protection (10 minutes @ 40Hz = 24,000 samples)
@@ -192,9 +214,9 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 			log.Println("Buffer full - saving run")
 		}
 		saveRun(state, debug)
-		state.isRecording = false
+		state.runActive = false
 		state.telemetryBuffer = state.telemetryBuffer[:0]
-		util.StopRecording()
+		util.NotifyRunSaved()
 	}
 }
 

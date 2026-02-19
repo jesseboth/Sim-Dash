@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 )
 
 var (
@@ -136,17 +137,28 @@ func GetRecordingState() RecordingState {
 	return recordingState
 }
 
-// UpdateRecordingElapsed updates the elapsed time during recording
+// UpdateRecordingElapsed updates the elapsed time and run-active flag
 func UpdateRecordingElapsed(elapsed float64) {
 	recordingMutex.Lock()
 	defer recordingMutex.Unlock()
 	recordingState.Elapsed = elapsed
+	recordingState.RunActive = true
 }
 
-// StopRecording stops the recording (called by game loop)
+// NotifyRunSaved signals that an auto-detected run was saved
+func NotifyRunSaved() {
+	recordingMutex.Lock()
+	defer recordingMutex.Unlock()
+	recordingState.RunSavedAt = time.Now().UnixMilli()
+	recordingState.RunActive = false
+	recordingState.Elapsed = 0
+}
+
+// StopRecording stops the recording (called by game loop on user stop)
 func StopRecording() {
 	recordingMutex.Lock()
 	defer recordingMutex.Unlock()
 	recordingState.IsRecording = false
+	recordingState.RunActive = false
 	recordingState.Elapsed = 0
 }

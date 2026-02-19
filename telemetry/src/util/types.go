@@ -63,8 +63,10 @@ type AutocrossStatistics struct {
 // RecordingState tracks the current recording state
 type RecordingState struct {
     IsRecording bool    `json:"isRecording"`
+    RunActive   bool    `json:"runActive"`
     CourseID    string  `json:"courseId"`
     Elapsed     float64 `json:"elapsed"`
+    RunSavedAt  int64   `json:"runSavedAt"` // unix ms, increments each time a run is auto-saved
 }
 
 // Top10Entry represents a top 10 run entry

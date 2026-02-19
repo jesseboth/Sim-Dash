@@ -386,6 +386,8 @@ const AutocrossRecorder = (function() {
     }
 
     // Poll recording status for UI updates
+    let lastRunSavedAt = 0;
+
     function startStatusPolling() {
         if (statusPollingInterval) return;
 
@@ -396,14 +398,21 @@ const AutocrossRecorder = (function() {
 
                 if (status.isRecording) {
                     state = STATE.RECORDING;
-                    updateUI(status.elapsed);
-                } else if (state === STATE.RECORDING) {
-                    // Recording stopped by backend (auto-stop)
+                    // Show run-active state in UI
+                    if (status.runActive) {
+                        updateUI(status.elapsed);
+                    } else {
+                        updateUI(); // enabled but waiting for run to start
+                    }
+                } else {
                     state = STATE.IDLE;
                     updateUI();
                     stopStatusPolling();
+                }
 
-                    // Notify main app to refresh runs
+                // Detect auto-saved run via runSavedAt timestamp
+                if (status.runSavedAt && status.runSavedAt !== lastRunSavedAt) {
+                    lastRunSavedAt = status.runSavedAt;
                     if (window.AutocrossApp && window.AutocrossApp.onRunSaved) {
                         window.AutocrossApp.onRunSaved();
                     }
@@ -435,9 +444,13 @@ const AutocrossRecorder = (function() {
                 break;
 
             case STATE.RECORDING:
-                const elapsedStr = elapsed ? elapsed.toFixed(1) : '0.0';
-                statusElement.textContent = `Recording ${elapsedStr}s`;
-                statusElement.className = 'recording-status recording';
+                if (elapsed) {
+                    statusElement.textContent = `Recording ${elapsed.toFixed(1)}s`;
+                    statusElement.className = 'recording-status recording';
+                } else {
+                    statusElement.textContent = 'Armed';
+                    statusElement.className = 'recording-status armed';
+                }
                 toggleButton.textContent = 'Stop';
                 toggleButton.className = 'btn btn-stop';
                 toggleButton.disabled = false;
