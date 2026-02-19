@@ -37,6 +37,13 @@ const AutocrossRecorder = (function() {
             nameIdentifiersBtn.addEventListener('click', openNamingModal);
         }
 
+        // Restore course from previous session
+        const savedCourseId = localStorage.getItem('recorder_courseId');
+        if (savedCourseId) {
+            currentCourseId = savedCourseId;
+            console.log('Recorder: Restored course from storage:', savedCourseId);
+        }
+
         updateUI();
         console.log('Recorder initialized');
     }
@@ -44,6 +51,11 @@ const AutocrossRecorder = (function() {
     // Set current course (for manual override if needed)
     function setCourse(courseId) {
         currentCourseId = courseId;
+        if (courseId) {
+            localStorage.setItem('recorder_courseId', courseId);
+        } else {
+            localStorage.removeItem('recorder_courseId');
+        }
         console.log('Recorder: Course set to', courseId);
     }
 
@@ -78,19 +90,20 @@ const AutocrossRecorder = (function() {
                 }
             }
 
-            // If still no course, auto-create one
+            // If still no course, auto-create one (requires a valid trackId)
             if (!currentCourseId) {
+                if (!trackId) {
+                    alert('No track detected yet. Please wait for telemetry to connect, then try again.');
+                    return;
+                }
                 try {
                     // Get track name from mappings if available
                     const trackMappings = await getTrackMappings();
-                    const trackName = trackId && trackMappings[trackId]
-                        ? trackMappings[trackId]
-                        : trackId
-                            ? `Track ${trackId}`
-                            : `Session ${new Date().toLocaleDateString()}`;
+                    const trackName = trackMappings[trackId] || `Track ${trackId}`;
 
                     const course = await createCourse(trackName, trackId);
                     currentCourseId = course.courseId;
+                    localStorage.setItem('recorder_courseId', currentCourseId);
                     console.log('Auto-created course:', trackName);
 
                     // Notify main app
@@ -105,7 +118,7 @@ const AutocrossRecorder = (function() {
         }
 
         try {
-            const response = await fetch('http://localhost:8888/autocross/recording/start', {
+            const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ courseId: currentCourseId })
@@ -129,7 +142,7 @@ const AutocrossRecorder = (function() {
     // Stop recording (via Go backend)
     async function stopRecording() {
         try {
-            const response = await fetch('http://localhost:8888/autocross/recording/stop', {
+            const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/stop`, {
                 method: 'POST'
             });
 
@@ -303,7 +316,7 @@ const AutocrossRecorder = (function() {
 
         statusPollingInterval = setInterval(async () => {
             try {
-                const response = await fetch('http://localhost:8888/autocross/recording/status');
+                const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/status`);
                 const status = await response.json();
 
                 if (status.isRecording) {
