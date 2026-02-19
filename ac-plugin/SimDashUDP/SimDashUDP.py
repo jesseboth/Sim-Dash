@@ -21,18 +21,47 @@ os.environ['PATH'] = os.environ['PATH'] + ";."
 import ctypes
 from ctypes import wintypes
 
-# Configuration
-UDP_IP = "192.168.4.199"
-UDP_PORTS = [20778]
-UPDATE_RATE_HZ = 40
+# ── Config file ──────────────────────────────────────────────────────────────
 
-# Windows socket constants
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.ini')
+
+def load_config():
+    cfg = {'ip': '127.0.0.1', 'port': 20778, 'update_rate_hz': 40}
+    try:
+        with open(CONFIG_PATH, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if '=' in line and not line.startswith('#') and not line.startswith('['):
+                    key, _, val = line.partition('=')
+                    key = key.strip().lower()
+                    val = val.strip()
+                    if key == 'ip':
+                        cfg['ip'] = val
+                    elif key == 'port':
+                        cfg['port'] = int(val)
+                    elif key == 'update_rate_hz':
+                        cfg['update_rate_hz'] = int(val)
+    except Exception as e:
+        ac.log("SimDash UDP: Could not read config.ini: {}".format(e))
+    return cfg
+
+def save_config(ip, port, rate):
+    try:
+        with open(CONFIG_PATH, 'w') as f:
+            f.write('[Network]\n')
+            f.write('ip = {}\n'.format(ip))
+            f.write('port = {}\n'.format(port))
+            f.write('update_rate_hz = {}\n'.format(rate))
+    except Exception as e:
+        ac.log("SimDash UDP: Could not write config.ini: {}".format(e))
+
+# ── Windows socket constants ──────────────────────────────────────────────────
+
 AF_INET = 2
 SOCK_DGRAM = 2
 IPPROTO_UDP = 17
 INVALID_SOCKET = ctypes.c_uint(-1).value
 
-# Load Winsock
 ws2 = ctypes.windll.ws2_32
 
 class WSADATA(ctypes.Structure):
@@ -50,7 +79,6 @@ class SOCKADDR_IN(ctypes.Structure):
                 ("sin_addr", ctypes.c_uint),
                 ("sin_zero", ctypes.c_char * 8)]
 
-# Set correct argument/return types for Winsock functions
 SOCKET = ctypes.c_uint64 if platform.architecture()[0] == "64bit" else ctypes.c_uint32
 ws2.socket.restype = SOCKET
 ws2.socket.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
@@ -59,11 +87,23 @@ ws2.sendto.argtypes = [SOCKET, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
                        ctypes.POINTER(SOCKADDR_IN), ctypes.c_int]
 ws2.closesocket.argtypes = [SOCKET]
 
-# Global state
+# ── Global state ──────────────────────────────────────────────────────────────
+
 sock = INVALID_SOCKET
 frame_counter = 0
 frames_per_update = 0
 destinations = []
+
+# Config values (loaded on start, reloaded on save)
+UDP_IP = '127.0.0.1'
+UDP_PORT = 20778
+UPDATE_RATE_HZ = 40
+
+# UI controls
+app_id = None
+lbl_status = None
+input_ip = None
+input_port = None
 
 def inet_addr(ip):
     parts = [int(x) for x in ip.split('.')]
@@ -72,43 +112,92 @@ def inet_addr(ip):
 def htons(port):
     return ((port & 0xFF) << 8) | ((port >> 8) & 0xFF)
 
-def acMain(ac_version):
-    global sock, frames_per_update, destinations
+def apply_config(ip, port, rate):
+    global UDP_IP, UDP_PORT, UPDATE_RATE_HZ, destinations, frames_per_update
+    UDP_IP = ip
+    UDP_PORT = port
+    UPDATE_RATE_HZ = rate
 
+    addr = SOCKADDR_IN()
+    addr.sin_family = AF_INET
+    addr.sin_port = htons(port)
+    addr.sin_addr = inet_addr(ip)
+    destinations = [addr]
+
+    frames_per_update = max(1, int(60.0 / rate))
+
+def on_save_clicked(dummy_x, dummy_y):
+    global lbl_status
     try:
-        # Initialize Winsock
+        new_ip = ac.getText(input_ip).strip()
+        new_port = int(ac.getText(input_port).strip())
+        apply_config(new_ip, new_port, UPDATE_RATE_HZ)
+        save_config(new_ip, new_port, UPDATE_RATE_HZ)
+        ac.setText(lbl_status, "Saved! Sending to {}:{}".format(new_ip, new_port))
+        ac.log("SimDash UDP: Config saved - {}:{}".format(new_ip, new_port))
+    except Exception as e:
+        ac.setText(lbl_status, "Error: {}".format(str(e)))
+
+def acMain(ac_version):
+    global sock, app_id, lbl_status, input_ip, input_port
+
+    # Load config
+    cfg = load_config()
+    apply_config(cfg['ip'], cfg['port'], cfg['update_rate_hz'])
+
+    # Init Winsock
+    try:
         wsadata = WSADATA()
         ret = ws2.WSAStartup(0x0202, ctypes.byref(wsadata))
         if ret != 0:
             ac.log("SimDash UDP: WSAStartup failed: {}".format(ret))
             return "SimDash UDP"
 
-        # Create UDP socket
         sock = ws2.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         if sock == INVALID_SOCKET:
             ac.log("SimDash UDP: socket() failed")
             return "SimDash UDP"
 
-        # Build destination addresses
-        for port in UDP_PORTS:
-            addr = SOCKADDR_IN()
-            addr.sin_family = AF_INET
-            addr.sin_port = htons(port)
-            addr.sin_addr = inet_addr(UDP_IP)
-            destinations.append(addr)
-
-        frames_per_update = max(1, int(60.0 / UPDATE_RATE_HZ))
-
-        ac.log("SimDash UDP Plugin Loaded - sending to {}:{} @ {}Hz".format(UDP_IP, UDP_PORTS, UPDATE_RATE_HZ))
+        ac.log("SimDash UDP Plugin Loaded - sending to {}:{} @ {}Hz".format(
+            UDP_IP, UDP_PORT, UPDATE_RATE_HZ))
 
     except Exception as e:
         ac.log("SimDash UDP Error in acMain: {}".format(str(e)))
+        return "SimDash UDP"
+
+    # Build settings app window
+    app_id = ac.newApp("SimDash UDP")
+    ac.setTitle(app_id, "SimDash UDP")
+    ac.setSize(app_id, 300, 160)
+
+    lbl_ip = ac.addLabel(app_id, "IP Address:")
+    ac.setPosition(lbl_ip, 10, 30)
+
+    input_ip = ac.addTextInput(app_id, "ip")
+    ac.setPosition(input_ip, 110, 26)
+    ac.setSize(input_ip, 170, 24)
+    ac.setText(input_ip, UDP_IP)
+
+    lbl_port = ac.addLabel(app_id, "Port:")
+    ac.setPosition(lbl_port, 10, 65)
+
+    input_port = ac.addTextInput(app_id, "port")
+    ac.setPosition(input_port, 110, 61)
+    ac.setSize(input_port, 100, 24)
+    ac.setText(input_port, str(UDP_PORT))
+
+    btn_save = ac.addButton(app_id, "Save")
+    ac.setPosition(btn_save, 10, 100)
+    ac.setSize(btn_save, 80, 28)
+    ac.addOnClickedListener(btn_save, on_save_clicked)
+
+    lbl_status = ac.addLabel(app_id, "Sending to {}:{}".format(UDP_IP, UDP_PORT))
+    ac.setPosition(lbl_status, 10, 135)
 
     return "SimDash UDP"
 
 def acUpdate(deltaT):
     global frame_counter
-
     frame_counter += 1
     if frame_counter >= frames_per_update:
         frame_counter = 0
@@ -155,12 +244,12 @@ def send_telemetry():
         norm_pos = ac.getCarState(0, acsys.CS.NormalizedSplinePosition)
         pos      = ac.getCarState(0, acsys.CS.WorldPosition)
 
-        wheel_speeds     = [0.0] * 4
-        slip_angles      = [0.0] * 4
-        slip_ratios      = [0.0] * 4
-        wheel_loads      = [0.0] * 4
-        cambers          = [0.0] * 4
-        tire_radii       = [0.0] * 4
+        wheel_speeds      = [0.0] * 4
+        slip_angles       = [0.0] * 4
+        slip_ratios       = [0.0] * 4
+        wheel_loads       = [0.0] * 4
+        cambers           = [0.0] * 4
+        tire_radii        = [0.0] * 4
         suspension_travel = [0.0] * 4
 
         raw_ws  = ac.getCarState(0, acsys.CS.WheelAngularSpeed)
