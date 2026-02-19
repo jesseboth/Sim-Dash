@@ -412,8 +412,20 @@ async function handleCourseChange() {
 }
 
 
+// Resolve car names for a list of runs - sends unique IDs, gets back a name map
+async function resolveCarNames(runs) {
+    const uniqueCarIds = [...new Set(runs.map(r => r.carId).filter(Boolean))];
+    if (uniqueCarIds.length === 0) return {};
+
+    try {
+        return await apiRequest('getCarNames', { carIds: uniqueCarIds });
+    } catch (e) {
+        return {};
+    }
+}
+
 // Render Runs List
-function renderRunsList(runs) {
+async function renderRunsList(runs) {
     // Update run count
     const countText = `${runs.length} run${runs.length !== 1 ? 's' : ''}`;
     if (runCount) {
@@ -428,6 +440,9 @@ function renderRunsList(runs) {
         runsList.innerHTML = '<div class="empty-state">No runs recorded yet. Click Start to begin recording.</div>';
         return;
     }
+
+    // Fetch car name mappings for runs in this list
+    const carNames = await resolveCarNames(runs);
 
     // Sort runs by adjusted time (fastest first)
     const sortedRuns = [...runs].sort((a, b) => {
@@ -462,7 +477,7 @@ function renderRunsList(runs) {
                 </div>
                 <div class="run-card-details">
                     <span>📅 ${dateStr} ${timeStr}</span>
-                    <span>🚗 ${run.carId || 'Unknown'}</span>
+                    <span>🚗 ${run.carId ? (carNames[run.carId] || run.carId) : 'Unknown'}</span>
                     ${cones > 0 ? `<span style="color: var(--accent-warning)">🚧 ${cones} cone${cones !== 1 ? 's' : ''} (+${cones * 2}s)</span>` : ''}
                     ${run.isValid ? '' : '<span style="color: var(--accent-secondary)">❌ Invalid</span>'}
                 </div>
@@ -706,6 +721,16 @@ function restoreSelectedRunsFromStorage() {
                     if (card) card.classList.add('selected');
                 }
             });
+
+            // If "Recent on top" is enabled, ensure most recent run is first in selectedRuns
+            if (mostRecentOnTop && allRuns.length > 0 && selectedRuns.length > 0) {
+                const mostRecent = allRuns.reduce((latest, run) =>
+                    new Date(run.timestamp) > new Date(latest.timestamp) ? run : latest, allRuns[0]);
+                const mostRecentId = mostRecent.runId;
+                if (selectedRuns.includes(mostRecentId) && selectedRuns[0] !== mostRecentId) {
+                    selectedRuns = [mostRecentId, ...selectedRuns.filter(id => id !== mostRecentId)];
+                }
+            }
 
             updateButtonStates();
 

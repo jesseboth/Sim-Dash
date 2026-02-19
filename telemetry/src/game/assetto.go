@@ -22,6 +22,8 @@ type AssettoState struct {
 	telemetryBuffer  []util.TelemetrySample
 	lastLapValue     float32
 	lastLapTime      time.Time
+	lastCarID        int32
+	lastTrackID      int32
 }
 
 // AssettoLoop is the main loop for Assetto Corsa telemetry
@@ -142,6 +144,14 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		return
 	}
 
+	// Always track car/track IDs from the live packet
+	if carID, ok := s32map["CarId"]; ok && carID != 0 {
+		state.lastCarID = carID
+	}
+	if trackID, ok := s32map["TrackId"]; ok && trackID != 0 {
+		state.lastTrackID = trackID
+	}
+
 	// Only record if explicitly started via API
 	if !state.isRecording {
 		return
@@ -231,8 +241,9 @@ func saveRun(state *AssettoState, debug bool) {
 		return
 	}
 
-	// Write to JSON file
+	// Write to JSON file - use same timestamp for both filename and runId
 	timestamp := time.Now().UnixMilli()
+	runData.RunID = fmt.Sprintf("run-%d", timestamp)
 	filename := filepath.Join(runDir, fmt.Sprintf("run-%d.json", timestamp))
 
 	file, err := os.Create(filename)
@@ -297,18 +308,33 @@ func prepareRunData(state *AssettoState) util.AutocrossRun {
 		}
 	}
 
-	// Use actual recording duration as lap time (last timestamp)
-	finalLapTime := float32(state.telemetryBuffer[len(state.telemetryBuffer)-1].Timestamp)
+	// Use the game's lap timer value from the last sample (most accurate autocross time)
+	// Falls back to wall clock elapsed if game timer is zero (e.g. manual stop before timer starts)
+	lastSample := state.telemetryBuffer[len(state.telemetryBuffer)-1]
+	finalLapTime := lastSample.LapTime
+	if finalLapTime <= 0 {
+		finalLapTime = float32(lastSample.Timestamp)
+	}
 
+	// RunID will be overwritten in saveRun with the same timestamp as the filename
 	runID := fmt.Sprintf("run-%d", time.Now().UnixMilli())
+
+	// Extract CarId and TrackId from last sample
+	var carID, trackID string
+	if state.lastCarID != 0 {
+		carID = fmt.Sprintf("%d", state.lastCarID)
+	}
+	if state.lastTrackID != 0 {
+		trackID = fmt.Sprintf("%d", state.lastTrackID)
+	}
 
 	return util.AutocrossRun{
 		RunID:     runID,
 		CourseID:  state.currentCourseID,
 		Timestamp: time.Now().Format(time.RFC3339),
 		LapTime:   finalLapTime,
-		CarID:     "",
-		TrackID:   "",
+		CarID:     carID,
+		TrackID:   trackID,
 		Cones:     0,
 		Name:      "",
 		IsValid:   true,

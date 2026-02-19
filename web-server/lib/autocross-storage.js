@@ -282,20 +282,12 @@ function deleteRun(courseId, runId) {
             return false; // Run not found
         }
 
-        // Check if run is in top 10 (protected from deletion)
-        const top10 = loadTop10(courseId);
-        const isTop10 = top10.some(t => t.runId === runId);
-
-        if (isTop10) {
-            console.log(`Run ${runId} is in top 10 and cannot be deleted`);
-            return false; // Protected from deletion
-        }
-
         // Delete the run file
         fs.unlinkSync(runFile);
 
-        // Update course metadata
+        // Update course metadata and rebuild top 10
         updateCourseMetadata(courseId);
+        rebuildTop10(courseId);
 
         return true;
     } catch (err) {

@@ -46,6 +46,9 @@ async function handleRequest(data) {
             case 'updateCones':
                 return handleUpdateCones(data);
 
+            case 'getCarNames':
+                return handleGetCarNames(data);
+
             case 'getCarMappings':
                 return handleGetCarMappings();
 
@@ -464,6 +467,28 @@ function handleUpdateCones(data) {
         success: true,
         data: { runId, cones: conesNum }
     };
+}
+
+/**
+ * Get friendly names for a list of car ID hashes
+ * Returns a map of { carId: name } for only the requested IDs
+ */
+function handleGetCarNames(data) {
+    const { carIds } = data;
+
+    if (!carIds || !Array.isArray(carIds)) {
+        return { success: false, error: 'carIds array is required' };
+    }
+
+    const allMappings = mappings.getAllCarMappings();
+    const result = {};
+    for (const carId of carIds) {
+        if (allMappings[carId]) {
+            result[carId] = allMappings[carId];
+        }
+    }
+
+    return { success: true, data: result };
 }
 
 /**
