@@ -4,21 +4,52 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
 
+const armedStateFile = "data/autocross/armed.json"
+
+// armedState is the subset of state persisted to disk
+type armedState struct {
+	IsArmed  bool   `json:"isArmed"`
+	CourseID string `json:"courseId"`
+}
+
 var (
 	recordingMutex sync.RWMutex
-	recordingState = RecordingState{
-		IsRecording: false,
-		CourseID:    "",
-		Elapsed:     0,
-	}
+	recordingState = RecordingState{}
 )
+
+// loadArmedState restores armed state from disk on startup
+func loadArmedState() {
+	data, err := os.ReadFile(armedStateFile)
+	if err != nil {
+		return // no saved state, start disarmed
+	}
+	var s armedState
+	if err := json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	if s.IsArmed && s.CourseID != "" {
+		recordingState.IsRecording = true
+		recordingState.CourseID = s.CourseID
+		log.Printf("Restored armed state for course: %s", s.CourseID)
+	}
+}
+
+// saveArmedState writes the armed/disarmed state to disk
+func saveArmedState(armed bool, courseID string) {
+	os.MkdirAll(filepath.Dir(armedStateFile), 0755)
+	data, _ := json.Marshal(armedState{IsArmed: armed, CourseID: courseID})
+	os.WriteFile(armedStateFile, data, 0644)
+}
 
 // SetupAutocrossRoutes registers autocross API endpoints
 func SetupAutocrossRoutes() {
+	loadArmedState()
 	http.HandleFunc("/autocross/recording/start", handleStartRecording)
 	http.HandleFunc("/autocross/recording/stop", handleStopRecording)
 	http.HandleFunc("/autocross/recording/status", handleRecordingStatus)
@@ -67,6 +98,7 @@ func handleStartRecording(w http.ResponseWriter, r *http.Request) {
 	recordingState.IsRecording = true
 	recordingState.CourseID = req.CourseID
 	recordingState.Elapsed = 0
+	saveArmedState(true, req.CourseID)
 
 	log.Printf("Recording started for course: %s", req.CourseID)
 
@@ -104,6 +136,7 @@ func handleStopRecording(w http.ResponseWriter, r *http.Request) {
 	// Signal to game loop to stop recording
 	recordingState.IsRecording = false
 	recordingState.Elapsed = 0
+	saveArmedState(false, "")
 
 	log.Println("Recording stopped by user")
 
@@ -161,4 +194,5 @@ func StopRecording() {
 	recordingState.IsRecording = false
 	recordingState.RunActive = false
 	recordingState.Elapsed = 0
+	saveArmedState(false, "")
 }

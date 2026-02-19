@@ -37,14 +37,38 @@ const AutocrossRecorder = (function() {
             nameIdentifiersBtn.addEventListener('click', openNamingModal);
         }
 
-        // Restore course from previous session
-        const savedCourseId = localStorage.getItem('recorder_courseId');
-        if (savedCourseId) {
-            currentCourseId = savedCourseId;
-            console.log('Recorder: Restored course from storage:', savedCourseId);
-        }
+        // Check server for persisted armed state and resume if active
+        fetch(`http://${window.location.hostname}:8888/autocross/recording/status`)
+            .then(r => r.json())
+            .then(status => {
+                if (status.isRecording && status.courseId) {
+                    currentCourseId = status.courseId;
+                    localStorage.setItem('recorder_courseId', currentCourseId);
+                    state = STATE.RECORDING;
+                    lastRunSavedAt = status.runSavedAt || 0;
+                    startStatusPolling();
+                    console.log('Recorder: Resumed armed state for course:', currentCourseId);
 
-        updateUI();
+                    // Sync course selection in main app
+                    if (window.AutocrossApp) {
+                        window.AutocrossApp.onCourseAutoSelected(currentCourseId);
+                    }
+                } else {
+                    // Restore course from localStorage as fallback
+                    const savedCourseId = localStorage.getItem('recorder_courseId');
+                    if (savedCourseId) {
+                        currentCourseId = savedCourseId;
+                    }
+                }
+                updateUI();
+            })
+            .catch(() => {
+                // Server not reachable, fall back to localStorage
+                const savedCourseId = localStorage.getItem('recorder_courseId');
+                if (savedCourseId) currentCourseId = savedCourseId;
+                updateUI();
+            });
+
         console.log('Recorder initialized');
     }
 
