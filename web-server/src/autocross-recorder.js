@@ -68,10 +68,72 @@ const AutocrossRecorder = (function() {
         }
     }
 
+    // Ensure AC telemetry is running (start or restart via Node server)
+    async function ensureACTelemetry() {
+        try {
+            // Check what game is currently running
+            const checkRes = await fetch('/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ game: 'get' })
+            });
+            const checkResult = await checkRes.json();
+            const currentGame = checkResult.game && checkResult.game.return;
+
+            if (currentGame && currentGame.toLowerCase() === 'ac') {
+                // AC already running, nothing to do
+                return true;
+            }
+
+            // Stop whatever is running, then start AC
+            if (currentGame) {
+                await fetch('/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ game: 'stop' })
+                });
+                // Brief pause for process to die
+                await new Promise(r => setTimeout(r, 300));
+            }
+
+            const startRes = await fetch('/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ game: 'ac' })
+            });
+            const startResult = await startRes.json();
+            if (!startResult.game || !startResult.game.success) {
+                console.error('Failed to start AC telemetry:', startResult);
+                return false;
+            }
+            console.log('AC telemetry started');
+            // Wait briefly for the Go server to come up
+            await new Promise(r => setTimeout(r, 500));
+            return true;
+        } catch (error) {
+            console.error('Error ensuring AC telemetry:', error);
+            return false;
+        }
+    }
+
+    // Fetch live telemetry from Go backend
+    async function getLiveTelemetry() {
+        try {
+            const res = await fetch(`http://${window.location.hostname}:8888/telemetry`);
+            if (!res.ok) return null;
+            return await res.json();
+        } catch (e) {
+            return null;
+        }
+    }
+
     // Start recording (via Go backend)
     async function startRecording() {
-        // Get current telemetry to check track ID
-        const telem = typeof telemetry !== 'undefined' ? telemetry : null;
+        // Ensure AC telemetry process is running
+        await ensureACTelemetry();
+
+        // Fetch live telemetry to get track ID
+        const telem = await getLiveTelemetry();
         let trackId = telem && telem.TrackID ? String(telem.TrackID) : null;
 
         // Check if course is selected
