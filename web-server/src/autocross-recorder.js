@@ -105,7 +105,7 @@ const AutocrossRecorder = (function() {
         }
 
         try {
-            const response = await fetch('http://localhost:8888/autocross/recording/start', {
+            const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ courseId: currentCourseId })
@@ -129,7 +129,7 @@ const AutocrossRecorder = (function() {
     // Stop recording (via Go backend)
     async function stopRecording() {
         try {
-            const response = await fetch('http://localhost:8888/autocross/recording/stop', {
+            const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/stop`, {
                 method: 'POST'
             });
 
@@ -303,7 +303,7 @@ const AutocrossRecorder = (function() {
 
         statusPollingInterval = setInterval(async () => {
             try {
-                const response = await fetch('http://localhost:8888/autocross/recording/status');
+                const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/status`);
                 const status = await response.json();
 
                 if (status.isRecording) {

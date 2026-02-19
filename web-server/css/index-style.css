@@ -86,6 +86,15 @@ li {
     background-color: #0056b3;
 }
 
+.redirect-autocross {
+    right: 80px;
+    background-color: #cc0000;
+}
+
+.redirect-autocross:hover {
+    background-color: #990000;
+}
+
 .modal {
     display: none;
     position: fixed;
