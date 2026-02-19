@@ -127,14 +127,28 @@ const AutocrossRecorder = (function() {
         }
     }
 
+    // Poll telemetry until TrackID is populated (up to maxWaitMs)
+    async function waitForTrackId(maxWaitMs = 5000) {
+        const interval = 500;
+        const attempts = maxWaitMs / interval;
+        for (let i = 0; i < attempts; i++) {
+            const telem = await getLiveTelemetry();
+            if (telem && telem.TrackId) {
+                return String(telem.TrackId);
+            }
+            await new Promise(r => setTimeout(r, interval));
+        }
+        return null;
+    }
+
     // Start recording (via Go backend)
     async function startRecording() {
         // Ensure AC telemetry process is running
         await ensureACTelemetry();
 
-        // Fetch live telemetry to get track ID
-        const telem = await getLiveTelemetry();
-        let trackId = telem && telem.TrackID ? String(telem.TrackID) : null;
+        // Poll for track ID (AC may need a moment to send packets)
+        if (statusElement) statusElement.textContent = 'Connecting...';
+        const trackId = await waitForTrackId(5000);
 
         // Check if course is selected
         if (!currentCourseId) {
@@ -268,15 +282,14 @@ const AutocrossRecorder = (function() {
 
     // Open naming modal (triggered by button click)
     async function openNamingModal() {
-        // Get current telemetry
-        const telem = typeof telemetry !== 'undefined' ? telemetry : null;
-        if (!telem || !telem.CarID || !telem.TrackID) {
+        const telem = await getLiveTelemetry();
+        if (!telem || !telem.CarId || !telem.TrackId) {
             alert('No telemetry available. Please start Assetto Corsa and begin driving.');
             return;
         }
 
-        const carId = String(telem.CarID);
-        const trackId = String(telem.TrackID);
+        const carId = String(telem.CarId);
+        const trackId = String(telem.TrackId);
 
         await showNamingModal(carId, trackId);
     }
