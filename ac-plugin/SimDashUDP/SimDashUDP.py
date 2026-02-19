@@ -50,6 +50,15 @@ class SOCKADDR_IN(ctypes.Structure):
                 ("sin_addr", ctypes.c_uint),
                 ("sin_zero", ctypes.c_char * 8)]
 
+# Set correct argument/return types for Winsock functions
+SOCKET = ctypes.c_uint64 if platform.architecture()[0] == "64bit" else ctypes.c_uint32
+ws2.socket.restype = SOCKET
+ws2.socket.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
+ws2.sendto.restype = ctypes.c_int
+ws2.sendto.argtypes = [SOCKET, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+                       ctypes.POINTER(SOCKADDR_IN), ctypes.c_int]
+ws2.closesocket.argtypes = [SOCKET]
+
 # Global state
 sock = INVALID_SOCKET
 frame_counter = 0
@@ -198,8 +207,6 @@ def send_telemetry():
         buf = ctypes.create_string_buffer(packet)
         for addr in destinations:
             ws2.sendto(sock, buf, len(packet), 0, ctypes.byref(addr), ctypes.sizeof(addr))
-
-        ac.log("SimDash UDP sent {} bytes".format(len(packet)))
 
     except Exception as e:
         ac.log("SimDash UDP Error in send_telemetry: {}".format(str(e)))

@@ -94,7 +94,7 @@ func updateJSONEndpoint(f32map map[string]float32, u8map map[string]uint8, s32ma
 	combinedMap := make(map[string]interface{})
 
 	for k, v := range f32map {
-		combinedMap[k] = v
+		combinedMap[k] = math.Round(float64(v)*100) / 100
 	}
 	for k, v := range u8map {
 		combinedMap[k] = v
