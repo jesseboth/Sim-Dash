@@ -168,6 +168,21 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		}
 	}
 
+	// Detect run end: timer resets to 0 (finish line / next lap)
+	// Must check BEFORE updating prevLapValue
+	if state.runActive && currentLap == 0 && state.prevLapValue > 0 {
+		if debug {
+			log.Println("Run complete - lap timer reset to 0")
+		}
+		saveRun(state, debug)
+		state.runActive = false
+		state.telemetryBuffer = state.telemetryBuffer[:0]
+		state.prevLapValue = 0
+		util.NotifyRunSaved()
+		return
+	}
+
+	// Update prevLapValue for next packet
 	state.prevLapValue = currentLap
 
 	if !state.runActive {
@@ -180,18 +195,6 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 
 	// Update elapsed time shown in UI
 	util.UpdateRecordingElapsed(time.Since(state.runStarted).Seconds())
-
-	// Detect run end: timer resets to 0 (finish line / next lap)
-	if currentLap == 0 && state.prevLapValue > 0 {
-		if debug {
-			log.Println("Run complete - lap timer reset to 0")
-		}
-		saveRun(state, debug)
-		state.runActive = false
-		state.telemetryBuffer = state.telemetryBuffer[:0]
-		util.NotifyRunSaved()
-		return
-	}
 
 	// Fallback: freeze detection (timer stopped for 2s mid-run)
 	if currentLap != state.lapFreezeValue {
@@ -231,12 +234,16 @@ func createTelemetrySample(f32map map[string]float32, s32map map[string]int32, s
 		lapTime = float32(currentLapMs) / 1000.0
 	}
 
+	roundTenth := func(v float32) float32 {
+		return float32(math.Round(float64(v)*10) / 10)
+	}
+
 	return util.TelemetrySample{
 		Timestamp: time.Since(startTime).Seconds(),
 		Brake:     f32map["Brake"],
 		Accel:     f32map["Accel"],
-		AccelX:    f32map["AccelerationX"], // Lateral G (left/right)
-		AccelY:    f32map["AccelerationZ"], // Longitudinal G (accel/brake) - FIXED from AccelerationY
+		AccelX:    roundTenth(f32map["AccelerationX"]), // Lateral G (left/right)
+		AccelY:    roundTenth(f32map["AccelerationZ"]), // Longitudinal G (accel/brake)
 		Speed:     speed,
 		PosX:      f32map["PositionX"], // X coordinate
 		PosY:      f32map["PositionZ"], // Z coordinate for top-down map - FIXED from PositionY
