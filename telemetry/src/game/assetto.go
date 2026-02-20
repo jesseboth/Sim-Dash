@@ -107,6 +107,13 @@ func updateJSONEndpoint(f32map map[string]float32, u8map map[string]uint8, s32ma
 		combinedMap[k] = v
 	}
 
+	// Convert lap times from milliseconds to seconds for dashboard compatibility
+	for _, field := range []string{"CurrentLap", "LastLap", "BestLap"} {
+		if ms, ok := s32map[field]; ok {
+			combinedMap[field] = math.Round(float64(ms)/10) / 100 // ms → seconds, 2 decimal places
+		}
+	}
+
 	finalJSON, err := json.Marshal(combinedMap)
 	if err != nil {
 		log.Printf("Error marshalling JSON: %v", err)

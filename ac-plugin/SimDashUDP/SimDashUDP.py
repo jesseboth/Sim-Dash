@@ -94,12 +94,6 @@ frame_counter = 0
 frames_per_update = 0
 destinations = []
 
-# Freeze detection for IsRaceOn
-_prev_lap_ms = -1
-_prev_speed_kmh = -1.0
-_frozen_frames = 0
-FROZEN_FRAMES_THRESHOLD = 20  # ~0.5s at 40Hz
-
 # Config values (loaded on start, reloaded on save)
 UDP_IP = '127.0.0.1'
 UDP_PORT = 20778
@@ -216,7 +210,7 @@ def acShutdown():
         ws2.WSACleanup()
 
 def send_telemetry():
-    global sock, destinations, _prev_lap_ms, _prev_speed_kmh, _frozen_frames
+    global sock, destinations
 
     if sock == INVALID_SOCKET or not destinations:
         return
@@ -247,6 +241,8 @@ def send_telemetry():
         accel_y = accg[1]
         accel_z = accg[2]
 
+        max_rpm  = ac.getCarState(0, acsys.CS.MaxRPM)
+
         norm_pos = ac.getCarState(0, acsys.CS.NormalizedSplinePosition)
         pos      = ac.getCarState(0, acsys.CS.WorldPosition)
 
@@ -274,23 +270,14 @@ def send_telemetry():
             tire_radii[i]        = float(raw_rad[i])
             suspension_travel[i] = float(raw_sus[i])
 
-        # Freeze detection: if both lap timer and speed are unchanged, sim is paused
-        if int(current_lap_ms) == _prev_lap_ms and abs(float(speed_kmh) - _prev_speed_kmh) < 0.01:
-            _frozen_frames += 1
-        else:
-            _frozen_frames = 0
-        _prev_lap_ms = int(current_lap_ms)
-        _prev_speed_kmh = float(speed_kmh)
-        is_race_on = 0 if _frozen_frames >= FROZEN_FRAMES_THRESHOLD else 1
-
         packet = struct.pack(
-            '<B i 3f B 3f 4i 4f i f 28f 2f 3f 2i i',
+            '<B i 3f B 3f 4i 5f i f 28f 2f 3f 2i i',
             97, 0,
             float(speed_kmh), float(speed_mph), float(speed_ms),
             is_in_pit,
             float(accel_y), float(accel_x), float(accel_z),
             int(current_lap_ms), int(last_lap_ms), int(best_lap_ms), int(lap_count),
-            float(gas), float(brake), float(clutch), float(rpm),
+            float(gas), float(brake), float(clutch), float(rpm), float(max_rpm),
             int(gear) - 1,
             float(steer),
             wheel_speeds[0], wheel_speeds[1], wheel_speeds[2], wheel_speeds[3],
@@ -303,7 +290,7 @@ def send_telemetry():
             float(norm_pos), 0.0,
             float(pos[0]), float(pos[1]), float(pos[2]),
             car_id, track_id,
-            is_race_on
+            1  # IsRaceOn: always 1 while plugin is sending
         )
 
         # Fix size field
