@@ -52,3 +52,4 @@ f32 PositionY; World position Y coordinate
 f32 PositionZ; World position Z coordinate
 s32 CarId; Hash of car name
 s32 TrackId; Hash of track name
+s32 IsRaceOn; 1 when simulation is active, 0 when paused or frozen

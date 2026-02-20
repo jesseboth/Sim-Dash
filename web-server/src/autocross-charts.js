@@ -30,8 +30,12 @@ const AutocrossCharts = (() => {
                 const xValue = chart.data.labels[currentCursorIndex];
                 const x = xAxis.getPixelForValue(xValue);
 
-                // Draw vertical line behind the data
+                // Clip to chart area
                 ctx.save();
+                ctx.beginPath();
+                ctx.rect(xAxis.left, yAxis.top, xAxis.right - xAxis.left, yAxis.bottom - yAxis.top);
+                ctx.clip();
+
                 ctx.beginPath();
                 ctx.moveTo(x, yAxis.top);
                 ctx.lineTo(x, yAxis.bottom);
@@ -50,15 +54,16 @@ const AutocrossCharts = (() => {
                 const xValue = chart.data.labels[currentCursorIndex];
                 const x = xAxis.getPixelForValue(xValue);
 
-                // Draw dots on each dataset line
+                // Clip to chart area and draw dots
                 ctx.save();
+                ctx.beginPath();
+                ctx.rect(xAxis.left, yAxis.top, xAxis.right - xAxis.left, yAxis.bottom - yAxis.top);
+                ctx.clip();
+
                 chart.data.datasets.forEach((dataset) => {
                     const value = dataset.data[currentCursorIndex];
-
                     if (value !== null && value !== undefined) {
                         const y = yAxis.getPixelForValue(value);
-
-                        // Draw dot
                         ctx.beginPath();
                         ctx.arc(x, y, 4, 0, 2 * Math.PI);
                         ctx.fillStyle = dataset.borderColor;
@@ -133,8 +138,8 @@ const AutocrossCharts = (() => {
             return null;
         }
 
-        // Set canvas size explicitly
-        canvas.width = canvas.parentElement.offsetWidth || 800;
+        // Set canvas size to the inner content width (excluding parent padding)
+        canvas.width = getInnerWidth(canvas.parentElement) || 800;
         canvas.height = 200;
 
         const chartConfig = {
@@ -147,10 +152,8 @@ const AutocrossCharts = (() => {
                 responsive: false,
                 maintainAspectRatio: false,
                 animation: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
+                clip: 0,
+                events: [],
                 plugins: {
                     legend: { display: false },
                     tooltip: { enabled: false },
@@ -159,7 +162,9 @@ const AutocrossCharts = (() => {
                 scales: {
                     x: {
                         display: false,
-                        type: 'linear'
+                        type: 'linear',
+                        min: 0,
+                        max: 5
                     },
                     y: {
                         display: true,
@@ -174,12 +179,6 @@ const AutocrossCharts = (() => {
                         ...config.yRange
                     }
                 },
-                onHover: (event, activeElements, chart) => {
-                    if (activeElements.length > 0) {
-                        const index = activeElements[0].index;
-                        syncCursor(chartType, index);
-                    }
-                }
             }
         };
 
@@ -193,31 +192,6 @@ const AutocrossCharts = (() => {
         } catch (error) {
             console.error(`Failed to create ${chartType} chart:`, error);
             return null;
-        }
-    }
-
-    // Sync cursor across all charts
-    function syncCursor(sourceChart, index) {
-        // Update cursor position
-        currentCursorIndex = index;
-
-        // Update value displays
-        updateValueDisplays(index);
-
-        // Redraw all charts to show vertical line
-        Object.values(charts).forEach(chart => {
-            if (chart) {
-                chart.update('none');
-            }
-        });
-
-        // Notify scrubber
-        if (window.AutocrossScrubber && !window._scrubberSeeking && currentRuns.length > 0) {
-            const longestRun = findLongestRun(currentRuns);
-            const time = longestRun.telemetry.timestamps[index];
-            if (time !== undefined) {
-                window.AutocrossScrubber.seekTo(time);
-            }
         }
     }
 
@@ -271,10 +245,11 @@ const AutocrossCharts = (() => {
         updateChart('brake', baseTimestamps);
         updateGForceChart(baseTimestamps);
 
-        // Initialize cursor at start if not set
+        // Initialize cursor and window at start
         if (currentCursorIndex === null) {
             currentCursorIndex = 0;
         }
+        updateChartWindow(baseTimestamps[currentCursorIndex] || 0);
 
         console.log('All charts updated');
     }
@@ -451,6 +426,29 @@ const AutocrossCharts = (() => {
         return result;
     }
 
+    // Update 5-second sliding window on all charts
+    function updateChartWindow(time) {
+        const half = 2.5;
+        const runMax = currentRuns.length
+            ? findLongestRun(currentRuns).telemetry.timestamps.at(-1)
+            : 5;
+
+        // Clamp window to [0, runMax], keeping it exactly 5 seconds wide
+        let windowMin = Math.max(0, time - half);
+        let windowMax = windowMin + 5;
+        if (windowMax > runMax) {
+            windowMax = runMax;
+            windowMin = Math.max(0, windowMax - 5);
+        }
+
+        Object.values(charts).forEach(chart => {
+            if (chart) {
+                chart.options.scales.x.min = windowMin;
+                chart.options.scales.x.max = windowMax;
+            }
+        });
+    }
+
     // Seek to specific time
     function seekTo(time, fromScrubber = false) {
         if (!currentRuns.length) return;
@@ -469,7 +467,8 @@ const AutocrossCharts = (() => {
         // Update value displays
         updateValueDisplays(idx);
 
-        // Redraw all charts to show vertical line
+        // Update 5-second window and redraw all charts
+        updateChartWindow(time);
         Object.values(charts).forEach(chart => {
             if (chart) {
                 chart.update('none');
@@ -594,6 +593,14 @@ const AutocrossCharts = (() => {
         });
     }
 
+    // Get inner content width of an element (excludes padding)
+    function getInnerWidth(el) {
+        const style = getComputedStyle(el);
+        return el.offsetWidth
+            - parseFloat(style.paddingLeft)
+            - parseFloat(style.paddingRight);
+    }
+
     // Handle window resize
     window.addEventListener('resize', () => {
         Object.entries(charts).forEach(([key, chart]) => {
@@ -601,7 +608,7 @@ const AutocrossCharts = (() => {
                 const config = CHART_CONFIG[key];
                 const canvas = document.getElementById(config.canvasId);
                 if (canvas && canvas.parentElement) {
-                    const newWidth = canvas.parentElement.offsetWidth;
+                    const newWidth = getInnerWidth(canvas.parentElement);
                     canvas.width = newWidth;
                     canvas.height = 200;
                     chart.resize(newWidth, 200);

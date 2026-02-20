@@ -94,6 +94,12 @@ frame_counter = 0
 frames_per_update = 0
 destinations = []
 
+# Freeze detection for IsRaceOn
+_prev_lap_ms = -1
+_prev_speed_kmh = -1.0
+_frozen_frames = 0
+FROZEN_FRAMES_THRESHOLD = 20  # ~0.5s at 40Hz
+
 # Config values (loaded on start, reloaded on save)
 UDP_IP = '127.0.0.1'
 UDP_PORT = 20778
@@ -210,7 +216,7 @@ def acShutdown():
         ws2.WSACleanup()
 
 def send_telemetry():
-    global sock, destinations
+    global sock, destinations, _prev_lap_ms, _prev_speed_kmh, _frozen_frames
 
     if sock == INVALID_SOCKET or not destinations:
         return
@@ -268,8 +274,17 @@ def send_telemetry():
             tire_radii[i]        = float(raw_rad[i])
             suspension_travel[i] = float(raw_sus[i])
 
+        # Freeze detection: if both lap timer and speed are unchanged, sim is paused
+        if int(current_lap_ms) == _prev_lap_ms and abs(float(speed_kmh) - _prev_speed_kmh) < 0.01:
+            _frozen_frames += 1
+        else:
+            _frozen_frames = 0
+        _prev_lap_ms = int(current_lap_ms)
+        _prev_speed_kmh = float(speed_kmh)
+        is_race_on = 0 if _frozen_frames >= FROZEN_FRAMES_THRESHOLD else 1
+
         packet = struct.pack(
-            '<B i 3f B 3f 4i 4f i f 28f 2f 3f 2i',
+            '<B i 3f B 3f 4i 4f i f 28f 2f 3f 2i i',
             97, 0,
             float(speed_kmh), float(speed_mph), float(speed_ms),
             is_in_pit,
@@ -287,7 +302,8 @@ def send_telemetry():
             suspension_travel[0], suspension_travel[1], suspension_travel[2], suspension_travel[3],
             float(norm_pos), 0.0,
             float(pos[0]), float(pos[1]), float(pos[2]),
-            car_id, track_id
+            car_id, track_id,
+            is_race_on
         )
 
         # Fix size field

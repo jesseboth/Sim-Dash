@@ -386,12 +386,12 @@ async function handleCourseChange() {
         // Load top 10
         const top10 = await apiRequest('getTop10', { courseId });
 
-        // Update UI
-        renderRunsList(runs);
-        renderTop10(top10);
-
-        // Update current course
+        // Update current course before rendering so restore can reference it
         currentCourse = courseId;
+
+        // Update UI
+        await renderRunsList(runs);
+        renderTop10(top10);
 
         // Update archive button state based on course data
         updateArchiveButtonState();

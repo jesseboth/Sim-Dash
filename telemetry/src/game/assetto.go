@@ -26,6 +26,7 @@ type AssettoState struct {
 	lapFreezeTime    time.Time // when lapFreezeValue last changed
 	lastCarID        int32
 	lastTrackID      int32
+	completedLapMs   int32     // LastLap captured at run completion (most accurate time)
 }
 
 // AssettoLoop is the main loop for Assetto Corsa telemetry
@@ -161,6 +162,7 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		state.runActive = true
 		state.runStarted = time.Now()
 		state.telemetryBuffer = state.telemetryBuffer[:0]
+		state.completedLapMs = 0
 		state.lapFreezeValue = currentLap
 		state.lapFreezeTime = time.Now()
 		if debug {
@@ -173,6 +175,10 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 	if state.runActive && currentLap == 0 && state.prevLapValue > 0 {
 		if debug {
 			log.Println("Run complete - lap timer reset to 0")
+		}
+		// Use LastLap from AC as the authoritative completed lap time
+		if lastLapMs, ok := s32map["LastLap"]; ok && lastLapMs > 0 {
+			state.completedLapMs = lastLapMs
 		}
 		saveRun(state, debug)
 		state.runActive = false
@@ -337,11 +343,15 @@ func prepareRunData(state *AssettoState) util.AutocrossRun {
 		}
 	}
 
-	// Use the game's lap timer value from the last sample (most accurate autocross time)
-	// Falls back to wall clock elapsed if game timer is zero (e.g. manual stop before timer starts)
+	// Use LastLap from AC as the authoritative time (set at moment of completion).
+	// Falls back to the last CurrentLap sample, then wall clock elapsed.
 	lastSample := state.telemetryBuffer[len(state.telemetryBuffer)-1]
-	finalLapTime := lastSample.LapTime
-	if finalLapTime <= 0 {
+	var finalLapTime float32
+	if state.completedLapMs > 0 {
+		finalLapTime = float32(state.completedLapMs) / 1000.0
+	} else if lastSample.LapTime > 0 {
+		finalLapTime = lastSample.LapTime
+	} else {
 		finalLapTime = float32(lastSample.Timestamp)
 	}
 

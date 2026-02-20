@@ -316,6 +316,8 @@ body.runs-collapsed {
 
 /* Charts Scroll Container */
 .charts-scroll-container {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 1rem;
@@ -500,6 +502,7 @@ body.runs-collapsed {
     flex-direction: column;
     max-height: 40vh;
     min-height: 200px;
+    overflow: hidden;
     position: fixed;
     bottom: 0;
     left: 0;
@@ -679,6 +682,8 @@ body.runs-collapsed {
 
 /* Runs List */
 .runs-list {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 0.75rem 1.5rem 0.5rem 1.5rem;
@@ -784,9 +789,12 @@ body.runs-collapsed {
 
 .run-card-details {
     display: flex;
+    align-items: center;
     gap: 1rem;
     font-size: 0.85rem;
+    line-height: 0;
     color: var(--text-muted);
+    margin-top: 0.25rem;
 }
 
 .run-card-actions {
