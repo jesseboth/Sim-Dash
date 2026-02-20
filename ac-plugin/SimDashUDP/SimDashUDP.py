@@ -93,6 +93,7 @@ sock = INVALID_SOCKET
 frame_counter = 0
 frames_per_update = 0
 destinations = []
+peak_rpm = 1000.0  # grows to observed max over time
 
 # Config values (loaded on start, reloaded on save)
 UDP_IP = '127.0.0.1'
@@ -210,7 +211,7 @@ def acShutdown():
         ws2.WSACleanup()
 
 def send_telemetry():
-    global sock, destinations
+    global sock, destinations, peak_rpm
 
     if sock == INVALID_SOCKET or not destinations:
         return
@@ -241,8 +242,6 @@ def send_telemetry():
         accel_y = accg[1]
         accel_z = accg[2]
 
-        max_rpm  = ac.getCarState(0, acsys.CS.MaxRPM)
-
         norm_pos = ac.getCarState(0, acsys.CS.NormalizedSplinePosition)
         pos      = ac.getCarState(0, acsys.CS.WorldPosition)
 
@@ -270,6 +269,9 @@ def send_telemetry():
             tire_radii[i]        = float(raw_rad[i])
             suspension_travel[i] = float(raw_sus[i])
 
+        if rpm > peak_rpm:
+            peak_rpm = float(rpm)
+
         packet = struct.pack(
             '<B i 3f B 3f 4i 5f i f 28f 2f 3f 2i i',
             97, 0,
@@ -277,7 +279,7 @@ def send_telemetry():
             is_in_pit,
             float(accel_y), float(accel_x), float(accel_z),
             int(current_lap_ms), int(last_lap_ms), int(best_lap_ms), int(lap_count),
-            float(gas), float(brake), float(clutch), float(rpm), float(max_rpm),
+            float(gas), float(brake), float(clutch), float(rpm), peak_rpm,
             int(gear) - 1,
             float(steer),
             wheel_speeds[0], wheel_speeds[1], wheel_speeds[2], wheel_speeds[3],

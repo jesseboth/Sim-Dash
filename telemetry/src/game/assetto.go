@@ -107,6 +107,10 @@ func updateJSONEndpoint(f32map map[string]float32, u8map map[string]uint8, s32ma
 		combinedMap[k] = v
 	}
 
+	// AC gear encoding: R=-1, N=0, 1st=1, 2nd=2...
+	combinedMap["GearNeutral"] = int32(0)
+	combinedMap["GearReverse"] = int32(-1)
+
 	// Convert lap times from milliseconds to seconds for dashboard compatibility
 	for _, field := range []string{"CurrentLap", "LastLap", "BestLap"} {
 		if ms, ok := s32map[field]; ok {
