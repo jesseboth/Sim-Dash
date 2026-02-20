@@ -492,7 +492,7 @@ const AutocrossMap = (function() {
         if (posX.length < 2) return;
 
         ctx.globalAlpha = opacity;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 1.5;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 

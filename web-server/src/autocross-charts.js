@@ -295,7 +295,7 @@ const AutocrossCharts = (() => {
                 data: interpolated,
                 borderColor: color,
                 backgroundColor: color,
-                borderWidth: 2,
+                borderWidth: 1,
                 pointRadius: 0,
                 pointHoverRadius: 4,
                 tension: 0.1
@@ -336,7 +336,7 @@ const AutocrossCharts = (() => {
                 data: lateral,
                 borderColor: color,
                 backgroundColor: color,
-                borderWidth: 2,
+                borderWidth: 1,
                 pointRadius: 0,
                 pointHoverRadius: 4,
                 tension: 0.1
@@ -355,7 +355,7 @@ const AutocrossCharts = (() => {
                 data: longitudinal,
                 borderColor: color,
                 backgroundColor: color,
-                borderWidth: 2,
+                borderWidth: 1,
                 borderDash: [5, 5],
                 pointRadius: 0,
                 pointHoverRadius: 4,
