@@ -461,6 +461,41 @@ function rebuildTop10(courseId) {
     }
 }
 
+/**
+ * Load sectors for a course
+ */
+function loadSectors(courseId) {
+    try {
+        const sectorsFile = path.join(DATA_DIR, courseId, 'sectors.json');
+        if (!fs.existsSync(sectorsFile)) {
+            return [];
+        }
+        const data = fs.readFileSync(sectorsFile, 'utf8');
+        return JSON.parse(data);
+    } catch (err) {
+        console.error('Error loading sectors:', err);
+        return [];
+    }
+}
+
+/**
+ * Save sectors for a course
+ */
+function saveSectors(courseId, sectors) {
+    try {
+        const courseDir = path.join(DATA_DIR, courseId);
+        if (!fs.existsSync(courseDir)) {
+            return false;
+        }
+        const sectorsFile = path.join(courseDir, 'sectors.json');
+        fs.writeFileSync(sectorsFile, JSON.stringify(sectors, null, 2));
+        return true;
+    } catch (err) {
+        console.error('Error saving sectors:', err);
+        return false;
+    }
+}
+
 module.exports = {
     loadCourses,
     saveCourses,
@@ -476,5 +511,7 @@ module.exports = {
     updateCones,
     loadTop10,
     updateTop10,
-    rebuildTop10
+    rebuildTop10,
+    loadSectors,
+    saveSectors
 };

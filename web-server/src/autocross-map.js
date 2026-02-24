@@ -21,6 +21,8 @@ const AutocrossMap = (function() {
     let isPanning = false;
     let lastMouseX = 0;
     let lastMouseY = 0;
+    let mouseDownX = 0;
+    let mouseDownY = 0;
 
     // Touch state
     let lastTouchDistance = 0;
@@ -119,6 +121,14 @@ const AutocrossMap = (function() {
         canvas.addEventListener('mouseup', handleMouseUp);
         canvas.addEventListener('mouseleave', handleMouseUp);
 
+        // Hover cursor for sector markers
+        canvas.addEventListener('mousemove', (e) => {
+            if (isPanning) return;
+            const rect = canvas.getBoundingClientRect();
+            const hit = getSectorAtScreenPoint(e.clientX - rect.left, e.clientY - rect.top);
+            canvas.style.cursor = hit ? 'pointer' : 'grab';
+        });
+
         // Touch controls
         canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
         canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -158,6 +168,8 @@ const AutocrossMap = (function() {
         isPanning = true;
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
+        mouseDownX = e.clientX;
+        mouseDownY = e.clientY;
         canvas.style.cursor = 'grabbing';
     }
 
@@ -178,13 +190,29 @@ const AutocrossMap = (function() {
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
 
+        // Update cursor if hovering a sector marker
+        const rect = canvas.getBoundingClientRect();
+        const hit = getSectorAtScreenPoint(e.clientX - rect.left, e.clientY - rect.top);
+        canvas.style.cursor = hit ? 'pointer' : 'grabbing';
+
         render();
     }
 
     // Handle mouse up
-    function handleMouseUp() {
+    function handleMouseUp(e) {
         isPanning = false;
-        canvas.style.cursor = 'grab';
+
+        // If the mouse barely moved, treat it as a click
+        const dist = Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY);
+        if (dist < 5) {
+            const rect = canvas.getBoundingClientRect();
+            handleMapClick(e.clientX - rect.left, e.clientY - rect.top);
+        }
+
+        // Restore cursor — pointer if hovering a sector, otherwise grab
+        const rect = canvas.getBoundingClientRect();
+        const hit = getSectorAtScreenPoint(e.clientX - rect.left, e.clientY - rect.top);
+        canvas.style.cursor = hit ? 'pointer' : 'grab';
     }
 
     // Handle wheel zoom
@@ -481,8 +509,100 @@ const AutocrossMap = (function() {
             drawPositionMarker(run, runIndex, color);
         });
 
+        // Draw sector markers on top of everything
+        drawSectorMarkers();
+
         // Update legend
         updateLegend();
+    }
+
+    // Return the sector under a screen point, or null
+    function getSectorAtScreenPoint(sx, sy) {
+        if (!window.AutocrossSectors) return null;
+        const sectors = AutocrossSectors.getSectors();
+        if (!sectors || sectors.length === 0) return null;
+
+        const HIT_RADIUS = 18; // px
+
+        for (const sector of sectors) {
+            const p = worldToScreen(sector.posX, sector.posY);
+            const dist = Math.hypot(sx - p.x, sy - p.y);
+            if (dist <= HIT_RADIUS) return sector;
+        }
+        return null;
+    }
+
+    // Handle a click on the map canvas
+    function handleMapClick(sx, sy) {
+        const sector = getSectorAtScreenPoint(sx, sy);
+        if (sector && window.AutocrossSectors) {
+            AutocrossSectors.confirmRemoveSector(sector);
+        }
+    }
+
+    // Draw sector boundary markers as perpendicular tick lines
+    function drawSectorMarkers() {
+        if (!window.AutocrossSectors) return;
+        const sectors = AutocrossSectors.getSectors();
+        if (!sectors || sectors.length === 0) return;
+
+        const refRun = currentRuns[0];
+
+        sectors.forEach((sector, i) => {
+            const p = worldToScreen(sector.posX, sector.posY);
+
+            // Determine track direction at this point using the reference run
+            let perpAngle = Math.PI / 2; // default: vertical
+            if (refRun) {
+                const idx = findClosestPositionIndex(refRun, sector.posX, sector.posY);
+                const nextIdx = Math.min(idx + 1, refRun.telemetry.posX.length - 1);
+                const prev = worldToScreen(refRun.telemetry.posX[idx], refRun.telemetry.posY[idx]);
+                const next = worldToScreen(refRun.telemetry.posX[nextIdx], refRun.telemetry.posY[nextIdx]);
+                const trackAngle = Math.atan2(next.y - prev.y, next.x - prev.x);
+                perpAngle = trackAngle + Math.PI / 2;
+            }
+
+            const tickLen = 14;
+            const dx = Math.cos(perpAngle) * tickLen;
+            const dy = Math.sin(perpAngle) * tickLen;
+
+            // Tick line across the track
+            ctx.strokeStyle = '#ffaa4a';
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(p.x - dx, p.y - dy);
+            ctx.lineTo(p.x + dx, p.y + dy);
+            ctx.stroke();
+
+            // Small center dot
+            ctx.fillStyle = '#ffaa4a';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Label offset to the side of the tick
+            const labelOffset = tickLen + 8;
+            ctx.fillStyle = '#ffaa4a';
+            ctx.font = 'bold 10px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`S${i + 1}`, p.x + Math.cos(perpAngle) * labelOffset, p.y + Math.sin(perpAngle) * labelOffset);
+            ctx.textBaseline = 'alphabetic';
+        });
+    }
+
+    // Find telemetry index closest to a world position
+    function findClosestPositionIndex(run, targetX, targetY) {
+        const { posX, posY } = run.telemetry;
+        let minDist = Infinity, bestIdx = 0;
+        for (let i = 0; i < posX.length; i++) {
+            const dx = posX[i] - targetX;
+            const dy = posY[i] - targetY;
+            const d = dx * dx + dy * dy;
+            if (d < minDist) { minDist = d; bestIdx = i; }
+        }
+        return bestIdx;
     }
 
     // Draw a single run
