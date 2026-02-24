@@ -243,7 +243,7 @@ const AutocrossSectors = (function () {
 
         // Update map label
         const label = document.getElementById('sectorMapLabel');
-        if (label) label.textContent = index === 0 ? 'Start' : (sectors[index - 1]?.name || '');
+        if (label) label.textContent = `Sector ${index + 1}`;
 
         restartPlayback();
     }
@@ -259,7 +259,7 @@ const AutocrossSectors = (function () {
         let thead = '<thead><tr><th>Run</th><th>Total</th>';
         sectorBounds.forEach((sb, i) => {
             const active = i === activeSectorIndex ? ' sector-col-active' : '';
-            const label = i === 0 ? 'Start' : sectors[i - 1].name;
+            const label = i === 0 ? 'Sector 1' : `Sector ${i + 1}`;
             thead += `<th class="sector-col-header${active}" data-sector-index="${i}">${label}</th>`;
         });
         thead += '</tr></thead>';
@@ -438,10 +438,10 @@ const AutocrossSectors = (function () {
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
         modalRuns.forEach(run => {
-            const startIdx = sb.startPos ? findIndexAtPosition(run, sb.startPos.posX, sb.startPos.posY) : 0;
-            const endIdx = sb.endPos
-                ? findIndexAtPosition(run, sb.endPos.posX, sb.endPos.posY)
-                : run.telemetry.posX.length - 1;
+            const startTime = sb.startPos ? findTimeAtGate(run, sb.startPos) : run.telemetry.timestamps[0];
+            const endTime = sb.endPos ? findTimeAtGate(run, sb.endPos) : run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
+            const startIdx = findClosestTimeIndex(run.telemetry.timestamps, startTime);
+            const endIdx = findClosestTimeIndex(run.telemetry.timestamps, endTime);
 
             const from = Math.min(startIdx, endIdx);
             const to = Math.max(startIdx, endIdx);
@@ -458,8 +458,8 @@ const AutocrossSectors = (function () {
 
         if (!isFinite(minX)) return;
 
-        const padX = (maxX - minX) * 0.15 || 5;
-        const padY = (maxY - minY) * 0.15 || 5;
+        const padX = (maxX - minX) * 0.25 || 5;
+        const padY = (maxY - minY) * 0.25 || 5;
         mapViewBounds = { minX: minX - padX, maxX: maxX + padX, minY: minY - padY, maxY: maxY + padY };
     }
 
@@ -488,10 +488,10 @@ const AutocrossSectors = (function () {
         drawOrder.forEach(({ run, ri }) => {
             const color = COLORS[ri % COLORS.length];
             drawRunSegment(run, null, null, color, 0.15);  // full track faded
-            const startIdx = sb.startPos ? findIndexAtPosition(run, sb.startPos.posX, sb.startPos.posY) : 0;
-            const endIdx = sb.endPos
-                ? findIndexAtPosition(run, sb.endPos.posX, sb.endPos.posY)
-                : run.telemetry.posX.length - 1;
+            const startTime = sb.startPos ? findTimeAtGate(run, sb.startPos) : run.telemetry.timestamps[0];
+            const endTime = sb.endPos ? findTimeAtGate(run, sb.endPos) : run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
+            const startIdx = findClosestTimeIndex(run.telemetry.timestamps, startTime);
+            const endIdx = findClosestTimeIndex(run.telemetry.timestamps, endTime);
             drawRunSegment(run, Math.min(startIdx, endIdx), Math.max(startIdx, endIdx), color, 1.0);
         });
 
@@ -499,16 +499,11 @@ const AutocrossSectors = (function () {
         const speedReadouts = [];
         drawOrder.forEach(({ run, ri }) => {
             const color = COLORS[ri % COLORS.length];
-            const startIdx = sb.startPos ? findIndexAtPosition(run, sb.startPos.posX, sb.startPos.posY) : 0;
-            const startTime = run.telemetry.timestamps[startIdx];
+            const startTime = sb.startPos ? findTimeAtGate(run, sb.startPos) : run.telemetry.timestamps[0];
+            const endTime = sb.endPos ? findTimeAtGate(run, sb.endPos) : run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
             const targetTime = startTime + playbackTime;
 
-            // Clamp to sector end
-            const endIdx = sb.endPos
-                ? findIndexAtPosition(run, sb.endPos.posX, sb.endPos.posY)
-                : run.telemetry.posX.length - 1;
-            const endTime = run.telemetry.timestamps[endIdx];
-
+            const endIdx = findClosestTimeIndex(run.telemetry.timestamps, endTime);
             let markerIdx;
             let finished;
             if (targetTime > endTime) {

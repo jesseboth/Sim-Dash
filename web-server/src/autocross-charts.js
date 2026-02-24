@@ -107,9 +107,16 @@ const AutocrossCharts = (() => {
         gForce: {
             canvasId: 'gForceChart',
             valueId: 'gForceValues',
-            yLabel: 'G-Forces',
+            yLabel: 'Lateral G',
             yRange: { min: -2, max: 2 },
-            dynamicMax: true // Enable dynamic symmetric y-axis
+            dynamicMax: true
+        },
+        timeDelta: {
+            canvasId: 'timeDeltaChart',
+            valueId: 'timeDeltaValues',
+            yLabel: 'Delta (s)',
+            yRange: { min: -1, max: 1 },
+            dynamicMax: true
         }
     };
 
@@ -244,6 +251,7 @@ const AutocrossCharts = (() => {
         updateChart('throttle', baseTimestamps);
         updateChart('brake', baseTimestamps);
         updateGForceChart(baseTimestamps);
+        updateTimeDeltaChart(baseTimestamps);
 
         // Initialize cursor and window at start
         if (currentCursorIndex === null) {
@@ -329,7 +337,6 @@ const AutocrossCharts = (() => {
         reversed.forEach((run, i) => {
             const color = run.isMostRecent ? RECENT_COLOR : COLORS[currentRuns.indexOf(run) % COLORS.length];
 
-            // Lateral (solid)
             const lateral = interpolateData(run.telemetry.accelX, run.telemetry.timestamps, baseTimestamps);
             datasets.push({
                 label: `Lateral ${run.runNumber || i + 1}`,
@@ -342,30 +349,9 @@ const AutocrossCharts = (() => {
                 tension: 0.1
             });
 
-            // Track max absolute value for dynamic y-axis
             if (config.dynamicMax) {
                 const lateralMax = Math.max(...lateral.filter(v => v !== null).map(Math.abs));
                 if (lateralMax > maxAbsValue) maxAbsValue = lateralMax;
-            }
-
-            // Longitudinal (dashed)
-            const longitudinal = interpolateData(run.telemetry.accelY, run.telemetry.timestamps, baseTimestamps);
-            datasets.push({
-                label: `Longitudinal ${run.runNumber || i + 1}`,
-                data: longitudinal,
-                borderColor: color,
-                backgroundColor: color,
-                borderWidth: 1,
-                borderDash: [5, 5],
-                pointRadius: 0,
-                pointHoverRadius: 4,
-                tension: 0.1
-            });
-
-            // Track max absolute value for dynamic y-axis
-            if (config.dynamicMax) {
-                const longitudinalMax = Math.max(...longitudinal.filter(v => v !== null).map(Math.abs));
-                if (longitudinalMax > maxAbsValue) maxAbsValue = longitudinalMax;
             }
         });
 
@@ -385,6 +371,139 @@ const AutocrossCharts = (() => {
         chart.data.labels = baseTimestamps;
         chart.data.datasets = datasets;
         chart.update('none');
+    }
+
+    // Update time delta chart
+    // The fastest run (by total lap time) is the reference — its delta is 0.
+    // For each other run, delta[t] = (time elapsed in ref run at same track position) - (time elapsed in this run at same position)
+    // Positive = this run is ahead (faster), negative = behind (slower).
+    // We compute this by aligning runs on distance travelled rather than clock time.
+    function updateTimeDeltaChart(baseTimestamps) {
+        const chart = charts.timeDelta;
+        const config = CHART_CONFIG.timeDelta;
+        if (!chart || currentRuns.length < 2) {
+            if (chart) {
+                chart.data.labels = baseTimestamps;
+                chart.data.datasets = [];
+                chart.update('none');
+            }
+            return;
+        }
+
+        // Reference = fastest run (lowest adjusted lap time)
+        const refRun = [...currentRuns].sort((a, b) => {
+            return (a.lapTime + (a.cones || 0) * 2) - (b.lapTime + (b.cones || 0) * 2);
+        })[0];
+
+        // Build cumulative distance arrays for each run
+        function cumulativeDist(run) {
+            const { posX, posY } = run.telemetry;
+            const dist = [0];
+            for (let i = 1; i < posX.length; i++) {
+                const dx = posX[i] - posX[i - 1];
+                const dy = posY[i] - posY[i - 1];
+                dist.push(dist[i - 1] + Math.sqrt(dx * dx + dy * dy));
+            }
+            return dist;
+        }
+
+        // For a given distance, find the time in a run using linear interpolation
+        function timeAtDist(dist, cumDist, timestamps) {
+            if (dist <= 0) return timestamps[0];
+            const maxDist = cumDist[cumDist.length - 1];
+            if (dist >= maxDist) return timestamps[timestamps.length - 1];
+            for (let i = 1; i < cumDist.length; i++) {
+                if (cumDist[i] >= dist) {
+                    const t = (dist - cumDist[i - 1]) / (cumDist[i] - cumDist[i - 1]);
+                    return timestamps[i - 1] + t * (timestamps[i] - timestamps[i - 1]);
+                }
+            }
+            return timestamps[timestamps.length - 1];
+        }
+
+        const refDist = cumulativeDist(refRun);
+
+        const datasets = [];
+        const reversed = [...currentRuns].reverse();
+        let maxAbsDelta = 0;
+
+        reversed.forEach((run) => {
+            if (run === refRun) return; // skip reference run
+            const color = run.isMostRecent ? RECENT_COLOR : COLORS[currentRuns.indexOf(run) % COLORS.length];
+            const runDist = cumulativeDist(run);
+
+            // For each timestamp in the reference run, compute delta
+            const deltas = refRun.telemetry.timestamps.map((refT, i) => {
+                const dist = refDist[i];
+                const runT = timeAtDist(dist, runDist, run.telemetry.timestamps);
+                return runT - refT; // positive = this run is slower (more time), negative = faster
+            });
+
+            // Interpolate onto baseTimestamps, holding flat at final delta after run ends
+            const runEndTime = run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
+            const interpolated = interpolateData(deltas, refRun.telemetry.timestamps, baseTimestamps);
+            // Find the last non-null value to use as the flat tail
+            let lastVal = null;
+            for (let i = interpolated.length - 1; i >= 0; i--) {
+                if (interpolated[i] !== null) { lastVal = interpolated[i]; break; }
+            }
+            interpolated.forEach((v, i) => {
+                if (baseTimestamps[i] > runEndTime) interpolated[i] = null;
+                else if (v === null && lastVal !== null) interpolated[i] = lastVal;
+            });
+
+            const absMax = Math.max(...interpolated.filter(v => v !== null).map(Math.abs));
+            if (absMax > maxAbsDelta) maxAbsDelta = absMax;
+
+            datasets.push({
+                label: `Delta Run ${run.runNumber}`,
+                data: interpolated,
+                borderColor: color,
+                backgroundColor: color,
+                borderWidth: 1,
+                pointRadius: 0,
+                tension: 0.1
+            });
+        });
+
+        // Zero line for reference run — stops at ref run's end time
+        const refEndTime = refRun.telemetry.timestamps[refRun.telemetry.timestamps.length - 1];
+        const refColor = refRun.isMostRecent ? RECENT_COLOR : COLORS[currentRuns.indexOf(refRun) % COLORS.length];
+        datasets.push({
+            label: `Ref Run ${refRun.runNumber}`,
+            data: baseTimestamps.map(t => t <= refEndTime ? 0 : null),
+            borderColor: refColor,
+            backgroundColor: refColor,
+            borderWidth: 1,
+            pointRadius: 0,
+            tension: 0
+        });
+
+        // Symmetric y-axis
+        const yMax = Math.ceil((maxAbsDelta || 1) * 10) / 10;
+        chart.options.scales.y.min = -yMax;
+        chart.options.scales.y.max = yMax;
+
+        chart.data.labels = baseTimestamps;
+        chart.data.datasets = datasets;
+        chart.update('none');
+    }
+
+    // Update time delta value display
+    function updateTimeDeltaValueDisplay(idx) {
+        const container = document.getElementById('timeDeltaValues');
+        const chart = charts.timeDelta;
+        if (!container || !chart) return;
+
+        let html = '';
+        chart.data.datasets.forEach((dataset) => {
+            const value = dataset.data[idx];
+            if (value !== null && value !== undefined && value !== 0) {
+                const sign = value > 0 ? '+' : '';
+                html += `<span class="chart-value-item" style="color: ${dataset.borderColor};">${sign}${value.toFixed(3)}s</span>`;
+            }
+        });
+        container.innerHTML = html;
     }
 
     // Interpolate data
@@ -510,6 +629,7 @@ const AutocrossCharts = (() => {
         });
 
         updateGForceValueDisplay(idx);
+        updateTimeDeltaValueDisplay(idx);
     }
 
     // Update value display for single chart
@@ -549,19 +669,14 @@ const AutocrossCharts = (() => {
         const reversed = [...currentRuns].reverse();
 
         reversed.forEach((run, i) => {
-            const lateralDataset = chart.data.datasets[i * 2];
-            const longitudinalDataset = chart.data.datasets[i * 2 + 1];
+            const dataset = chart.data.datasets[i];
+            if (!dataset) return;
 
-            if (!lateralDataset || !longitudinalDataset) return;
-
-            const lateral = lateralDataset.data[idx];
-            const longitudinal = longitudinalDataset.data[idx];
+            const lateral = dataset.data[idx];
             const color = run.isMostRecent ? RECENT_COLOR : COLORS[currentRuns.indexOf(run) % COLORS.length];
 
-            if (lateral !== null && lateral !== undefined && longitudinal !== null && longitudinal !== undefined) {
-                const latStr = lateral.toFixed(2);
-                const longStr = longitudinal.toFixed(2);
-                html += `<span class="chart-value-item" style="color: ${color};">${latStr}, ${longStr}</span>`;
+            if (lateral !== null && lateral !== undefined) {
+                html += `<span class="chart-value-item" style="color: ${color};">${lateral.toFixed(2)}g</span>`;
             }
         });
 
@@ -570,7 +685,7 @@ const AutocrossCharts = (() => {
 
     // Clear value displays
     function clearValueDisplays() {
-        ['speedValues', 'throttleValues', 'brakeValues', 'gForceValues'].forEach(id => {
+        ['speedValues', 'throttleValues', 'brakeValues', 'gForceValues', 'timeDeltaValues'].forEach(id => {
             const elem = document.getElementById(id);
             if (elem) elem.innerHTML = '';
         });
