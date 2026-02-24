@@ -6,12 +6,15 @@ const AutocrossScrubber = (function() {
     let ctx = null;
     let scrubberSection = null;
 
-    // Current run
+    // Current run (frontmost = fastest, used for speed graph)
     let currentRun = null;
+    let allRuns = [];       // all loaded runs, sorted fastest first
     let currentTime = 0;
-    let maxTime = 0;
+    let maxTime = 0;        // slowest run's full duration
     let isPlaying = false;
     let playbackInterval = null;
+
+    const COLORS = ['#4a9eff', '#ff4a4a', '#4aff4a', '#ffaa4a', '#ff4aff', '#4affff'];
 
     // Interaction state
     let isDragging = false;
@@ -103,11 +106,38 @@ const AutocrossScrubber = (function() {
         updatePlayPauseButton();
         render();
         updateTimeDisplay();
+        updateAddSectorBtn();
+    }
+
+    // Load multiple runs — scrubber follows frontmost (fastest) car
+    function setRuns(runs) {
+        if (!runs || runs.length === 0) { clear(); return; }
+
+        // runs already sorted fastest first by autocross-scripts
+        allRuns = runs;
+        currentRun = runs[0]; // frontmost car drives the speed graph
+
+        // Timeline covers the slowest run (full session)
+        maxTime = Math.max(...runs.map(r => r.telemetry.timestamps[r.telemetry.timestamps.length - 1]));
+
+        currentTime = 0;
+        isPlaying = false;
+
+        if (playbackInterval) {
+            clearInterval(playbackInterval);
+            playbackInterval = null;
+        }
+
+        updatePlayPauseButton();
+        render();
+        updateTimeDisplay();
+        updateAddSectorBtn();
     }
 
     // Clear scrubber
     function clear() {
         currentRun = null;
+        allRuns = [];
         currentTime = 0;
         maxTime = 0;
         isPlaying = false;
@@ -120,6 +150,7 @@ const AutocrossScrubber = (function() {
         updatePlayPauseButton();
         render();
         updateTimeDisplay();
+        updateAddSectorBtn();
     }
 
     // Seek to specific time
@@ -134,6 +165,7 @@ const AutocrossScrubber = (function() {
         currentTime = Math.max(0, Math.min(maxTime, time));
         render();
         updateTimeDisplay();
+        updateAddSectorBtn();
 
         // Notify charts and map
         notifySeek();
@@ -357,6 +389,12 @@ const AutocrossScrubber = (function() {
         // Draw speed graph overlay
         drawSpeedGraph(timelineY, timelineHeight);
 
+        // Draw sector markers
+        drawSectorMarkers(timelineY, timelineHeight);
+
+        // Draw finish lines for each run
+        drawFinishLines(timelineY, timelineHeight);
+
         // Draw time markers
         drawTimeMarkers(timelineY, timelineHeight);
 
@@ -429,6 +467,37 @@ const AutocrossScrubber = (function() {
         }
     }
 
+    // Draw vertical finish lines for each loaded run
+    function drawFinishLines(timelineY, timelineHeight) {
+        if (allRuns.length <= 1) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const width = rect.width;
+
+        allRuns.forEach((run, i) => {
+            const finishTime = run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
+            const x = 10 + (width - 20) * (finishTime / maxTime);
+            const color = COLORS[i % COLORS.length];
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.globalAlpha = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(x, timelineY);
+            ctx.lineTo(x, timelineY + timelineHeight);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
+
+            // Small flag above the line
+            ctx.fillStyle = color;
+            ctx.font = 'bold 9px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`R${run.runNumber || (i + 1)}`, x, timelineY - 2);
+        });
+    }
+
     // Update time display
     function updateTimeDisplay() {
         if (!timeDisplay) return;
@@ -455,13 +524,63 @@ const AutocrossScrubber = (function() {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
     }
 
+    // Enable/disable +Sector button based on scrubber position
+    function updateAddSectorBtn() {
+        const btn = document.getElementById('addSectorBtn');
+        if (!btn) return;
+
+        if (!currentRun || maxTime === 0) {
+            btn.disabled = true;
+            return;
+        }
+
+        // Disable past the frontmost (fastest) car's finish line
+        const frontFinish = allRuns.length > 0
+            ? allRuns[0].telemetry.timestamps[allRuns[0].telemetry.timestamps.length - 1]
+            : maxTime;
+        btn.disabled = currentTime >= frontFinish - 0.05;
+    }
+
+    // Draw sector markers on the timeline
+    function drawSectorMarkers(timelineY, timelineHeight) {
+        if (!window.AutocrossSectors || !currentRun) return;
+        const rect = canvas.getBoundingClientRect();
+        const width = rect.width;
+        const times = AutocrossSectors.getSectorTimesForRun(currentRun);
+
+        times.forEach((t, i) => {
+            if (t === undefined || t === null) return;
+            const x = 10 + (width - 20) * (t / maxTime);
+
+            // Vertical line
+            ctx.strokeStyle = '#ffaa4a';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([3, 2]);
+            ctx.beginPath();
+            ctx.moveTo(x, timelineY - 4);
+            ctx.lineTo(x, timelineY + timelineHeight + 4);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Label
+            ctx.fillStyle = '#ffaa4a';
+            ctx.font = 'bold 9px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`S${i + 1}`, x, timelineY - 7);
+        });
+    }
+
     // Public API
     return {
         init,
         loadRun,
         clear,
         seekTo,
-        togglePlayback
+        togglePlayback,
+        render,
+        setRuns,
+        getCurrentTime: () => currentTime,
+        getCurrentRun: () => currentRun
     };
 })();
 

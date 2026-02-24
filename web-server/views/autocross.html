@@ -52,6 +52,11 @@
                 <div class="scrubber-controls">
                     <button id="playPauseBtn" class="btn-icon">▶</button>
                     <span id="timeDisplay" class="time-display">00:00.000</span>
+                    <div id="sectorsList" class="sectors-list" style="display:none"></div>
+                    <div class="sector-action-btns">
+                        <button id="addSectorBtn" class="btn btn-secondary btn-sm" title="Add sector at current time">+ Sector</button>
+                        <button id="openSectorsBtn" class="btn btn-secondary btn-sm" disabled>Sectors</button>
+                    </div>
                 </div>
             </div>
         </section>
@@ -189,6 +194,46 @@
         </div>
     </div>
 
+    <!-- Modal: Sector Analysis -->
+    <div id="sectorsModal" class="modal hidden">
+        <div class="modal-content sectors-modal-content">
+            <div class="sectors-modal-header">
+                <h2>Sector Analysis</h2>
+                <button id="closeSectorsModal" class="modal-close-btn" title="Close">×</button>
+            </div>
+            <div class="sectors-modal-body">
+                <!-- Left: Mini Map -->
+                <div class="sectors-map-panel">
+                    <div class="sectors-map-controls">
+                        <span id="sectorMapLabel" class="sector-map-label"></span>
+                        <div class="sector-playback-btns">
+                            <button id="sectorPlayBtn" class="btn btn-primary btn-sm">▶ Play</button>
+                        </div>
+                    </div>
+                    <canvas id="sectorMapCanvas" class="sector-map-canvas"></canvas>
+                </div>
+                <!-- Right: Table -->
+                <div class="sectors-table-panel">
+                    <div class="sectors-table-scroll">
+                        <table id="sectorsTable" class="sectors-table"></table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Confirm Delete Sector -->
+    <div id="deleteSectorModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 380px;">
+            <h2>Remove Sector</h2>
+            <p id="deleteSectorMsg" style="color: var(--text-secondary); margin: 1rem 0;">Remove this sector?</p>
+            <div class="modal-actions">
+                <button id="cancelDeleteSector" class="btn btn-secondary">Cancel</button>
+                <button id="confirmDeleteSector" class="btn btn-danger">Remove</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Hidden file input for import -->
     <input type="file" id="importFileInput" accept=".json" style="display: none;">
 
@@ -208,5 +253,6 @@
     <script src="/src/autocross-charts.js"></script>
     <script src="/src/autocross-map.js"></script>
     <script src="/src/autocross-scrubber.js"></script>
+    <script src="/src/autocross-sectors.js"></script>
 </body>
 </html>

@@ -399,6 +399,11 @@ async function handleCourseChange() {
         // Restore selected runs from localStorage
         restoreSelectedRunsFromStorage();
 
+        // Load sectors for this course
+        if (window.AutocrossSectors) {
+            await AutocrossSectors.loadSectors(courseId);
+        }
+
         // Notify recorder of course change
         if (window.AutocrossRecorder) {
             window.AutocrossRecorder.setCourse(courseId);
@@ -803,7 +808,7 @@ async function loadSelectedRuns() {
                 window.AutocrossMap.loadRun(run);
             }
             if (window.AutocrossScrubber) {
-                window.AutocrossScrubber.loadRun(run);
+                window.AutocrossScrubber.setRuns([run]);
             }
         } else {
             // Multiple runs - compare mode
@@ -814,13 +819,7 @@ async function loadSelectedRuns() {
                 window.AutocrossMap.compareRuns(runsToLoad);
             }
             if (window.AutocrossScrubber) {
-                // Find the longest run for scrubber duration
-                const longestRun = runsToLoad.reduce((longest, run) => {
-                    const currentDuration = run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
-                    const longestDuration = longest.telemetry.timestamps[longest.telemetry.timestamps.length - 1];
-                    return currentDuration > longestDuration ? run : longest;
-                }, runsToLoad[0]);
-                window.AutocrossScrubber.loadRun(longestRun);
+                window.AutocrossScrubber.setRuns(runsToLoad);
             }
         }
     } catch (error) {
@@ -1311,7 +1310,18 @@ window.AutocrossApp = {
     init,
     onRunSaved,
     onCourseAutoSelected,
-    getCurrentCourse: () => currentCourse
+    getCurrentCourse: () => currentCourse,
+    getLoadedRunObjects: () => {
+        // Return full run objects for currently selected runs (sorted fastest first)
+        return selectedRuns
+            .filter(id => loadedRuns[id])
+            .map(id => loadedRuns[id])
+            .sort((a, b) => {
+                const aTime = a.lapTime + ((a.cones || 0) * 2);
+                const bTime = b.lapTime + ((b.cones || 0) * 2);
+                return aTime - bTime;
+            });
+    }
 };
 
 // Initialize on page load

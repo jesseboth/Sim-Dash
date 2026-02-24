@@ -64,6 +64,12 @@ async function handleRequest(data) {
             case 'archiveCourse':
                 return handleArchiveCourse(data);
 
+            case 'getSectors':
+                return handleGetSectors(data);
+
+            case 'saveSectors':
+                return handleSaveSectors(data);
+
             default:
                 return {
                     success: false,
@@ -567,6 +573,28 @@ function handleSetTrackName(data) {
         success: true,
         data: { trackId, name }
     };
+}
+
+/**
+ * Get sectors for a course
+ */
+function handleGetSectors(data) {
+    const { courseId } = data;
+    if (!courseId) return { success: false, error: 'courseId is required' };
+    return { success: true, data: storage.loadSectors(courseId) };
+}
+
+/**
+ * Save sectors for a course
+ */
+function handleSaveSectors(data) {
+    const { courseId, sectors } = data;
+    if (!courseId || !Array.isArray(sectors)) {
+        return { success: false, error: 'courseId and sectors array are required' };
+    }
+    const result = storage.saveSectors(courseId, sectors);
+    if (!result) return { success: false, error: 'Failed to save sectors' };
+    return { success: true, data: sectors };
 }
 
 module.exports = {
