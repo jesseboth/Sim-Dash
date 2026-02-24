@@ -473,8 +473,13 @@ const AutocrossSectors = (function () {
         const sb = sectorBounds[activeSectorIndex];
         if (!sb) return;
 
+        // Sort draw order so fastest sector run is drawn last (on top)
+        const drawOrder = modalRuns
+            .map((run, ri) => ({ run, ri, t: computeSectorTime(run, sb.startPos, sb.endPos) ?? Infinity }))
+            .sort((a, b) => b.t - a.t);  // slowest first, fastest last (on top)
+
         // Draw full track (faded) then sector portion (bright) for each run
-        modalRuns.forEach((run, ri) => {
+        drawOrder.forEach(({ run, ri }) => {
             const color = COLORS[ri % COLORS.length];
             drawRunSegment(run, null, null, color, 0.15);  // full track faded
             const startIdx = findIndexAtPosition(run, sb.startPos.posX, sb.startPos.posY);
@@ -484,8 +489,9 @@ const AutocrossSectors = (function () {
             drawRunSegment(run, Math.min(startIdx, endIdx), Math.max(startIdx, endIdx), color, 1.0);
         });
 
-        // Draw animated position markers
-        modalRuns.forEach((run, ri) => {
+        // Draw animated position markers (same order — fastest on top)
+        const speedReadouts = [];
+        drawOrder.forEach(({ run, ri }) => {
             const color = COLORS[ri % COLORS.length];
             const startIdx = findIndexAtPosition(run, sb.startPos.posX, sb.startPos.posY);
             const startTime = run.telemetry.timestamps[startIdx];
@@ -497,13 +503,39 @@ const AutocrossSectors = (function () {
                 : run.telemetry.posX.length - 1;
             const endTime = run.telemetry.timestamps[endIdx];
 
+            let markerIdx;
+            let finished;
             if (targetTime > endTime) {
-                // Run finished this sector - draw at end position
-                drawMarker(run, endIdx, color, true);
+                markerIdx = endIdx;
+                finished = true;
             } else {
-                const idx = findClosestTimeIndex(run.telemetry.timestamps, targetTime);
-                drawMarker(run, idx, color, false);
+                markerIdx = findClosestTimeIndex(run.telemetry.timestamps, targetTime);
+                finished = false;
             }
+            drawMarker(run, markerIdx, color, finished);
+
+            // Collect speed for readout (mph assumed — adjust if needed)
+            const speed = run.telemetry.speed ? run.telemetry.speed[markerIdx] : null;
+            speedReadouts.push({ ri, color, speed, finished });
+        });
+
+        // Draw speed readouts in bottom-right, fastest run at top of list
+        speedReadouts.sort((a, b) => a.ri - b.ri);  // restore original run order for readout
+        const fontSize = 13;
+        const lineH = fontSize + 5;
+        const padL = 10;
+        const padB = 10;
+        mapCtx.font = `bold ${fontSize}px monospace`;
+        speedReadouts.forEach(({ color, speed, finished }, i) => {
+            const label = speed !== null ? `${Math.round(speed)} mph` : '—';
+            const x = padL;
+            const y = h - padB - (speedReadouts.length - 1 - i) * lineH;
+
+            // Speed text in run color
+            mapCtx.globalAlpha = finished ? 0.4 : 1.0;
+            mapCtx.fillStyle = color;
+            mapCtx.fillText(label, x, y);
+            mapCtx.globalAlpha = 1.0;
         });
     }
 
