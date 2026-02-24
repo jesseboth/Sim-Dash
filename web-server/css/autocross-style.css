@@ -1416,6 +1416,13 @@ body.runs-collapsed {
     color: #4aff4a;
 }
 
+.sector-cone-badge {
+    font-size: 0.75em;
+    color: #ffaa4a;
+    margin-left: 4px;
+    white-space: nowrap;
+}
+
 .sector-run-dot {
     display: inline-block;
     width: 8px;

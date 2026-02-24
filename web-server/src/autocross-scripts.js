@@ -757,6 +757,8 @@ async function loadSelectedRuns() {
         return;
     }
 
+    if (window.AutocrossMap) window.AutocrossMap.setLoading(true);
+
     try {
         // Calculate run rankings (sort all runs by adjusted time)
         const sortedRuns = [...allRuns].sort((a, b) => {
@@ -825,6 +827,8 @@ async function loadSelectedRuns() {
     } catch (error) {
         console.error('Failed to load selected runs:', error);
         showToast('Failed to load runs', 'error');
+    } finally {
+        if (window.AutocrossMap) window.AutocrossMap.setLoading(false);
     }
 }
 

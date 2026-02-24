@@ -243,7 +243,7 @@ const AutocrossSectors = (function () {
 
         // Update map label
         const label = document.getElementById('sectorMapLabel');
-        if (label) label.textContent = sectors[index]?.name || '';
+        if (label) label.textContent = index === 0 ? 'Start' : (sectors[index - 1]?.name || '');
 
         restartPlayback();
     }
@@ -259,7 +259,8 @@ const AutocrossSectors = (function () {
         let thead = '<thead><tr><th>Run</th><th>Total</th>';
         sectorBounds.forEach((sb, i) => {
             const active = i === activeSectorIndex ? ' sector-col-active' : '';
-            thead += `<th class="sector-col-header${active}" data-sector-index="${i}">${sectors[i].name}</th>`;
+            const label = i === 0 ? 'Start' : sectors[i - 1].name;
+            thead += `<th class="sector-col-header${active}" data-sector-index="${i}">${label}</th>`;
         });
         thead += '</tr></thead>';
 
@@ -283,12 +284,14 @@ const AutocrossSectors = (function () {
         // Build body rows
         let tbody = '<tbody>';
         runSectorTimes.forEach(({ run, sectorTimes }, ri) => {
-            const total = run.lapTime + ((run.cones || 0) * 2);
+            const cones = run.cones || 0;
+            const total = run.lapTime + (cones * 2);
             const label = run.name || `Run #${run.runNumber || (ri + 1)}`;
             const color = COLORS[ri % COLORS.length];
+            const coneTag = cones > 0 ? ` <span class="sector-cone-badge">+${cones}</span>` : '';
             tbody += `<tr>`;
             tbody += `<td><span class="sector-run-dot" style="background:${color}"></span>${escapeHtml(label)}</td>`;
-            tbody += `<td>${formatTime(total)}</td>`;
+            tbody += `<td>${formatTime(total)}${coneTag}</td>`;
             sectorTimes.forEach((t, si) => {
                 const best = bestSectorTimes[si];
                 const isBest = t !== null && best !== null && Math.abs(t - best) < 0.001;
@@ -338,9 +341,12 @@ const AutocrossSectors = (function () {
     function getSectorBounds() {
         if (sectors.length === 0) return [];
         const bounds = [];
+        // First sector: start of run → first marker
+        bounds.push({ startPos: null, endPos: sectors[0] });
+        // Remaining sectors: marker[i] → marker[i+1] (last → end of run)
         for (let i = 0; i < sectors.length; i++) {
             bounds.push({
-                startPos: sectors[i],   // full sector object (has posX, posY, dirX, dirY)
+                startPos: sectors[i],
                 endPos: i + 1 < sectors.length ? sectors[i + 1] : null
             });
         }
@@ -350,7 +356,7 @@ const AutocrossSectors = (function () {
     // Compute sector time for a run using virtual gate crossing where possible
     function computeSectorTime(run, startSector, endSector) {
         const ts = run.telemetry.timestamps;
-        const startTime = findTimeAtGate(run, startSector);
+        const startTime = startSector ? findTimeAtGate(run, startSector) : ts[0];
         const endTime = endSector
             ? findTimeAtGate(run, endSector)
             : ts[ts.length - 1];
@@ -432,7 +438,7 @@ const AutocrossSectors = (function () {
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
         modalRuns.forEach(run => {
-            const startIdx = findIndexAtPosition(run, sb.startPos.posX, sb.startPos.posY);
+            const startIdx = sb.startPos ? findIndexAtPosition(run, sb.startPos.posX, sb.startPos.posY) : 0;
             const endIdx = sb.endPos
                 ? findIndexAtPosition(run, sb.endPos.posX, sb.endPos.posY)
                 : run.telemetry.posX.length - 1;
@@ -482,7 +488,7 @@ const AutocrossSectors = (function () {
         drawOrder.forEach(({ run, ri }) => {
             const color = COLORS[ri % COLORS.length];
             drawRunSegment(run, null, null, color, 0.15);  // full track faded
-            const startIdx = findIndexAtPosition(run, sb.startPos.posX, sb.startPos.posY);
+            const startIdx = sb.startPos ? findIndexAtPosition(run, sb.startPos.posX, sb.startPos.posY) : 0;
             const endIdx = sb.endPos
                 ? findIndexAtPosition(run, sb.endPos.posX, sb.endPos.posY)
                 : run.telemetry.posX.length - 1;
@@ -493,7 +499,7 @@ const AutocrossSectors = (function () {
         const speedReadouts = [];
         drawOrder.forEach(({ run, ri }) => {
             const color = COLORS[ri % COLORS.length];
-            const startIdx = findIndexAtPosition(run, sb.startPos.posX, sb.startPos.posY);
+            const startIdx = sb.startPos ? findIndexAtPosition(run, sb.startPos.posX, sb.startPos.posY) : 0;
             const startTime = run.telemetry.timestamps[startIdx];
             const targetTime = startTime + playbackTime;
 

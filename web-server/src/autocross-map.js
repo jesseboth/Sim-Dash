@@ -30,6 +30,11 @@ const AutocrossMap = (function() {
     // Rendering preferences
     let mostRecentOnTop = true;
 
+    // Loading state
+    let isLoading = false;
+    let loadingAngle = 0;
+    let loadingAnimFrame = null;
+
     // Color palette (matching charts - 6 distinct colors)
     const COLORS = [
         '#4a9eff', // Blue
@@ -460,11 +465,14 @@ const AutocrossMap = (function() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         if (currentRuns.length === 0) {
-            // Draw placeholder text
-            ctx.fillStyle = '#888';
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Select a run to view track map', canvas.width / 2, canvas.height / 2);
+            if (isLoading) {
+                drawLoadingSpinner();
+            } else {
+                ctx.fillStyle = '#888';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Select a run to view track map', canvas.width / 2, canvas.height / 2);
+            }
             return;
         }
 
@@ -753,6 +761,45 @@ const AutocrossMap = (function() {
         return `${mins}:${secs.padStart(6, '0')}`;
     }
 
+    // Loading spinner
+    function drawLoadingSpinner() {
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const r = 22;
+
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#4a9eff';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, loadingAngle, loadingAngle + Math.PI * 0.75);
+        ctx.stroke();
+    }
+
+    function setLoading(state) {
+        isLoading = state;
+        if (state) {
+            if (loadingAnimFrame) return; // already animating
+            const animate = () => {
+                if (!isLoading) { loadingAnimFrame = null; return; }
+                loadingAngle += 0.08;
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                drawLoadingSpinner();
+                loadingAnimFrame = requestAnimationFrame(animate);
+            };
+            loadingAnimFrame = requestAnimationFrame(animate);
+        } else {
+            loadingAnimFrame = null;
+            render();
+        }
+    }
+
     // Clear map
     function clear() {
         currentRuns = [];
@@ -768,7 +815,8 @@ const AutocrossMap = (function() {
         compareRuns,
         seekTo,
         clear,
-        render
+        render,
+        setLoading
     };
 })();
 
