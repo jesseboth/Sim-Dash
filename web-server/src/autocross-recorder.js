@@ -50,9 +50,7 @@ const AutocrossRecorder = (function() {
                     console.log('Recorder: Resumed armed state for course:', currentCourseId);
 
                     // Sync course selection in main app
-                    if (window.AutocrossApp) {
-                        window.AutocrossApp.onCourseAutoSelected(currentCourseId);
-                    }
+                    notifyCourseSelected(currentCourseId);
                 } else {
                     // Restore course from localStorage as fallback
                     const savedCourseId = localStorage.getItem('recorder_courseId');
@@ -167,57 +165,21 @@ const AutocrossRecorder = (function() {
 
     // Start recording (via Go backend)
     async function startRecording() {
-        // Ensure AC telemetry process is running
-        await ensureACTelemetry();
-
-        // Poll for track ID (AC may need a moment to send packets)
+        toggleButton.disabled = true;
         if (statusElement) statusElement.textContent = 'Connecting...';
-        const trackId = await waitForTrackId(5000);
-
-        // Check if course is selected
-        if (!currentCourseId) {
-            // Try to auto-select course based on trackID
-            if (trackId) {
-                const existingCourse = await findCourseByTrackId(trackId);
-                if (existingCourse) {
-                    currentCourseId = existingCourse.courseId;
-                    console.log('Auto-selected course:', existingCourse.name);
-
-                    // Notify main app to update UI
-                    if (window.AutocrossApp) {
-                        window.AutocrossApp.onCourseAutoSelected(currentCourseId);
-                    }
-                }
-            }
-
-            // If still no course, auto-create one (requires a valid trackId)
-            if (!currentCourseId) {
-                if (!trackId) {
-                    alert('No track detected yet. Please wait for telemetry to connect, then try again.');
-                    return;
-                }
-                try {
-                    // Get track name from mappings if available
-                    const trackMappings = await getTrackMappings();
-                    const trackName = trackMappings[trackId] || `Track ${trackId}`;
-
-                    const course = await createCourse(trackName, trackId);
-                    currentCourseId = course.courseId;
-                    localStorage.setItem('recorder_courseId', currentCourseId);
-                    console.log('Auto-created course:', trackName);
-
-                    // Notify main app
-                    if (window.AutocrossApp) {
-                        window.AutocrossApp.onCourseAutoSelected(currentCourseId);
-                    }
-                } catch (error) {
-                    alert('Failed to create course: ' + error.message);
-                    return;
-                }
-            }
-        }
 
         try {
+            // Ensure AC telemetry process is running
+            await ensureACTelemetry();
+
+            // Poll for track ID (AC may need a moment to send packets)
+            const trackId = await waitForTrackId(5000);
+
+            const courseId = await resolveCourseForTrack(trackId);
+            if (!courseId) return;
+            currentCourseId = courseId;
+            localStorage.setItem('recorder_courseId', currentCourseId);
+
             const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -227,15 +189,66 @@ const AutocrossRecorder = (function() {
             const result = await response.json();
             if (result.success) {
                 state = STATE.RECORDING;
-                updateUI();
                 startStatusPolling();
                 console.log('Recording started on course:', currentCourseId);
             } else {
-                alert('Failed to start recording: ' + (result.error || 'Unknown error'));
+                showToast('Failed to start recording: ' + (result.error || 'Unknown error'), 'error');
             }
         } catch (error) {
-            alert('Failed to start recording: ' + error.message);
+            // A network error or a non-JSON reply means the Go recorder is not answering on port 8888
+            const unreachable = error instanceof TypeError || error instanceof SyntaxError;
+            showToast(unreachable
+                ? 'Cannot reach the telemetry recorder on port 8888. Check that no other program uses that port.'
+                : 'Failed to start recording: ' + error.message, 'error');
             console.error('Error starting recording:', error);
+        } finally {
+            updateUI();
+        }
+    }
+
+    // Choose the course to record into.
+    // Keeps the selected course when it fits the current track, otherwise uses or creates
+    // the active course for this track. Returns null when no course can be chosen.
+    async function resolveCourseForTrack(trackId) {
+        const courses = await getCourses();
+        const current = courses.find(c => c.courseId === currentCourseId);
+
+        const currentFits = current && !current.isArchived &&
+            (!trackId || !current.trackId || current.trackId === 'manual' || current.trackId === trackId);
+        if (currentFits) {
+            return current.courseId;
+        }
+
+        if (!trackId) {
+            showToast('No track detected yet. Start driving in Assetto Corsa, then press Start again.', 'warning');
+            return null;
+        }
+
+        const trackMappings = await getTrackMappings();
+        const trackName = trackMappings[trackId] || `Track ${trackId}`;
+
+        // One course for this track: use it. More than one: ask which.
+        const matches = courses.filter(c => !c.isArchived && c.trackId === trackId);
+        let choice = matches.length === 1 ? matches[0].courseId : 'new';
+        if (matches.length > 1 && window.AutocrossCourses) {
+            choice = await AutocrossCourses.chooseCourse(matches, trackName);
+            if (choice === null) return null;
+        }
+
+        if (choice !== 'new') {
+            const match = matches.find(c => c.courseId === choice);
+            notifyCourseSelected(choice, `Recording to course "${match.name}"`);
+            return choice;
+        }
+
+        const course = await createCourse(trackName, trackId);
+        notifyCourseSelected(course.courseId, `Created course "${trackName}" for this track`);
+        return course.courseId;
+    }
+
+    function notifyCourseSelected(courseId, message) {
+        if (window.AutocrossApp) {
+            window.AutocrossApp.onCourseAutoSelected(courseId, message);
         }
     }
 
@@ -252,11 +265,6 @@ const AutocrossRecorder = (function() {
                 updateUI();
                 stopStatusPolling();
                 console.log('Recording stopped');
-
-                // Notify main app to refresh runs
-                if (window.AutocrossApp && window.AutocrossApp.onRunSaved) {
-                    window.AutocrossApp.onRunSaved();
-                }
             } else {
                 console.error('Failed to stop recording:', result.error);
             }
@@ -279,18 +287,15 @@ const AutocrossRecorder = (function() {
         return result.data;
     }
 
-    // Find course by trackID
-    async function findCourseByTrackId(trackId) {
+    // Get all courses
+    async function getCourses() {
         const response = await fetch('/autocross/api', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'getCourses' })
         });
         const result = await response.json();
-        if (!result.success) return null;
-
-        const courses = result.data || [];
-        return courses.find(c => c.trackId === trackId);
+        return result.success ? (result.data || []) : [];
     }
 
     // Get track mappings
@@ -308,7 +313,7 @@ const AutocrossRecorder = (function() {
     async function openNamingModal() {
         const telem = await getLiveTelemetry();
         if (!telem || !telem.CarId || !telem.TrackId) {
-            alert('No telemetry available. Please start Assetto Corsa and begin driving.');
+            showToast('No telemetry available. Start Assetto Corsa and begin driving.', 'warning');
             return;
         }
 
@@ -411,14 +416,20 @@ const AutocrossRecorder = (function() {
 
     // Poll recording status for UI updates
     let lastRunSavedAt = 0;
+    let statusRequestPending = false;
 
     function startStatusPolling() {
         if (statusPollingInterval) return;
 
         statusPollingInterval = setInterval(async () => {
+            // Skip this tick while the previous request is still running
+            if (statusRequestPending) return;
+            statusRequestPending = true;
             try {
                 const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/status`);
                 const status = await response.json();
+
+                if (window.AutocrossLive) AutocrossLive.onStatus(status);
 
                 if (status.isRecording) {
                     state = STATE.RECORDING;
@@ -438,13 +449,16 @@ const AutocrossRecorder = (function() {
                 if (status.runSavedAt && status.runSavedAt !== lastRunSavedAt) {
                     lastRunSavedAt = status.runSavedAt;
                     if (window.AutocrossApp && window.AutocrossApp.onRunSaved) {
-                        window.AutocrossApp.onRunSaved();
+                        await window.AutocrossApp.onRunSaved();
                     }
+                    if (window.AutocrossLive) AutocrossLive.onRunSaved();
                 }
             } catch (error) {
                 console.error('Error polling recording status:', error);
+            } finally {
+                statusRequestPending = false;
             }
-        }, 100); // Poll every 100ms
+        }, 200);
     }
 
     function stopStatusPolling() {

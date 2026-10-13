@@ -7,6 +7,23 @@ let allRuns = [];
 let selectedRuns = [];
 let loadedRuns = {}; // Cache for full run data with telemetry
 let mostRecentOnTop = true; // Track "Recent on top" toggle state
+let courseLoadToken = 0; // Increments per course load so stale responses are ignored
+let runsLoadToken = 0; // Increments per visualization load so stale loads are ignored
+let lastLoadedSignature = ''; // Runs, order and cones last sent to the visualizations
+let shownRuns = []; // Run objects currently in the visualizations
+let runSortMode = 'fastest'; // 'fastest' or 'recent'
+let carFilter = 'all'; // 'all' or a carId
+let carNames = {}; // carId -> friendly name
+let runNumbers = new Map(); // runId -> run number in driving order
+let newRunIds = new Map(); // runId -> time the NEW highlight ends
+let newRunTimer = null;
+let lastRefreshedCourse = null;
+
+const CONE_PENALTY = 2; // seconds per cone
+const MAX_SELECTED_RUNS = 6;
+const NEW_RUN_HIGHLIGHT_MS = 20000;
+const RUN_COLORS = ['#4a9eff', '#ff4a4a', '#4aff4a', '#ffaa4a', '#ff4aff', '#4affff'];
+const RECENT_COLOR = '#7d5aff';
 
 // DOM Elements
 const courseSelector = document.getElementById('courseSelector');
@@ -43,6 +60,30 @@ async function apiRequest(action, data = {}) {
     }
 }
 
+// Lap time including cone penalties
+function getAdjustedTime(run) {
+    return run.lapTime + ((run.cones || 0) * CONE_PENALTY);
+}
+
+function sortByAdjustedTime(runs) {
+    return [...runs].sort((a, b) => getAdjustedTime(a) - getAdjustedTime(b));
+}
+
+function findMostRecentRun(runs) {
+    if (runs.length === 0) return null;
+    return runs.reduce((latest, run) =>
+        new Date(run.timestamp) > new Date(latest.timestamp) ? run : latest, runs[0]);
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Toast Notification
 function showToast(message, type = 'info') {
     const toast = document.createElement('div');
@@ -74,6 +115,8 @@ async function init() {
     if (savedPreference !== null) {
         mostRecentOnTop = savedPreference === 'true';
     }
+    runSortMode = localStorage.getItem('runSortMode') === 'recent' ? 'recent' : 'fastest';
+    updateSortButtons();
 
     // Load courses
     await loadCourses();
@@ -83,6 +126,7 @@ async function init() {
 
     // Initialize archive button state (disabled initially)
     updateArchiveButtonState();
+    updateHint();
 
     // Initialize recorder
     if (window.AutocrossRecorder) {
@@ -215,6 +259,108 @@ function setupEventListeners() {
     if (mostRecentToggle) {
         mostRecentToggle.addEventListener('change', handleMostRecentToggle);
     }
+
+    // Run list sort order
+    document.querySelectorAll('[data-sort]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            runSortMode = btn.dataset.sort;
+            localStorage.setItem('runSortMode', runSortMode);
+            updateSortButtons();
+            renderRunsList();
+            syncSelectionUI();
+        });
+    });
+
+    // Car filter
+    document.getElementById('carFilter')?.addEventListener('change', (e) => {
+        carFilter = e.target.value;
+        if (currentCourse) localStorage.setItem(`carFilter_${currentCourse}`, carFilter);
+        renderRunsList();
+        syncSelectionUI();
+    });
+
+    // Hint bar
+    document.getElementById('hintDismiss')?.addEventListener('click', () => {
+        const hint = document.getElementById('hintBar');
+        if (hint && hint.dataset.hintId) {
+            localStorage.setItem(`hintDismissed_${hint.dataset.hintId}`, 'true');
+        }
+        updateHint();
+    });
+
+    // Confirm dialog
+    document.getElementById('confirmCancel')?.addEventListener('click', () => closeConfirmDialog(false));
+    document.getElementById('confirmOk')?.addEventListener('click', () => closeConfirmDialog(true));
+    document.getElementById('confirmModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'confirmModal') closeConfirmDialog(false);
+    });
+
+    if (window.AutocrossAlign) {
+        AutocrossAlign.onChange(handleAlignChange);
+    }
+}
+
+function updateSortButtons() {
+    document.querySelectorAll('[data-sort]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.sort === runSortMode);
+    });
+}
+
+// --- Confirm dialog ---
+let confirmResolve = null;
+
+// Ask a yes/no question in a dialog. Resolves to true when confirmed.
+function confirmDialog({ title, message, confirmLabel = 'OK', danger = false }) {
+    if (confirmResolve) closeConfirmDialog(false);
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMessage').textContent = message;
+    const okBtn = document.getElementById('confirmOk');
+    okBtn.textContent = confirmLabel;
+    okBtn.className = `btn ${danger ? 'btn-danger' : 'btn-primary'}`;
+    document.getElementById('confirmModal').classList.remove('hidden');
+    setTimeout(() => okBtn.focus(), 50);
+    return new Promise(resolve => { confirmResolve = resolve; });
+}
+
+function closeConfirmDialog(result) {
+    document.getElementById('confirmModal')?.classList.add('hidden');
+    if (confirmResolve) {
+        const resolve = confirmResolve;
+        confirmResolve = null;
+        resolve(result);
+    }
+}
+
+// --- First-use hints: one short tip for the next useful step ---
+function updateHint() {
+    const bar = document.getElementById('hintBar');
+    if (!bar) return;
+
+    let hint = null;
+    const alignActive = window.AutocrossAlign && AutocrossAlign.isActive();
+    const sectorCount = window.AutocrossSectors ? AutocrossSectors.getSectors().length : 0;
+
+    if (!currentCourse) {
+        hint = { id: 'start', text: 'Press Start, then drive in Assetto Corsa. A course is created for your track, and each run saves when you cross the finish.' };
+    } else if (allRuns.length === 0) {
+        hint = { id: 'firstRun', text: 'Press Start and drive a run. It saves when you cross the finish line.' };
+    } else if (selectedRuns.length < 2) {
+        hint = { id: 'compare', text: 'Tap runs in the list (open it with ▲ at the bottom) to compare up to 6 runs.' };
+    } else if (!alignActive) {
+        hint = { id: 'align', text: 'Tap a car on the map to line the other cars up with it and see the time gaps.' };
+    } else if (sectorCount === 0) {
+        hint = { id: 'sectors', text: 'Move the timeline to a point on the track and press + Sector to split the course into sectors.' };
+    }
+
+    if (hint && localStorage.getItem(`hintDismissed_${hint.id}`) === 'true') {
+        hint = null;
+    }
+
+    bar.classList.toggle('hidden', !hint);
+    if (hint) {
+        bar.dataset.hintId = hint.id;
+        document.getElementById('hintText').textContent = hint.text;
+    }
 }
 
 // Handle "Recent on top" toggle changes
@@ -224,22 +370,33 @@ async function handleMostRecentToggle(e) {
     // Save preference to localStorage
     localStorage.setItem('mostRecentOnTop', mostRecentOnTop.toString());
 
-    if (mostRecentOnTop && allRuns.length > 0) {
-        // Auto-select the most recent run (don't deselect old most recent when toggling on)
-        await autoSelectMostRecentRun(false);
+    if (mostRecentOnTop) {
+        // Don't deselect the old most recent run when toggling on
+        applyMostRecentSelection(false);
+        syncSelectionUI();
+        saveSelectedRunsToStorage();
     }
 
-    // Always reload visualizations to update colors when toggle changes
-    if (selectedRuns.length > 0) {
-        await loadSelectedRuns();
-    }
+    // Reload visualizations to update colors when toggle changes
+    await loadSelectedRuns();
 }
 
-// Handle New Course
 // Handle Keyboard Shortcuts
 function handleKeyboardShortcuts(e) {
-    // Don't trigger shortcuts when typing in inputs
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+    if (e.key === 'Escape') {
+        closeOpenModals();
+        return;
+    }
+
+    // Don't trigger shortcuts when typing, using a dropdown, or with a dialog open
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) {
+        return;
+    }
+    if (document.querySelector('.modal:not(.hidden)')) {
+        return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) {
         return;
     }
 
@@ -269,27 +426,45 @@ function handleKeyboardShortcuts(e) {
             }
             break;
 
-        case 'Escape': // Escape - Close modals
-            // Could add modal closing logic here if needed
+        case 'ArrowLeft':
+        case 'ArrowRight': // Step the timeline (Shift = 1 s)
+            if (window.AutocrossScrubber) {
+                e.preventDefault();
+                const stepSize = e.shiftKey ? 1 : 0.1;
+                AutocrossScrubber.step(e.key === 'ArrowLeft' ? -stepSize : stepSize);
+            }
             break;
 
-        case '?': // ? - Show help (could add help modal in future)
+        case '?': // ? - Show help
             e.preventDefault();
             showKeyboardHelp();
             break;
     }
 }
 
+// Close any open dialog the same way its Cancel button does
+function closeOpenModals() {
+    document.querySelectorAll('.modal:not(.hidden)').forEach(modal => {
+        const cancelBtn = modal.querySelector('#cancelRename, #cancelArchive, #cancelNameIdentifiers, #cancelDeleteSector, #closeSectorsModal, #confirmCancel, #closeCourseModal, #cancelCourseChooser, #channelsCancelBtn');
+        if (cancelBtn) {
+            cancelBtn.click();
+        } else {
+            modal.classList.add('hidden');
+        }
+    });
+}
+
 // Show keyboard help
 function showKeyboardHelp() {
-    const helpText = `
-Keyboard Shortcuts:
-- Space: Play/Pause scrubber
-- R: Arm/Disarm recording
-- Delete/Backspace: Delete selected runs
-- Escape: Close modal
-- ?: Show this help
-    `;
+    const helpText = [
+        'Keyboard Shortcuts:',
+        '- Space: Play/Pause scrubber',
+        '- Left/Right: Step 0.1 s (Shift: 1 s)',
+        '- R: Arm/Disarm recording',
+        '- Delete/Backspace: Delete selected runs',
+        '- Escape: Close dialog',
+        '- ?: Show this help'
+    ].join('\n');
     showToast(helpText, 'info');
 }
 
@@ -297,53 +472,7 @@ Keyboard Shortcuts:
 async function loadCourses() {
     try {
         const courses = await apiRequest('getCourses');
-
-        // Sort courses: active first (newest to oldest), then archived (newest to oldest)
-        const sortedCourses = [...courses].sort((a, b) => {
-            // First, separate by archived status
-            const aArchived = a.isArchived || false;
-            const bArchived = b.isArchived || false;
-
-            if (aArchived !== bArchived) {
-                return aArchived ? 1 : -1; // Active courses first
-            }
-
-            // Within same archive status, sort by date (newest first)
-            const aDate = new Date(a.archivedDate || a.courseId);
-            const bDate = new Date(b.archivedDate || b.courseId);
-            return bDate - aDate;
-        });
-
-        // Clear existing options (except the first one)
-        courseSelector.innerHTML = '<option value="">Select a course...</option>';
-
-        // Add separator for archived courses if needed
-        let archivedSeparatorAdded = false;
-
-        // Add courses to selector
-        sortedCourses.forEach(course => {
-            // Add separator before first archived course
-            if (course.isArchived && !archivedSeparatorAdded) {
-                const separator = document.createElement('option');
-                separator.disabled = true;
-                separator.textContent = '─────── Archived ───────';
-                courseSelector.appendChild(separator);
-                archivedSeparatorAdded = true;
-            }
-
-            const option = document.createElement('option');
-            option.value = course.courseId;
-
-            // Format course name
-            let displayName = course.name;
-            if (course.isArchived && course.archivedEventName) {
-                displayName = `📦 ${course.archivedEventName} - ${course.archivedCarName}`;
-            }
-            displayName += ` (${course.runCount} runs)`;
-
-            option.textContent = displayName;
-            courseSelector.appendChild(option);
-        });
+        renderCourseOptions(courses);
 
         // If there's a saved course selection, restore it
         const savedCourseId = localStorage.getItem('selectedCourse');
@@ -356,66 +485,164 @@ async function loadCourses() {
     }
 }
 
+// Fill the course dropdown: active first (newest to oldest), then archived (newest to oldest)
+function renderCourseOptions(courses) {
+    const selectedValue = courseSelector.value;
+
+    const sortedCourses = [...courses].sort((a, b) => {
+        const aArchived = a.isArchived || false;
+        const bArchived = b.isArchived || false;
+
+        if (aArchived !== bArchived) {
+            return aArchived ? 1 : -1;
+        }
+
+        const aDate = new Date(a.archivedDate || a.dateCreated);
+        const bDate = new Date(b.archivedDate || b.dateCreated);
+        return bDate - aDate;
+    });
+
+    courseSelector.innerHTML = '<option value="">Select a course...</option>';
+
+    let archivedSeparatorAdded = false;
+
+    sortedCourses.forEach(course => {
+        // Add separator before first archived course
+        if (course.isArchived && !archivedSeparatorAdded) {
+            const separator = document.createElement('option');
+            separator.disabled = true;
+            separator.textContent = '─────── Archived ───────';
+            courseSelector.appendChild(separator);
+            archivedSeparatorAdded = true;
+        }
+
+        const option = document.createElement('option');
+        option.value = course.courseId;
+
+        let displayName = course.name;
+        if (course.isArchived && course.archivedEventName) {
+            displayName = `📦 ${course.archivedEventName} - ${course.archivedCarName}`;
+        }
+        displayName += ` (${course.runCount} run${course.runCount !== 1 ? 's' : ''})`;
+
+        option.textContent = displayName;
+        courseSelector.appendChild(option);
+    });
+
+    if (selectedValue && courses.some(c => c.courseId === selectedValue)) {
+        courseSelector.value = selectedValue;
+    }
+}
+
 // Handle Course Change
 async function handleCourseChange() {
     const courseId = courseSelector.value;
+    const token = ++courseLoadToken;
 
     if (!courseId) {
         currentCourse = null;
         currentCourseData = null;
+        allRuns = [];
+        selectedRuns = [];
+        shownRuns = [];
+        lastRefreshedCourse = null;
+        localStorage.removeItem('selectedCourse');
         clearRunsList();
         clearVisualization();
+        updateButtonStates();
         updateArchiveButtonState();
+        if (window.AutocrossSectors) AutocrossSectors.loadSectors(null);
+        if (window.AutocrossRecorder) window.AutocrossRecorder.setCourse(null);
+        updateHint();
         return;
     }
 
     try {
         showLoading();
 
-        // Save selection
         localStorage.setItem('selectedCourse', courseId);
 
-        // Load course data to check archive status
-        const courses = await apiRequest('getCourses');
-        currentCourseData = courses.find(c => c.courseId === courseId);
-
-        // Load course runs
-        const runs = await apiRequest('getRuns', { courseId });
-        allRuns = runs;
-
-        // Load top 10
-        const top10 = await apiRequest('getTop10', { courseId });
-
-        // Update current course before rendering so restore can reference it
         currentCourse = courseId;
+        selectedRuns = readStoredSelection(courseId);
+        carFilter = localStorage.getItem(`carFilter_${courseId}`) || 'all';
+        lastLoadedSignature = '';
+        runsLoadToken++;
+        clearVisualization();
 
-        // Update UI
-        await renderRunsList(runs);
-        renderTop10(top10);
+        await Promise.all([
+            refreshRuns({ deselectOldMostRecent: true }),
+            window.AutocrossSectors ? AutocrossSectors.loadSectors(courseId) : null
+        ]);
+        if (token !== courseLoadToken) return;
 
-        // Update archive button state based on course data
-        updateArchiveButtonState();
-
-        // Restore selected runs from localStorage
-        restoreSelectedRunsFromStorage();
-
-        // Load sectors for this course
-        if (window.AutocrossSectors) {
-            await AutocrossSectors.loadSectors(courseId);
-        }
-
-        // Notify recorder of course change
         if (window.AutocrossRecorder) {
             window.AutocrossRecorder.setCourse(courseId);
         }
-
-        hideLoading();
     } catch (error) {
         console.error('Failed to load course:', error);
-        hideLoading();
+    } finally {
+        if (token === courseLoadToken) hideLoading();
     }
 }
 
+// Reload runs, top 10 and course info for the current course.
+// Keeps the current selection and only redraws the visualizations when they change.
+async function refreshRuns({ deselectOldMostRecent = true } = {}) {
+    const courseId = currentCourse;
+    if (!courseId) return;
+    const token = courseLoadToken;
+
+    const [courses, runs] = await Promise.all([
+        apiRequest('getCourses'),
+        apiRequest('getRuns', { courseId })
+    ]);
+    const names = await resolveCarNames(runs);
+
+    // Ignore the result if the user switched course while loading
+    if (token !== courseLoadToken || courseId !== currentCourse) return;
+
+    // Runs that appeared since the last refresh of this course are marked as new
+    if (lastRefreshedCourse === courseId) {
+        const knownIds = new Set(allRuns.map(r => r.runId));
+        runs.filter(r => !knownIds.has(r.runId))
+            .forEach(r => newRunIds.set(r.runId, Date.now() + NEW_RUN_HIGHLIGHT_MS));
+    } else {
+        newRunIds.clear();
+    }
+    lastRefreshedCourse = courseId;
+
+    renderCourseOptions(courses);
+    currentCourseData = courses.find(c => c.courseId === courseId) || null;
+    allRuns = runs;
+    carNames = names;
+    updateRunNumbers();
+
+    // Drop selections of runs that no longer exist
+    const existingIds = new Set(runs.map(r => r.runId));
+    selectedRuns = selectedRuns.filter(id => existingIds.has(id));
+
+    if (mostRecentOnTop) {
+        applyMostRecentSelection(deselectOldMostRecent);
+    }
+
+    updateCarFilter();
+    renderRunsList();
+    syncSelectionUI();
+    saveSelectedRunsToStorage();
+    updateButtonStates();
+    updateArchiveButtonState();
+    updateHint();
+
+    await loadSelectedRuns();
+}
+
+// Run numbers follow the order runs were driven (Run 1 = first run of the course)
+function updateRunNumbers() {
+    runNumbers = new Map();
+    [...allRuns]
+        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+        .forEach((run, i) => runNumbers.set(run.runId, i + 1));
+}
 
 // Resolve car names for a list of runs - sends unique IDs, gets back a name map
 async function resolveCarNames(runs) {
@@ -429,10 +656,39 @@ async function resolveCarNames(runs) {
     }
 }
 
+function getCarName(carId) {
+    return carId ? (carNames[carId] || `Car ${carId}`) : 'Unknown car';
+}
+
+// Runs shown in the list: filtered by car
+function getVisibleRuns() {
+    return carFilter === 'all' ? allRuns : allRuns.filter(r => r.carId === carFilter);
+}
+
+// Show the car filter only when the course has runs from more than one car
+function updateCarFilter() {
+    const select = document.getElementById('carFilter');
+    if (!select) return;
+
+    const carIds = [...new Set(allRuns.map(r => r.carId).filter(Boolean))];
+    if (carFilter !== 'all' && !carIds.includes(carFilter)) {
+        carFilter = 'all';
+    }
+
+    select.innerHTML = '<option value="all">All cars</option>' + carIds
+        .map(id => `<option value="${escapeHtml(id)}">${escapeHtml(getCarName(id))}</option>`)
+        .join('');
+    select.value = carFilter;
+    select.classList.toggle('hidden', carIds.length < 2);
+}
+
 // Render Runs List
-async function renderRunsList(runs) {
-    // Update run count
-    const countText = `${runs.length} run${runs.length !== 1 ? 's' : ''}`;
+function renderRunsList() {
+    const runs = getVisibleRuns();
+
+    const countText = carFilter === 'all'
+        ? `${allRuns.length} run${allRuns.length !== 1 ? 's' : ''}`
+        : `${runs.length} of ${allRuns.length} runs`;
     if (runCount) {
         runCount.textContent = countText;
     }
@@ -441,63 +697,72 @@ async function renderRunsList(runs) {
         runCountCollapsed.textContent = countText;
     }
 
+    renderTop10(runs);
+
     if (runs.length === 0) {
-        runsList.innerHTML = '<div class="empty-state">No runs recorded yet. Click Start to begin recording.</div>';
+        runsList.innerHTML = allRuns.length === 0
+            ? '<div class="empty-state">No runs recorded yet. Press Start, then drive. Each run saves when you cross the finish.</div>'
+            : '<div class="empty-state">No runs with this car.</div>';
         return;
     }
 
-    // Fetch car name mappings for runs in this list
-    const carNames = await resolveCarNames(runs);
+    const byTime = sortByAdjustedTime(runs);
+    const rankById = new Map(byTime.map((r, i) => [r.runId, i + 1]));
+    const fastestTime = getAdjustedTime(byTime[0]);
+    const bestSectors = computeBestSectorTimes(runs);
+    const showCar = new Set(allRuns.map(r => r.carId)).size > 1;
 
-    // Sort runs by adjusted time (fastest first)
-    const sortedRuns = [...runs].sort((a, b) => {
-        const aTime = a.lapTime + ((a.cones || 0) * 2);
-        const bTime = b.lapTime + ((b.cones || 0) * 2);
-        return aTime - bTime;
-    });
-    const fastestTime = sortedRuns[0].lapTime + ((sortedRuns[0].cones || 0) * 2);
+    const ordered = runSortMode === 'recent'
+        ? [...runs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        : byTime;
 
     runsList.innerHTML = '';
+    const now = Date.now();
 
-    sortedRuns.forEach((run, index) => {
+    ordered.forEach(run => {
         const card = document.createElement('div');
         card.className = 'run-card';
         card.dataset.runId = run.runId;
+        const isNew = (newRunIds.get(run.runId) || 0) > now;
+        if (isNew) card.classList.add('run-new');
 
         const date = new Date(run.timestamp);
-        const dateStr = date.toLocaleDateString();
         const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dateStr = date.toDateString() === new Date().toDateString() ? 'Today' : date.toLocaleDateString();
 
         const cones = run.cones || 0;
-        const adjustedTime = run.lapTime + (cones * 2);
+        const adjustedTime = getAdjustedTime(run);
         const isFastest = adjustedTime === fastestTime;
+        const rank = rankById.get(run.runId);
 
         card.innerHTML = `
-            <input type="checkbox" class="run-card-checkbox" data-run-id="${run.runId}">
+            <input type="checkbox" class="run-card-checkbox" data-run-id="${escapeHtml(run.runId)}">
             <div class="run-card-info">
                 <div class="run-card-main">
-                    <span class="run-number">#${index + 1}</span>
+                    <span class="run-number">Run ${runNumbers.get(run.runId)}</span>
                     <span class="run-time ${isFastest ? 'fastest' : ''}">${formatLapTime(adjustedTime)}</span>
-                    ${run.name ? `<span class="run-name">📝 ${run.name}</span>` : ''}
+                    <span class="run-rank" title="Position by time">P${rank}</span>
+                    ${isNew ? '<span class="run-new-badge">NEW</span>' : ''}
+                    ${run.name ? `<span class="run-name">📝 ${escapeHtml(run.name)}</span>` : ''}
                 </div>
                 <div class="run-card-details">
-                    <span>📅 ${dateStr} ${timeStr}</span>
-                    <span>🚗 ${run.carId ? (carNames[run.carId] || run.carId) : 'Unknown'}</span>
-                    ${cones > 0 ? `<span style="color: var(--accent-warning)">🚧 ${cones} cone${cones !== 1 ? 's' : ''} (+${cones * 2}s)</span>` : ''}
+                    <span>${dateStr} ${timeStr}</span>
+                    ${showCar ? `<span class="run-car">🚗 ${escapeHtml(getCarName(run.carId))}</span>` : ''}
+                    ${cones > 0 ? `<span style="color: var(--accent-warning)">🚧 ${cones} cone${cones !== 1 ? 's' : ''} (+${cones * CONE_PENALTY}s)</span>` : ''}
                     ${run.isValid ? '' : '<span style="color: var(--accent-secondary)">❌ Invalid</span>'}
                 </div>
+                ${renderSectorTimesRow(run, bestSectors)}
             </div>
             <div class="run-card-actions">
                 <div class="cone-controls">
-                    <button class="btn-icon cone-minus" data-run-id="${run.runId}" title="Remove cone">−</button>
+                    <button class="btn-icon cone-minus" title="Remove cone">−</button>
                     <span class="cone-count">${cones}</span>
-                    <button class="btn-icon cone-plus" data-run-id="${run.runId}" title="Add cone">+</button>
+                    <button class="btn-icon cone-plus" title="Add cone">+</button>
                 </div>
-                <button class="btn btn-secondary btn-sm rename-run" data-run-id="${run.runId}" title="Rename">✏️</button>
+                <button class="btn btn-secondary btn-sm rename-run" title="Rename">✏️</button>
             </div>
         `;
 
-        // Add event listeners
         const checkbox = card.querySelector('.run-card-checkbox');
         checkbox.addEventListener('change', (e) => {
             e.stopPropagation();
@@ -510,24 +775,20 @@ async function renderRunsList(runs) {
             showRenameModal(run.runId, run.name || '');
         });
 
-        const conePlusBtn = card.querySelector('.cone-plus');
-        conePlusBtn.addEventListener('click', (e) => {
+        card.querySelector('.cone-plus').addEventListener('click', (e) => {
             e.stopPropagation();
-            handleConeChange(run.runId, (run.cones || 0) + 1);
+            handleConeChange(run.runId, 1);
         });
 
-        const coneMinusBtn = card.querySelector('.cone-minus');
-        coneMinusBtn.addEventListener('click', (e) => {
+        card.querySelector('.cone-minus').addEventListener('click', (e) => {
             e.stopPropagation();
-            const newCount = Math.max(0, (run.cones || 0) - 1);
-            handleConeChange(run.runId, newCount);
+            handleConeChange(run.runId, -1);
         });
 
         // Click card to toggle selection
         card.addEventListener('click', (e) => {
-            const isControl = e.target === checkbox ||
-                             e.target === renameBtn || e.target === conePlusBtn ||
-                             e.target === coneMinusBtn || e.target.closest('.cone-controls');
+            const isControl = e.target === checkbox || e.target === renameBtn ||
+                              e.target.closest('.cone-controls');
             if (!isControl) {
                 checkbox.checked = !checkbox.checked;
                 handleRunSelection({ target: checkbox });
@@ -537,19 +798,48 @@ async function renderRunsList(runs) {
         runsList.appendChild(card);
     });
 
-    // Update button states
-    updateButtonStates();
-
-    // Auto-select most recent run if "Recent on top" is enabled
-    if (mostRecentOnTop) {
-        // Use setTimeout to ensure DOM is ready
-        // Pass true to deselect old most recent run when a new one arrives
-        setTimeout(() => autoSelectMostRecentRun(true), 0);
+    // Remove the NEW highlight when it expires
+    if (newRunIds.size > 0) {
+        clearTimeout(newRunTimer);
+        const nextExpiry = Math.min(...newRunIds.values());
+        newRunTimer = setTimeout(() => {
+            const t = Date.now();
+            newRunIds.forEach((expiry, id) => { if (expiry <= t) newRunIds.delete(id); });
+            renderRunsList();
+            syncSelectionUI();
+        }, Math.max(0, nextExpiry - now) + 50);
     }
 }
 
-// Render Top 10
-function renderTop10(top10) {
+// Best time per sector across the given runs
+function computeBestSectorTimes(runs) {
+    const best = [];
+    runs.forEach(run => {
+        (run.sectorTimes || []).forEach((t, i) => {
+            if (t !== null && (best[i] === undefined || t < best[i])) best[i] = t;
+        });
+    });
+    return best;
+}
+
+// Compact sector times for a run card, best per sector in green
+function renderSectorTimesRow(run, bestSectors) {
+    const times = run.sectorTimes || [];
+    if (times.length === 0) return '';
+
+    const cells = times.map((t, i) => {
+        if (t === null) return `<span class="run-sector">S${i + 1} —</span>`;
+        const isBest = bestSectors[i] !== undefined && Math.abs(t - bestSectors[i]) < 0.001;
+        const delta = isBest ? '' : `<span class="run-sector-delta">+${(t - bestSectors[i]).toFixed(2)}</span>`;
+        return `<span class="run-sector${isBest ? ' best' : ''}">S${i + 1} ${t.toFixed(2)}${delta}</span>`;
+    });
+    return `<div class="run-card-sectors">${cells.join('')}</div>`;
+}
+
+// Render Top 10 (valid runs in the list, by adjusted time)
+function renderTop10(runs) {
+    const top10 = sortByAdjustedTime(runs.filter(r => r.isValid)).slice(0, 10);
+
     if (top10.length === 0) {
         top10Panel.classList.add('hidden');
         return;
@@ -563,13 +853,13 @@ function renderTop10(top10) {
         item.className = 'top10-item';
         item.dataset.runId = run.runId;
 
-        const adjustedTime = run.adjustedTime || run.lapTime;
-        const hasCones = (run.cones || 0) > 0;
+        const cones = run.cones || 0;
 
         item.innerHTML = `
             <span class="rank">#${index + 1}</span>
-            <span class="time">${formatLapTime(adjustedTime)}</span>
-            ${hasCones ? `<span class="cone-badge">🚧${run.cones}</span>` : ''}
+            <span class="time">${formatLapTime(getAdjustedTime(run))}</span>
+            <span class="top10-run">Run ${runNumbers.get(run.runId)}</span>
+            ${cones > 0 ? `<span class="cone-badge">🚧${cones}</span>` : ''}
         `;
 
         item.addEventListener('click', () => {
@@ -585,251 +875,183 @@ function renderTop10(top10) {
 async function handleRunSelection(e) {
     const runId = e.target.dataset.runId;
     const isChecked = e.target.checked;
-    const card = e.target.closest('.run-card');
 
     // If trying to uncheck and this is the most recent run and toggle is on, prevent it
     if (!isChecked && mostRecentOnTop && isMostRecentRun(runId)) {
-        e.target.checked = true; // Force it back to checked
+        e.target.checked = true;
         showToast('Cannot deselect most recent run while "Recent on top" is enabled', 'warning');
         return;
     }
 
     if (isChecked) {
-        // Limit to 6 runs
-        if (selectedRuns.length >= 6) {
+        if (selectedRuns.length >= MAX_SELECTED_RUNS) {
             e.target.checked = false;
-            showToast('Maximum 6 runs can be selected', 'warning');
+            showToast(`Maximum ${MAX_SELECTED_RUNS} runs can be selected`, 'warning');
             return;
         }
         if (!selectedRuns.includes(runId)) {
             selectedRuns.push(runId);
         }
-        if (card) card.classList.add('selected');
     } else {
         selectedRuns = selectedRuns.filter(id => id !== runId);
-        if (card) card.classList.remove('selected');
     }
 
-    // Save to localStorage
+    syncSelectionUI();
     saveSelectedRunsToStorage();
-
     updateButtonStates();
 
-    // Auto-load runs into visualizations
     await loadSelectedRuns();
 }
 
 // Check if a run is the most recent run (by timestamp)
 function isMostRecentRun(runId) {
-    if (allRuns.length === 0) return false;
-
-    // Find the most recent run by timestamp (highest timestamp)
-    const mostRecent = allRuns.reduce((latest, run) => {
-        return new Date(run.timestamp) > new Date(latest.timestamp) ? run : latest;
-    }, allRuns[0]);
-
-    return mostRecent.runId === runId;
+    const mostRecent = findMostRecentRun(allRuns);
+    return mostRecent !== null && mostRecent.runId === runId;
 }
 
-// Auto-select the most recent run
-async function autoSelectMostRecentRun(deselectOldMostRecent = false) {
-    if (allRuns.length === 0) return false;
-
-    // Find the most recent run by timestamp
-    const mostRecent = allRuns.reduce((latest, run) => {
-        return new Date(run.timestamp) > new Date(latest.timestamp) ? run : latest;
-    }, allRuns[0]);
-
+// Put the most recent run first in the selection.
+// With deselectOldMostRecent, the previous most recent run (first in the list) is replaced.
+function applyMostRecentSelection(deselectOldMostRecent) {
+    const mostRecent = findMostRecentRun(allRuns);
+    if (!mostRecent) return;
     const mostRecentId = mostRecent.runId;
 
-    // If deselecting old most recent, find and remove it (but keep other selections)
-    if (deselectOldMostRecent && selectedRuns.length > 0) {
-        const oldMostRecentId = selectedRuns[0]; // First item is always most recent
-
-        // Only deselect if it's different from the new most recent
-        if (oldMostRecentId !== mostRecentId) {
-            // Remove old most recent from selection
-            selectedRuns = selectedRuns.filter(id => id !== oldMostRecentId);
-
-            // Update UI for old most recent
-            const oldCheckbox = document.querySelector(`.run-card-checkbox[data-run-id="${oldMostRecentId}"]`);
-            if (oldCheckbox) {
-                oldCheckbox.checked = false;
-                const card = oldCheckbox.closest('.run-card');
-                if (card) card.classList.remove('selected');
-            }
-        }
+    if (deselectOldMostRecent && selectedRuns.length > 0 && selectedRuns[0] !== mostRecentId) {
+        selectedRuns = selectedRuns.slice(1);
     }
 
-    // Check if new most recent is already selected
-    if (selectedRuns.includes(mostRecentId)) {
-        // Even if already selected, make sure it's first (most recent position)
-        selectedRuns = selectedRuns.filter(id => id !== mostRecentId);
-        selectedRuns.unshift(mostRecentId);
-        saveSelectedRunsToStorage();
-        updateButtonStates();
-        await loadSelectedRuns();
-        return false; // Return false to indicate no new selection
-    }
+    selectedRuns = [mostRecentId, ...selectedRuns.filter(id => id !== mostRecentId)]
+        .slice(0, MAX_SELECTED_RUNS);
+}
 
-    // Add to selection (at the beginning so it's the "most recent selection")
-    selectedRuns.unshift(mostRecentId);
-
-    // Limit to 6 runs
-    if (selectedRuns.length > 6) {
-        selectedRuns = selectedRuns.slice(0, 6);
-    }
-
-    // Update UI
-    const checkbox = document.querySelector(`.run-card-checkbox[data-run-id="${mostRecentId}"]`);
-    if (checkbox) {
-        checkbox.checked = true;
+// Make checkboxes and card highlights match selectedRuns.
+// Selected cards are highlighted in the color the run has on the map and charts.
+function syncSelectionUI() {
+    const colors = computeRunColors();
+    document.querySelectorAll('.run-card-checkbox').forEach(checkbox => {
+        const runId = checkbox.dataset.runId;
+        const isSelected = selectedRuns.includes(runId);
+        checkbox.checked = isSelected;
         const card = checkbox.closest('.run-card');
-        if (card) card.classList.add('selected');
-    }
+        if (!card) return;
+        card.classList.toggle('selected', isSelected);
+        if (isSelected && colors[runId]) {
+            card.style.setProperty('--run-color', colors[runId]);
+        } else {
+            card.style.removeProperty('--run-color');
+        }
+    });
+}
 
-    // Save and reload
-    saveSelectedRunsToStorage();
-    updateButtonStates();
-    await loadSelectedRuns();
+// Color of each selected run: the most recent run (with "Recent on top") is purple,
+// the others take palette colors from fastest to slowest
+function computeRunColors() {
+    const runsById = new Map(allRuns.map(r => [r.runId, r]));
+    const selected = selectedRuns.map(id => runsById.get(id) || loadedRuns[id]).filter(Boolean);
+    const mostRecentId = mostRecentOnTop ? selectedRuns[0] : null;
 
-    return true; // Return true to indicate selection was changed
+    const colors = {};
+    sortByAdjustedTime(selected).forEach((run, i) => {
+        colors[run.runId] = run.runId === mostRecentId ? RECENT_COLOR : RUN_COLORS[i % RUN_COLORS.length];
+    });
+    return colors;
 }
 
 // Save selected runs to localStorage
 function saveSelectedRunsToStorage() {
     if (currentCourse) {
-        const storageKey = `selectedRuns_${currentCourse}`;
-        localStorage.setItem(storageKey, JSON.stringify(selectedRuns));
+        localStorage.setItem(`selectedRuns_${currentCourse}`, JSON.stringify(selectedRuns));
     }
 }
 
-// Restore selected runs from localStorage
-function restoreSelectedRunsFromStorage() {
-    if (!currentCourse) return;
-
-    const storageKey = `selectedRuns_${currentCourse}`;
-    const stored = localStorage.getItem(storageKey);
-
-    if (stored) {
-        try {
-            const runIds = JSON.parse(stored);
-            selectedRuns = [];
-
-            // Check each stored run ID and restore selection
-            runIds.forEach(runId => {
-                const checkbox = document.querySelector(`.run-card-checkbox[data-run-id="${runId}"]`);
-                if (checkbox) {
-                    checkbox.checked = true;
-                    selectedRuns.push(runId);
-                    const card = checkbox.closest('.run-card');
-                    if (card) card.classList.add('selected');
-                }
-            });
-
-            // If "Recent on top" is enabled, ensure most recent run is first in selectedRuns
-            if (mostRecentOnTop && allRuns.length > 0 && selectedRuns.length > 0) {
-                const mostRecent = allRuns.reduce((latest, run) =>
-                    new Date(run.timestamp) > new Date(latest.timestamp) ? run : latest, allRuns[0]);
-                const mostRecentId = mostRecent.runId;
-                if (selectedRuns.includes(mostRecentId) && selectedRuns[0] !== mostRecentId) {
-                    selectedRuns = [mostRecentId, ...selectedRuns.filter(id => id !== mostRecentId)];
-                }
-            }
-
-            updateButtonStates();
-
-            // Auto-load the restored selection
-            if (selectedRuns.length > 0) {
-                loadSelectedRuns();
-            }
-        } catch (e) {
-            console.error('Failed to restore selected runs:', e);
-        }
+// Read the stored selection for a course
+function readStoredSelection(courseId) {
+    try {
+        const stored = JSON.parse(localStorage.getItem(`selectedRuns_${courseId}`));
+        return Array.isArray(stored) ? stored.slice(0, MAX_SELECTED_RUNS) : [];
+    } catch (e) {
+        return [];
     }
 }
 
 // Load Selected Runs into Visualizations
 async function loadSelectedRuns() {
+    const token = ++runsLoadToken;
+
     if (selectedRuns.length === 0) {
-        // Clear visualizations if nothing selected
+        lastLoadedSignature = '';
+        if (window.AutocrossAlign) AutocrossAlign.setRuns([]);
         clearVisualization();
+        updateHint();
         return;
     }
 
-    if (window.AutocrossMap) window.AutocrossMap.setLoading(true);
+    const courseId = currentCourse;
+    const missing = selectedRuns.filter(id => !loadedRuns[id]);
+
+    if (missing.length > 0 && window.AutocrossMap) window.AutocrossMap.setLoading(true);
 
     try {
-        // Calculate run rankings (sort all runs by adjusted time)
-        const sortedRuns = [...allRuns].sort((a, b) => {
-            const aTime = a.lapTime + ((a.cones || 0) * 2);
-            const bTime = b.lapTime + ((b.cones || 0) * 2);
-            return aTime - bTime;
-        });
+        // Fetch full telemetry for runs that are not cached
+        const fetched = await Promise.all(
+            missing.map(runId => apiRequest('getRun', { courseId, runId }))
+        );
+        fetched.forEach(runData => { loadedRuns[runData.runId] = runData; });
 
-        // Load full run data for all selected runs and track the most recent selection
-        const mostRecentRunId = selectedRuns[0]; // First in selectedRuns is most recent
-        const runsToLoad = [];
+        // Ignore the result if a newer load started meanwhile
+        if (token !== runsLoadToken) return;
 
-        for (const runId of selectedRuns) {
-            if (!loadedRuns[runId]) {
-                const runData = await apiRequest('getRun', {
-                    courseId: currentCourse,
-                    runId
-                });
-                loadedRuns[runId] = runData;
-            }
+        const colors = computeRunColors();
+        const mostRecentRunId = selectedRuns[0];
 
-            // Add run number based on position in sorted list
-            const runData = loadedRuns[runId];
-            const runRank = sortedRuns.findIndex(r => r.runId === runId) + 1;
-            runData.runNumber = runRank;
+        const runsToLoad = selectedRuns
+            .filter(runId => loadedRuns[runId])
+            .map(runId => {
+                const runData = loadedRuns[runId];
+                runData.runNumber = runNumbers.get(runId);
+                runData.isMostRecent = (runId === mostRecentRunId) && mostRecentOnTop;
+                runData.color = colors[runId];
+                return runData;
+            });
 
-            // Mark if this is the most recent selection AND toggle is on
-            runData.isMostRecent = (runId === mostRecentRunId) && mostRecentOnTop;
+        // Fastest run first
+        const sortedToLoad = sortByAdjustedTime(runsToLoad);
 
-            runsToLoad.push(runData);
-        }
+        // Skip the redraw when nothing visible changed, so playback position and zoom are kept
+        const signature = sortedToLoad
+            .map(r => `${r.runId}:${r.cones || 0}:${r.color}:${r.runNumber}`)
+            .join('|');
+        if (signature === lastLoadedSignature) return;
+        lastLoadedSignature = signature;
 
-        // Sort runs by speed (fastest first) for consistent color assignment
-        // Fastest run gets first color (blue), slowest gets last color
-        runsToLoad.sort((a, b) => {
-            const aTime = a.lapTime + ((a.cones || 0) * 2);
-            const bTime = b.lapTime + ((b.cones || 0) * 2);
-            return aTime - bTime; // Ascending: fastest first
-        });
-
-        // Update visualizations with all selected runs
-        if (runsToLoad.length === 1) {
-            // Single run
-            const run = runsToLoad[0];
-            if (window.AutocrossCharts) {
-                window.AutocrossCharts.loadRun(run);
-            }
-            if (window.AutocrossMap) {
-                window.AutocrossMap.loadRun(run);
-            }
-            if (window.AutocrossScrubber) {
-                window.AutocrossScrubber.setRuns([run]);
-            }
-        } else {
-            // Multiple runs - compare mode
-            if (window.AutocrossCharts) {
-                window.AutocrossCharts.compareRuns(runsToLoad);
-            }
-            if (window.AutocrossMap) {
-                window.AutocrossMap.compareRuns(runsToLoad);
-            }
-            if (window.AutocrossScrubber) {
-                window.AutocrossScrubber.setRuns(runsToLoad);
-            }
-        }
+        if (window.AutocrossAlign) AutocrossAlign.setRuns(sortedToLoad);
+        pushToVisualizations(sortedToLoad, { keepTime: false });
+        updateHint();
     } catch (error) {
         console.error('Failed to load selected runs:', error);
         showToast('Failed to load runs', 'error');
     } finally {
         if (window.AutocrossMap) window.AutocrossMap.setLoading(false);
     }
+}
+
+// Send runs to the charts, map and scrubber.
+// With keepTime, the playback position and map view are kept (used when align mode changes).
+function pushToVisualizations(runs, { keepTime }) {
+    shownRuns = runs;
+    if (window.AutocrossCharts) window.AutocrossCharts.compareRuns(runs, { keepTime });
+    if (window.AutocrossMap) window.AutocrossMap.compareRuns(runs, { keepView: keepTime });
+    if (window.AutocrossScrubber) window.AutocrossScrubber.setRuns(runs, { keepTime });
+}
+
+// Redraw everything when align mode starts, changes reference, or ends
+function handleAlignChange(reference) {
+    if (shownRuns.length === 0) return;
+    pushToVisualizations(shownRuns, { keepTime: true });
+    if (reference) {
+        showToast(`Lined up with Run ${reference.runNumber}. Tap it again or press Reset to go back to time.`, 'info');
+    }
+    updateHint();
 }
 
 // Update Button States
@@ -864,54 +1086,6 @@ function updateArchiveButtonState() {
     }
 }
 
-// Load and View Run
-async function loadAndViewRun(runId) {
-    try {
-        showLoading();
-
-        // Load full run data if not cached
-        if (!loadedRuns[runId]) {
-            const runData = await apiRequest('getRun', {
-                courseId: currentCourse,
-                runId
-            });
-            loadedRuns[runId] = runData;
-        }
-
-        const run = loadedRuns[runId];
-
-        // Calculate run number based on position in sorted list
-        const sortedRuns = [...allRuns].sort((a, b) => {
-            const aTime = a.lapTime + ((a.cones || 0) * 2);
-            const bTime = b.lapTime + ((b.cones || 0) * 2);
-            return aTime - bTime;
-        });
-        const runRank = sortedRuns.findIndex(r => r.runId === runId) + 1;
-        run.runNumber = runRank;
-
-        // Mark as most recent (single run view) only if toggle is on
-        run.isMostRecent = mostRecentOnTop;
-
-        // Update visualizations
-        if (window.AutocrossCharts) {
-            window.AutocrossCharts.loadRun(run);
-        }
-
-        if (window.AutocrossMap) {
-            window.AutocrossMap.loadRun(run);
-        }
-
-        if (window.AutocrossScrubber) {
-            window.AutocrossScrubber.loadRun(run);
-        }
-
-        hideLoading();
-    } catch (error) {
-        console.error('Failed to load run:', error);
-        hideLoading();
-    }
-}
-
 // Scroll to Run in List
 function scrollToRun(runId) {
     // Expand runs section if collapsed
@@ -937,23 +1111,25 @@ function scrollToRun(runId) {
     }
 }
 
-// Handle Compare Runs
 // Handle Delete Run
 async function handleDeleteRun() {
     if (selectedRuns.length === 0) return;
 
-    const confirmMsg = selectedRuns.length === 1
-        ? 'Delete this run?'
-        : `Delete ${selectedRuns.length} runs?`;
-
-    if (!confirm(confirmMsg)) return;
+    const names = selectedRuns.map(id => `Run ${runNumbers.get(id)}`).join(', ');
+    const confirmed = await confirmDialog({
+        title: selectedRuns.length === 1 ? 'Delete run' : `Delete ${selectedRuns.length} runs`,
+        message: `${names} will be deleted. This cannot be undone.`,
+        confirmLabel: 'Delete',
+        danger: true
+    });
+    if (!confirmed) return;
 
     try {
         showLoading();
 
-        // Delete all selected runs
+        const deletedIds = [...selectedRuns];
         await Promise.all(
-            selectedRuns.map(runId =>
+            deletedIds.map(runId =>
                 apiRequest('deleteRun', {
                     courseId: currentCourse,
                     runId
@@ -961,49 +1137,35 @@ async function handleDeleteRun() {
             )
         );
 
-        // Clear selection
+        deletedIds.forEach(runId => delete loadedRuns[runId]);
         selectedRuns = [];
 
-        // Reload runs list
-        await handleCourseChange();
+        await refreshRuns({ deselectOldMostRecent: false });
 
-        // Clear visualizations
-        clearVisualization();
-
-        showToast('Run(s) deleted successfully', 'success');
-        hideLoading();
+        showToast(`Deleted ${deletedIds.length} run${deletedIds.length !== 1 ? 's' : ''}`, 'success');
     } catch (error) {
         console.error('Failed to delete run:', error);
+    } finally {
         hideLoading();
     }
 }
 
 // Handle Clear Selections
 async function handleClearSelections() {
-    // Uncheck all run checkboxes
-    const checkboxes = document.querySelectorAll('.run-card-checkbox');
-    checkboxes.forEach(checkbox => {
-        if (checkbox.checked) {
-            checkbox.checked = false;
-            // Remove selected class from card
-            const card = checkbox.closest('.run-card');
-            if (card) card.classList.remove('selected');
-        }
-    });
-
-    // Clear selectedRuns array
     selectedRuns = [];
 
-    // Save to localStorage
-    saveSelectedRunsToStorage();
+    // The most recent run stays selected while "Recent on top" is enabled
+    if (mostRecentOnTop) {
+        applyMostRecentSelection(false);
+    }
 
-    // Update button states
+    syncSelectionUI();
+    saveSelectedRunsToStorage();
     updateButtonStates();
 
-    // Reload visualizations (with empty selection)
     await loadSelectedRuns();
 
-    showToast('All selections cleared', 'success');
+    showToast(mostRecentOnTop ? 'Selections cleared (most recent run kept)' : 'All selections cleared', 'success');
 }
 
 // Handle Export Runs
@@ -1069,8 +1231,7 @@ async function handleImportRuns(e) {
             runs: importData.runs
         });
 
-        // Reload runs list
-        await handleCourseChange();
+        await refreshRuns({ deselectOldMostRecent: false });
 
         let message = `Imported ${result.imported} run(s)`;
         if (result.errors && result.errors.length > 0) {
@@ -1079,12 +1240,11 @@ async function handleImportRuns(e) {
         }
 
         showToast(message, result.errors.length > 0 ? 'warning' : 'success');
-        hideLoading();
     } catch (error) {
         console.error('Failed to import runs:', error);
         showToast('Failed to import: ' + error.message, 'error');
-        hideLoading();
     } finally {
+        hideLoading();
         e.target.value = '';
     }
 }
@@ -1148,19 +1308,15 @@ async function handleArchiveSubmit(e) {
         if (archiveModal) archiveModal.classList.add('hidden');
         if (archiveForm) archiveForm.reset();
 
-        // Reload courses to show updated list
-        await loadCourses();
+        // Deselect the course so the next recording starts a new course for this track
+        courseSelector.value = '';
+        await handleCourseChange();
+        renderCourseOptions(await apiRequest('getCourses'));
 
-        // Clear current course selection
-        currentCourse = null;
-        courseSelector.value = ''; // Reset dropdown to "Select a course..."
-        clearRunsList();
-        clearVisualization();
-
-        showToast('Course archived successfully', 'success');
-        hideLoading();
+        showToast('Course archived. The next recording starts a new course.', 'success');
     } catch (error) {
         console.error('Failed to archive course:', error);
+    } finally {
         hideLoading();
     }
 }
@@ -1206,22 +1362,32 @@ async function handleRenameSubmit(e) {
         if (renameModal) renameModal.classList.add('hidden');
         if (renameRunForm) renameRunForm.reset();
 
-        // Reload runs list
-        await handleCourseChange();
+        if (loadedRuns[currentRenameRunId]) {
+            loadedRuns[currentRenameRunId].name = newName || null;
+        }
+
+        await refreshRuns();
 
         showToast(newName ? 'Run renamed successfully' : 'Run name cleared', 'success');
-        hideLoading();
     } catch (error) {
         console.error('Failed to rename run:', error);
-        hideLoading();
     } finally {
+        hideLoading();
         currentRenameRunId = null;
     }
 }
 
 // Handle Cone Penalty Change
-async function handleConeChange(runId, newConeCount) {
+async function handleConeChange(runId, change) {
     if (!currentCourse) return;
+
+    // Use the latest local count so quick repeated clicks all count
+    const run = allRuns.find(r => r.runId === runId);
+    if (!run) return;
+    const newConeCount = Math.max(0, (run.cones || 0) + change);
+    if (newConeCount === (run.cones || 0)) return;
+    run.cones = newConeCount;
+    if (loadedRuns[runId]) loadedRuns[runId].cones = newConeCount;
 
     try {
         await apiRequest('updateCones', {
@@ -1230,14 +1396,7 @@ async function handleConeChange(runId, newConeCount) {
             cones: newConeCount
         });
 
-        // Update local run data
-        const run = allRuns.find(r => r.runId === runId);
-        if (run) {
-            run.cones = newConeCount;
-        }
-
-        // Reload runs list to show updated times and rankings
-        await handleCourseChange();
+        await refreshRuns();
     } catch (error) {
         console.error('Failed to update cone count:', error);
         showToast('Failed to update cone count', 'error');
@@ -1259,6 +1418,9 @@ function clearRunsList() {
 
 // Clear Visualization
 function clearVisualization() {
+    shownRuns = [];
+    if (window.AutocrossAlign) AutocrossAlign.setRuns([]);
+
     if (window.AutocrossCharts) {
         window.AutocrossCharts.clear();
     }
@@ -1274,39 +1436,34 @@ function clearVisualization() {
 
 // Format Lap Time
 function formatLapTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = (seconds % 60).toFixed(3);
+    // Round to whole milliseconds first so 59.9996 shows as 1:00.000
+    const totalMs = Math.round(seconds * 1000);
+    const mins = Math.floor(totalMs / 60000);
+    const secs = ((totalMs % 60000) / 1000).toFixed(3);
     return `${mins}:${secs.padStart(6, '0')}`;
 }
 
 // Handle Run Saved (called by recorder)
-async function onRunSaved(runData) {
-    console.log('Run saved:', runData);
-
-    // Reload course to update run count
+async function onRunSaved() {
     if (currentCourse) {
-        await handleCourseChange();
+        await refreshRuns();
     }
 
     showToast('Run saved successfully', 'success');
 }
 
-// Handle Course Auto-Selected (called by recorder when creating quick course)
-async function onCourseAutoSelected(courseId) {
-    console.log('Course auto-created:', courseId);
+// Show a course chosen by the recorder (found or created for the current track)
+async function onCourseAutoSelected(courseId, message) {
+    if (courseId !== currentCourse) {
+        localStorage.setItem('selectedCourse', courseId);
+        renderCourseOptions(await apiRequest('getCourses'));
+        courseSelector.value = courseId;
+        await handleCourseChange();
+    }
 
-    currentCourse = courseId;
-
-    // Reload courses list to include new course
-    await loadCourses();
-
-    // Select the course in dropdown
-    courseSelector.value = courseId;
-
-    // Load course data
-    await handleCourseChange();
-
-    showToast('Course created for this session', 'success');
+    if (message) {
+        showToast(message, 'success');
+    }
 }
 
 // Export global functions
@@ -1315,16 +1472,25 @@ window.AutocrossApp = {
     onRunSaved,
     onCourseAutoSelected,
     getCurrentCourse: () => currentCourse,
+    getCurrentCourseData: () => currentCourseData,
+    getAllRuns: () => allRuns,
+    getCarName,
+    getRunNumber: (runId) => runNumbers.get(runId),
+    refreshRuns,
+    updateHint,
+    confirmDialog,
+    // Full run data with telemetry (loaded once, then cached)
+    getRunData: async (runId) => {
+        if (!loadedRuns[runId]) {
+            loadedRuns[runId] = await apiRequest('getRun', { courseId: currentCourse, runId });
+        }
+        return loadedRuns[runId];
+    },
     getLoadedRunObjects: () => {
         // Return full run objects for currently selected runs (sorted fastest first)
-        return selectedRuns
+        return sortByAdjustedTime(selectedRuns
             .filter(id => loadedRuns[id])
-            .map(id => loadedRuns[id])
-            .sort((a, b) => {
-                const aTime = a.lapTime + ((a.cones || 0) * 2);
-                const bTime = b.lapTime + ((b.cones || 0) * 2);
-                return aTime - bTime;
-            });
+            .map(id => loadedRuns[id]));
     }
 };
 

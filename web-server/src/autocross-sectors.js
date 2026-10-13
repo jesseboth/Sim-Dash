@@ -3,8 +3,11 @@
 const AutocrossSectors = (function () {
 
     // --- State ---
-    let sectors = [];           // [{sectorId, name, posX, posY}]
+    let sectors = [];           // [{sectorId, name, posX, posY, dirX, dirY}], in track order
     let currentCourseId = null;
+    let sectorsVersion = 0;     // Increments when sectors change, invalidates gate time cache
+    const gateTimeCache = new WeakMap(); // run -> {version, times}
+    let saveQueue = Promise.resolve();
 
     // Modal state
     let modalRuns = [];         // full run objects with telemetry
@@ -54,6 +57,9 @@ const AutocrossSectors = (function () {
 
         mapCanvas = document.getElementById('sectorMapCanvas');
         if (mapCanvas) mapCtx = mapCanvas.getContext('2d');
+
+        const table = document.getElementById('sectorsTable');
+        if (table) setupTableListeners(table);
     }
 
     // --- Delete confirmation modal ---
@@ -79,28 +85,41 @@ const AutocrossSectors = (function () {
     // --- Course change ---
     async function loadSectors(courseId) {
         currentCourseId = courseId;
-        sectors = [];
+        setSectors([]);
         if (!courseId) {
             renderSectorControls();
+            refreshVisualizations();
             return;
         }
+        let loaded = [];
         try {
-            const result = await apiRequest('getSectors', { courseId });
-            sectors = result || [];
+            loaded = (await apiRequest('getSectors', { courseId })) || [];
         } catch (e) {
-            sectors = [];
+            loaded = [];
         }
+        // Ignore the result if the course changed while loading
+        if (courseId !== currentCourseId) return;
+        setSectors(loaded);
         renderSectorControls();
-        if (window.AutocrossMap) AutocrossMap.render();
+        refreshVisualizations();
     }
 
-    async function persistSectors() {
+    function setSectors(newSectors) {
+        sectors = newSectors;
+        sectors.forEach((s, i) => { s.name = `Sector ${i + 1}`; });
+        sectorsVersion++;
+    }
+
+    // Saves run one after another so the last change always wins
+    function persistSectors() {
         if (!currentCourseId) return;
-        try {
-            await apiRequest('saveSectors', { courseId: currentCourseId, sectors });
-        } catch (e) {
-            console.error('Failed to save sectors:', e);
-        }
+        const courseId = currentCourseId;
+        const snapshot = sectors.map(s => ({ ...s }));
+        saveQueue = saveQueue
+            .then(() => apiRequest('saveSectors', { courseId, sectors: snapshot }))
+            // Sector times on the run cards are calculated by the server
+            .then(() => { if (window.AutocrossApp && courseId === currentCourseId) AutocrossApp.refreshRuns(); })
+            .catch(e => console.error('Failed to save sectors:', e));
     }
 
     // --- Add / Remove ---
@@ -113,36 +132,51 @@ const AutocrossSectors = (function () {
             return;
         }
 
-        // Use the frontmost run — whichever loaded run has traveled furthest by this time
-        const frontRun = getFrontmostRun(time) || run;
+        // Use the aligned reference run, else whichever run has traveled furthest by this time
+        const alignRef = window.AutocrossAlign && AutocrossAlign.getReference();
+        const frontRun = alignRef || getFrontmostRun(time) || run;
+        const { posX, posY, timestamps } = frontRun.telemetry;
         const idx = findIndexAtTime(frontRun, time);
-        const posX = frontRun.telemetry.posX[idx];
-        const posY = frontRun.telemetry.posY[idx];
+        const gateX = posX[idx];
+        const gateY = posY[idx];
 
-        // Store track direction so crossing detection works for non-overlapping runs
-        const nextIdx = Math.min(idx + 3, frontRun.telemetry.posX.length - 1);
-        const dx = frontRun.telemetry.posX[nextIdx] - posX;
-        const dy = frontRun.telemetry.posY[nextIdx] - posY;
-        const len = Math.hypot(dx, dy) || 1;
-        const dirX = dx / len;
-        const dirY = dy / len;
+        // Track direction at the gate, from the next point at least 1 m away
+        let dx = 0, dy = 0;
+        for (let i = idx + 1; i < posX.length; i++) {
+            dx = posX[i] - gateX;
+            dy = posY[i] - gateY;
+            if (Math.hypot(dx, dy) >= 1) break;
+        }
+        const len = Math.hypot(dx, dy);
+        if (len < 0.1) {
+            showToast('Cannot add a sector here: the car is not moving', 'warning');
+            return;
+        }
 
-        const sectorId = `s-${Date.now()}`;
-        const sectorNum = sectors.length + 1;
-        sectors.push({ sectorId, name: `Sector ${sectorNum}`, posX, posY, dirX, dirY });
+        // Insert in track order: before the first gate this run reaches later
+        const gateTime = timestamps[idx];
+        const existingTimes = getGateTimes(frontRun);
+        let insertAt = existingTimes.findIndex(t => t !== null && t > gateTime);
+        if (insertAt === -1) insertAt = sectors.length;
 
-        // Sort sectors by time they appear in the reference run
-        sortSectorsByRun(run);
+        const newSectors = [...sectors];
+        newSectors.splice(insertAt, 0, {
+            sectorId: `s-${Date.now()}`,
+            posX: gateX,
+            posY: gateY,
+            dirX: dx / len,
+            dirY: dy / len
+        });
+        setSectors(newSectors);
 
         persistSectors();
         renderSectorControls();
         refreshVisualizations();
+        showToast(`Added sector marker S${insertAt + 1}`, 'success');
     }
 
     function removeSector(sectorId) {
-        sectors = sectors.filter(s => s.sectorId !== sectorId);
-        // Rename remaining sectors
-        sectors.forEach((s, i) => { s.name = `Sector ${i + 1}`; });
+        setSectors(sectors.filter(s => s.sectorId !== sectorId));
         persistSectors();
         renderSectorControls();
         refreshVisualizations();
@@ -151,17 +185,8 @@ const AutocrossSectors = (function () {
     function refreshVisualizations() {
         if (window.AutocrossScrubber) AutocrossScrubber.render();
         if (window.AutocrossMap) AutocrossMap.render();
-    }
-
-    function sortSectorsByRun(run) {
-        // Sort by the time the reference run passes through each sector position
-        sectors.sort((a, b) => {
-            const ta = findTimeAtPosition(run, a.posX, a.posY);
-            const tb = findTimeAtPosition(run, b.posX, b.posY);
-            return ta - tb;
-        });
-        // Re-number after sort
-        sectors.forEach((s, i) => { s.name = `Sector ${i + 1}`; });
+        if (window.AutocrossCharts) AutocrossCharts.render();
+        if (window.AutocrossApp) AutocrossApp.updateHint();
     }
 
     // --- Sector controls (below scrubber) ---
@@ -253,25 +278,23 @@ const AutocrossSectors = (function () {
         const table = document.getElementById('sectorsTable');
         if (!table) return;
 
-        const sectorBounds = getSectorBounds();
+        const sectorCount = sectors.length + 1;
+        const sectorIndexes = [...Array(sectorCount).keys()];
 
-        // Build header — sector columns are clickable to select for map playback
+        // Header — sector columns are clickable to select for map playback
         let thead = '<thead><tr><th>Run</th><th>Total</th>';
-        sectorBounds.forEach((sb, i) => {
+        sectorIndexes.forEach(i => {
             const active = i === activeSectorIndex ? ' sector-col-active' : '';
-            const label = i === 0 ? 'Sector 1' : `Sector ${i + 1}`;
-            thead += `<th class="sector-col-header${active}" data-sector-index="${i}">${label}</th>`;
+            thead += `<th class="sector-col-header${active}" data-sector-index="${i}">Sector ${i + 1}</th>`;
         });
         thead += '</tr></thead>';
 
-        // Compute sector times per run
         const runSectorTimes = modalRuns.map(run => ({
             run,
-            sectorTimes: sectorBounds.map(sb => computeSectorTime(run, sb.startPos, sb.endPos))
+            sectorTimes: sectorIndexes.map(i => computeSectorTime(run, i))
         }));
 
-        // Find best time per sector
-        const bestSectorTimes = sectorBounds.map((_, si) => {
+        const bestSectorTimes = sectorIndexes.map(si => {
             const times = runSectorTimes.map(r => r.sectorTimes[si]).filter(t => t !== null);
             return times.length > 0 ? Math.min(...times) : null;
         });
@@ -281,14 +304,13 @@ const AutocrossSectors = (function () {
             ? bestSectorTimes.reduce((a, b) => a + b, 0)
             : null;
 
-        // Build body rows
         let tbody = '<tbody>';
         runSectorTimes.forEach(({ run, sectorTimes }, ri) => {
             const cones = run.cones || 0;
-            const total = run.lapTime + (cones * 2);
-            const label = run.name || `Run #${run.runNumber || (ri + 1)}`;
-            const color = COLORS[ri % COLORS.length];
-            const coneTag = cones > 0 ? ` <span class="sector-cone-badge">+${cones}</span>` : '';
+            const total = getAdjustedTime(run);
+            const label = run.name || `Run ${run.runNumber || (ri + 1)}`;
+            const color = run.color || COLORS[ri % COLORS.length];
+            const coneTag = cones > 0 ? ` <span class="sector-cone-badge" title="${cones} cone${cones !== 1 ? 's' : ''}">+${cones * CONE_PENALTY}s</span>` : '';
             tbody += `<tr>`;
             tbody += `<td><span class="sector-run-dot" style="background:${color}"></span>${escapeHtml(label)}</td>`;
             tbody += `<td>${formatTime(total)}${coneTag}</td>`;
@@ -296,7 +318,7 @@ const AutocrossSectors = (function () {
                 const best = bestSectorTimes[si];
                 const isBest = t !== null && best !== null && Math.abs(t - best) < 0.001;
                 const delta = (t !== null && best !== null && !isBest) ? (t - best) : null;
-                let cls = isBest ? 'sector-best' : '';
+                const cls = isBest ? 'sector-best' : '';
                 let content = t !== null ? formatTime(t) : '—';
                 if (delta !== null) content += `<br><span class="sector-delta">+${delta.toFixed(3)}</span>`;
                 tbody += `<td class="sector-col sector-col-${si} ${cls}" data-sector-index="${si}">${content}</td>`;
@@ -304,17 +326,20 @@ const AutocrossSectors = (function () {
             tbody += `</tr>`;
         });
 
-        // Optimal row — just the total, sector cells are blank (best times already shown green above)
+        // Optimal row — sum of best sectors, without cone penalties
         if (optimalTotal !== null) {
-            tbody += `<tr class="sector-optimal-row"><td>Optimal</td><td>${formatTime(optimalTotal)}</td>`;
-            sectorBounds.forEach((_, si) => { tbody += `<td class="sector-col sector-col-${si}" data-sector-index="${si}"></td>`; });
+            tbody += `<tr class="sector-optimal-row"><td title="Sum of the best sector times, without cone penalties">Optimal</td><td>${formatTime(optimalTotal)}</td>`;
+            sectorIndexes.forEach(si => { tbody += `<td class="sector-col sector-col-${si}" data-sector-index="${si}"></td>`; });
             tbody += `</tr>`;
         }
 
         tbody += '</tbody>';
         table.innerHTML = thead + tbody;
+    }
 
-        // Single delegated listener — any header or cell with data-sector-index selects that sector
+    // Table listeners are added once; the table content is replaced on each render
+    function setupTableListeners(table) {
+        // Any header or cell with data-sector-index selects that sector
         table.addEventListener('click', (e) => {
             const cell = e.target.closest('[data-sector-index]');
             if (cell) setActiveSector(parseInt(cell.dataset.sectorIndex, 10));
@@ -335,85 +360,23 @@ const AutocrossSectors = (function () {
         });
     }
 
-    // --- Sector bounds ---
-    // Each bound is {startPos: {posX, posY} | null, endPos: {posX, posY} | null}
-    // startPos null = start of run (t=0), endPos null = end of run
-    function getSectorBounds() {
-        if (sectors.length === 0) return [];
-        const bounds = [];
-        // First sector: start of run → first marker
-        bounds.push({ startPos: null, endPos: sectors[0] });
-        // Remaining sectors: marker[i] → marker[i+1] (last → end of run)
-        for (let i = 0; i < sectors.length; i++) {
-            bounds.push({
-                startPos: sectors[i],
-                endPos: i + 1 < sectors.length ? sectors[i + 1] : null
-            });
-        }
-        return bounds;
+    // --- Gate timing (math in autocross-track.js) ---
+    function getSectorWindow(run, sectorIndex) {
+        return AutocrossTrack.sectorWindow(run.telemetry, getGateTimes(run), sectorIndex);
     }
 
-    // Compute sector time for a run using virtual gate crossing where possible
-    function computeSectorTime(run, startSector, endSector) {
-        const ts = run.telemetry.timestamps;
-        const startTime = startSector ? findTimeAtGate(run, startSector) : ts[0];
-        const endTime = endSector
-            ? findTimeAtGate(run, endSector)
-            : ts[ts.length - 1];
-        if (endTime <= startTime) return null;
-        return endTime - startTime;
+    function computeSectorTime(run, sectorIndex) {
+        const w = getSectorWindow(run, sectorIndex);
+        return w ? w.endTime - w.startTime : null;
     }
 
-    // Find the time a run crosses a sector gate.
-    // If the sector has a stored direction, use perpendicular-line crossing detection
-    // (accurate regardless of which line the car took). Falls back to nearest-neighbour.
-    function findTimeAtGate(run, sector) {
-        if (sector.dirX !== undefined && sector.dirY !== undefined) {
-            const t = findGateCrossingTime(run, sector.posX, sector.posY, sector.dirX, sector.dirY);
-            if (t !== null) return t;
-        }
-        return findTimeAtPosition(run, sector.posX, sector.posY);
-    }
+    function getGateTimes(run) {
+        const cached = gateTimeCache.get(run);
+        if (cached && cached.version === sectorsVersion) return cached.times;
 
-    // Gate crossing: find when the run path crosses the line through (gateX, gateY)
-    // perpendicular to (dirX, dirY). Uses segment intersection + linear interpolation.
-    // MAX_GATE_WIDTH limits how far to either side of the gate centre a crossing can be,
-    // preventing false matches from runs that pass far away from the gate.
-    const MAX_GATE_WIDTH = 30; // metres
-
-    function findGateCrossingTime(run, gateX, gateY, dirX, dirY) {
-        // Gate normal is perpendicular to track direction
-        const nx = -dirY;
-        const ny =  dirX;
-
-        const { posX, posY, timestamps } = run.telemetry;
-
-        let bestTime = null;
-        let bestLateralDist = Infinity;
-
-        for (let i = 0; i < posX.length - 1; i++) {
-            // Signed distance of each point from the gate line
-            const d0 = nx * (posX[i]     - gateX) + ny * (posY[i]     - gateY);
-            const d1 = nx * (posX[i + 1] - gateX) + ny * (posY[i + 1] - gateY);
-
-            // Segment crosses the gate line when signs differ
-            if (d0 * d1 > 0) continue;
-
-            const t = d0 / (d0 - d1);   // interpolation fraction [0,1]
-            const crossX = posX[i] + t * (posX[i + 1] - posX[i]);
-            const crossY = posY[i] + t * (posY[i + 1] - posY[i]);
-
-            // Lateral distance from the crossing point to the gate centre
-            // (rules out crossings on the infinite line far from the actual gate)
-            const latDist = Math.hypot(crossX - gateX, crossY - gateY);
-
-            if (latDist < MAX_GATE_WIDTH && latDist < bestLateralDist) {
-                bestLateralDist = latDist;
-                bestTime = timestamps[i] + t * (timestamps[i + 1] - timestamps[i]);
-            }
-        }
-
-        return bestTime;
+        const times = AutocrossTrack.gateTimes(run.telemetry, sectors);
+        gateTimeCache.set(run, { version: sectorsVersion, times });
+        return times;
     }
 
     // --- Mini-map ---
@@ -431,20 +394,15 @@ const AutocrossSectors = (function () {
     }
 
     function computeMapBounds() {
-        if (activeSectorIndex < 0 || activeSectorIndex >= sectors.length) return;
-        const sectorBounds = getSectorBounds();
-        const sb = sectorBounds[activeSectorIndex];
+        if (activeSectorIndex < 0 || activeSectorIndex > sectors.length) return;
 
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
         modalRuns.forEach(run => {
-            const startTime = sb.startPos ? findTimeAtGate(run, sb.startPos) : run.telemetry.timestamps[0];
-            const endTime = sb.endPos ? findTimeAtGate(run, sb.endPos) : run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
-            const startIdx = findClosestTimeIndex(run.telemetry.timestamps, startTime);
-            const endIdx = findClosestTimeIndex(run.telemetry.timestamps, endTime);
-
-            const from = Math.min(startIdx, endIdx);
-            const to = Math.max(startIdx, endIdx);
+            const w = getSectorWindow(run, activeSectorIndex);
+            if (!w) return;
+            const from = findClosestTimeIndex(run.telemetry.timestamps, w.startTime);
+            const to = findClosestTimeIndex(run.telemetry.timestamps, w.endTime);
 
             for (let i = from; i <= to; i++) {
                 const x = run.telemetry.posX[i];
@@ -475,32 +433,27 @@ const AutocrossSectors = (function () {
 
         computeMapBounds();
 
-        const sectorBounds = getSectorBounds();
-        const sb = sectorBounds[activeSectorIndex];
-        if (!sb) return;
-
-        // Sort draw order so fastest sector run is drawn last (on top)
+        // Draw order: runs that miss the sector first, then slowest to fastest (fastest on top)
         const drawOrder = modalRuns
-            .map((run, ri) => ({ run, ri, t: computeSectorTime(run, sb.startPos, sb.endPos) ?? Infinity }))
-            .sort((a, b) => b.t - a.t);  // slowest first, fastest last (on top)
+            .map((run, ri) => ({ run, ri, w: getSectorWindow(run, activeSectorIndex) }))
+            .sort((a, b) => (b.w ? b.w.endTime - b.w.startTime : Infinity) - (a.w ? a.w.endTime - a.w.startTime : Infinity));
 
         // Draw full track (faded) then sector portion (bright) for each run
-        drawOrder.forEach(({ run, ri }) => {
-            const color = COLORS[ri % COLORS.length];
-            drawRunSegment(run, null, null, color, 0.15);  // full track faded
-            const startTime = sb.startPos ? findTimeAtGate(run, sb.startPos) : run.telemetry.timestamps[0];
-            const endTime = sb.endPos ? findTimeAtGate(run, sb.endPos) : run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
-            const startIdx = findClosestTimeIndex(run.telemetry.timestamps, startTime);
-            const endIdx = findClosestTimeIndex(run.telemetry.timestamps, endTime);
-            drawRunSegment(run, Math.min(startIdx, endIdx), Math.max(startIdx, endIdx), color, 1.0);
+        drawOrder.forEach(({ run, ri, w }) => {
+            const color = run.color || COLORS[ri % COLORS.length];
+            drawRunSegment(run, null, null, color, 0.15);
+            if (!w) return;
+            const startIdx = findClosestTimeIndex(run.telemetry.timestamps, w.startTime);
+            const endIdx = findClosestTimeIndex(run.telemetry.timestamps, w.endTime);
+            drawRunSegment(run, startIdx, endIdx, color, 1.0);
         });
 
         // Draw animated position markers (same order — fastest on top)
         const speedReadouts = [];
-        drawOrder.forEach(({ run, ri }) => {
-            const color = COLORS[ri % COLORS.length];
-            const startTime = sb.startPos ? findTimeAtGate(run, sb.startPos) : run.telemetry.timestamps[0];
-            const endTime = sb.endPos ? findTimeAtGate(run, sb.endPos) : run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
+        drawOrder.forEach(({ run, ri, w }) => {
+            if (!w) return;
+            const color = run.color || COLORS[ri % COLORS.length];
+            const { startTime, endTime } = w;
             const targetTime = startTime + playbackTime;
 
             const endIdx = findClosestTimeIndex(run.telemetry.timestamps, endTime);
@@ -620,14 +573,7 @@ const AutocrossSectors = (function () {
         if (modalRuns.length === 0 || sectors.length === 0) return;
 
         // Compute max sector duration across all runs
-        const sectorBounds = getSectorBounds();
-        const sb = sectorBounds[activeSectorIndex];
-        if (!sb) return;
-
-        const durations = modalRuns.map(run => {
-            const t = computeSectorTime(run, sb.startPos, sb.endPos);
-            return t !== null ? t : 0;
-        });
+        const durations = modalRuns.map(run => computeSectorTime(run, activeSectorIndex) ?? 0);
         maxPlaybackTime = Math.max(...durations);
 
         if (playbackTime >= maxPlaybackTime) playbackTime = 0;
@@ -695,23 +641,6 @@ const AutocrossSectors = (function () {
     }
 
     // --- Telemetry helpers ---
-    function findTimeAtPosition(run, targetX, targetY) {
-        const idx = findIndexAtPosition(run, targetX, targetY);
-        return run.telemetry.timestamps[idx];
-    }
-
-    function findIndexAtPosition(run, targetX, targetY) {
-        const { posX, posY } = run.telemetry;
-        let minDist = Infinity, bestIdx = 0;
-        for (let i = 0; i < posX.length; i++) {
-            const dx = posX[i] - targetX;
-            const dy = posY[i] - targetY;
-            const d = dx * dx + dy * dy;
-            if (d < minDist) { minDist = d; bestIdx = i; }
-        }
-        return bestIdx;
-    }
-
     function findIndexAtTime(run, time) {
         return findClosestTimeIndex(run.telemetry.timestamps, time);
     }
@@ -730,26 +659,16 @@ const AutocrossSectors = (function () {
         return lo;
     }
 
-    // --- For scrubber: get sector marker times for a given run ---
+    // --- For scrubber: gate times for a given run (same timing as the table) ---
     function getSectorTimesForRun(run) {
         if (!run || sectors.length === 0) return [];
-        return sectors.map(s => findTimeAtPosition(run, s.posX, s.posY));
+        return getGateTimes(run);
     }
 
     // --- Utils ---
     function formatTime(seconds) {
         if (typeof seconds !== 'number' || isNaN(seconds)) return '—';
-        const m = Math.floor(seconds / 60);
-        const s = Math.floor(seconds % 60);
-        const ms = Math.round((seconds % 1) * 1000);
-        return `${m}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
-    }
-
-    function escapeHtml(str) {
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+        return formatLapTime(seconds);
     }
 
     // Public API

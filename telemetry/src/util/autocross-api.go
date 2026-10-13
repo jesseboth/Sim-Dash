@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -17,6 +18,9 @@ type armedState struct {
 	IsArmed  bool   `json:"isArmed"`
 	CourseID string `json:"courseId"`
 }
+
+// Course IDs are used as directory names, so only plain names are allowed
+var validCourseID = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 var (
 	recordingMutex sync.RWMutex
@@ -33,7 +37,7 @@ func loadArmedState() {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return
 	}
-	if s.IsArmed && s.CourseID != "" {
+	if s.IsArmed && validCourseID.MatchString(s.CourseID) {
 		recordingState.IsRecording = true
 		recordingState.CourseID = s.CourseID
 		log.Printf("Restored armed state for course: %s", s.CourseID)
@@ -79,6 +83,14 @@ func handleStartRecording(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
 			"error":   "Invalid request body",
+		})
+		return
+	}
+
+	if !validCourseID.MatchString(req.CourseID) {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid courseId",
 		})
 		return
 	}

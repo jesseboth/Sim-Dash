@@ -255,7 +255,7 @@ func createTelemetrySample(f32map map[string]float32, s32map map[string]int32, s
 		return float32(math.Round(float64(v)*10) / 10)
 	}
 
-	return util.TelemetrySample{
+	sample := util.TelemetrySample{
 		Timestamp: time.Since(startTime).Seconds(),
 		Brake:     f32map["Brake"],
 		Accel:     f32map["Accel"],
@@ -266,7 +266,31 @@ func createTelemetrySample(f32map map[string]float32, s32map map[string]int32, s
 		PosY:      f32map["PositionZ"], // Z coordinate for top-down map - FIXED from PositionY
 		PosZ:      f32map["PositionY"], // Y coordinate (elevation)
 		LapTime:   lapTime,
+		Steer:     roundTo(f32map["Steer"], 2),
+		Clutch:    roundTo(f32map["Clutch"], 3),
+		Rpm:       float32(math.Round(float64(f32map["CurrentEngineRpm"]))),
+		Gear:      s32map["Gear"],
 	}
+
+	for i, wheel := range wheelNames {
+		radius := f32map["TyreRadius"+wheel]
+		omega := f32map["WheelRotationSpeed"+wheel] // rad/s
+		sample.WheelSpeed[i] = roundTo(absFloat32(omega*radius)*2.23694, 1)
+		sample.SlipAngle[i] = roundTo(f32map["TireSlipAngle"+wheel], 2)
+		sample.SlipRatio[i] = roundTo(f32map["TireSlipRatio"+wheel], 3)
+		sample.Load[i] = roundTo(f32map["WheelLoad"+wheel]/9.81, 0)
+		sample.SuspTravel[i] = roundTo(f32map["SuspensionTravelMeters"+wheel]*1000, 1)
+	}
+	return sample
+}
+
+// Wheel name suffixes in the AC packet, in FL, FR, RL, RR order
+var wheelNames = [4]string{"FrontLeft", "FrontRight", "RearLeft", "RearRight"}
+
+// roundTo rounds v to the given number of decimals, to keep run files small
+func roundTo(v float32, decimals int) float32 {
+	p := math.Pow(10, float64(decimals))
+	return float32(math.Round(float64(v)*p) / p)
 }
 
 // saveRun saves the recorded run to disk
@@ -326,6 +350,16 @@ func prepareRunData(state *AssettoState) util.AutocrossRun {
 	posX := make([]float32, len(state.telemetryBuffer))
 	posY := make([]float32, len(state.telemetryBuffer))
 	posZ := make([]float32, len(state.telemetryBuffer))
+	n := len(state.telemetryBuffer)
+	steer := make([]float32, n)
+	clutch := make([]float32, n)
+	rpm := make([]float32, n)
+	gear := make([]int32, n)
+	wheelSpeed := util.NewWheelChannel(n)
+	slipAngle := util.NewWheelChannel(n)
+	slipRatio := util.NewWheelChannel(n)
+	load := util.NewWheelChannel(n)
+	suspTravel := util.NewWheelChannel(n)
 
 	var maxSpeed float32
 	var maxLatG float32
@@ -341,6 +375,15 @@ func prepareRunData(state *AssettoState) util.AutocrossRun {
 		posX[i] = sample.PosX
 		posY[i] = sample.PosY
 		posZ[i] = sample.PosZ
+		steer[i] = sample.Steer
+		clutch[i] = sample.Clutch
+		rpm[i] = sample.Rpm
+		gear[i] = sample.Gear
+		wheelSpeed.Set(i, sample.WheelSpeed)
+		slipAngle.Set(i, sample.SlipAngle)
+		slipRatio.Set(i, sample.SlipRatio)
+		load.Set(i, sample.Load)
+		suspTravel.Set(i, sample.SuspTravel)
 
 		// Calculate statistics
 		if sample.Speed > maxSpeed {
@@ -398,6 +441,15 @@ func prepareRunData(state *AssettoState) util.AutocrossRun {
 			PosX:       posX,
 			PosY:       posY,
 			PosZ:       posZ,
+			Steer:      steer,
+			Clutch:     clutch,
+			Rpm:        rpm,
+			Gear:       gear,
+			WheelSpeed: wheelSpeed,
+			SlipAngle:  slipAngle,
+			SlipRatio:  slipRatio,
+			Load:       load,
+			SuspTravel: suspTravel,
 		},
 		Statistics: util.AutocrossStatistics{
 			MaxSpeed: maxSpeed,

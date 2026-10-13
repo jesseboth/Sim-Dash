@@ -15,13 +15,22 @@
             <select id="courseSelector" class="course-selector">
                 <option value="">Select course...</option>
             </select>
+            <button id="courseMenuBtn" class="btn btn-secondary" title="Rename, create or delete courses">⚙ Course</button>
             <button id="nameIdentifiersBtn" class="btn btn-secondary" style="font-size: 0.85rem;" title="Name current car/track">🏷️ Name Car/Track</button>
         </div>
         <div class="header-right">
+            <button id="liveToggleBtn" class="btn btn-secondary live-toggle" title="Live split screen">⏱ Live</button>
             <div id="recordingStatus" class="recording-status">Ready</div>
             <button id="toggleRecordingBtn" class="btn btn-start">Start</button>
         </div>
     </header>
+
+    <!-- Hint for the next useful step -->
+    <div id="hintBar" class="hint-bar hidden">
+        <span class="hint-icon">💡</span>
+        <span id="hintText"></span>
+        <button id="hintDismiss" class="hint-dismiss" title="Don't show this tip again">Got it</button>
+    </div>
 
     <!-- Main Content -->
     <div class="main-container">
@@ -36,6 +45,7 @@
                         <button id="zoomInBtn" class="btn-icon" title="Zoom In">+</button>
                         <button id="zoomOutBtn" class="btn-icon" title="Zoom Out">-</button>
                         <button id="fitBtn" class="btn-icon" title="Fit to View">⊡</button>
+                        <button id="alignResetBtn" class="btn btn-secondary btn-sm align-reset hidden" title="Back to time mode"></button>
                         <label class="toggle-label" style="margin-left: 8px; font-size: 0.85rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
                             <input type="checkbox" id="mostRecentOnTopToggle" checked style="cursor: pointer;">
                             <span>Recent on top</span>
@@ -63,33 +73,11 @@
 
         <!-- Right Panel: Scrollable Charts -->
         <section class="right-panel">
-            <div class="charts-scroll-container">
-                <div class="chart-wrapper">
-                    <h3>Time Delta (s)</h3>
-                    <canvas id="timeDeltaChart" class="chart"></canvas>
-                    <div id="timeDeltaValues" class="chart-values"></div>
-                </div>
-                <div class="chart-wrapper">
-                    <h3>Speed (mph)</h3>
-                    <canvas id="speedChart" class="chart"></canvas>
-                    <div id="speedValues" class="chart-values"></div>
-                </div>
-                <div class="chart-wrapper">
-                    <h3>Throttle (%)</h3>
-                    <canvas id="throttleChart" class="chart"></canvas>
-                    <div id="throttleValues" class="chart-values"></div>
-                </div>
-                <div class="chart-wrapper">
-                    <h3>Brake (%)</h3>
-                    <canvas id="brakeChart" class="chart"></canvas>
-                    <div id="brakeValues" class="chart-values"></div>
-                </div>
-                <div class="chart-wrapper">
-                    <h3>Lateral G</h3>
-                    <canvas id="gForceChart" class="chart"></canvas>
-                    <div id="gForceValues" class="chart-values"></div>
-                </div>
+            <div class="charts-header">
+                <h2>Charts</h2>
+                <button id="channelsBtn" class="btn btn-secondary btn-sm channels-btn" title="Channels" aria-label="Channels">☰</button>
             </div>
+            <div id="chartsContainer" class="charts-scroll-container"></div>
         </section>
     </div>
 
@@ -109,6 +97,11 @@
                 </button>
                 <h2>Runs</h2>
                 <span id="runCount" class="run-count">0 runs</span>
+                <div class="sort-toggle" role="group" aria-label="Sort runs">
+                    <button class="sort-btn" data-sort="fastest">Fastest</button>
+                    <button class="sort-btn" data-sort="recent">Recent</button>
+                </div>
+                <select id="carFilter" class="car-filter hidden" title="Show runs for one car"></select>
             </div>
             <div class="runs-header-right">
                 <button id="exportBtn" class="btn btn-secondary" disabled>Export</button>
@@ -239,6 +232,98 @@
         </div>
     </div>
 
+    <!-- Modal: Confirm -->
+    <div id="confirmModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 420px;">
+            <h2 id="confirmTitle">Confirm</h2>
+            <p id="confirmMessage" class="modal-text"></p>
+            <div class="modal-actions">
+                <button id="confirmCancel" class="btn btn-secondary">Cancel</button>
+                <button id="confirmOk" class="btn btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Course -->
+    <div id="courseModal" class="modal hidden">
+        <div class="modal-content course-modal-content">
+            <div class="sectors-modal-header">
+                <h2>Courses</h2>
+                <button id="closeCourseModal" class="modal-close-btn" title="Close">×</button>
+            </div>
+            <div id="currentCourseSection" class="course-section">
+                <h3>This course</h3>
+                <form id="renameCourseForm" class="inline-form">
+                    <input type="text" id="courseNameInput" maxlength="80" aria-label="Course name">
+                    <button type="submit" class="btn btn-primary">Rename</button>
+                </form>
+                <div class="course-info-row">
+                    <span id="courseInfo" class="modal-text"></span>
+                    <button id="deleteCourseBtn" type="button" class="btn btn-danger btn-sm">Delete course</button>
+                </div>
+            </div>
+            <div class="course-section">
+                <h3>New course</h3>
+                <p class="modal-text">Use a new course for a different layout on the same track. Runs from any car can go in one course.</p>
+                <form id="newCourseForm">
+                    <div class="inline-form">
+                        <input type="text" id="newCourseName" maxlength="80" placeholder="Course name" aria-label="New course name">
+                        <button type="submit" class="btn btn-primary">Create</button>
+                    </div>
+                    <label id="linkTrackRow" class="check-row hidden">
+                        <input type="checkbox" id="linkTrackCheck" checked>
+                        <span id="linkTrackLabel"></span>
+                    </label>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Chart channels -->
+    <div id="channelsModal" class="modal hidden">
+        <div class="modal-content channels-modal-content">
+            <div class="channels-modal-header">
+                <h2>Channels</h2>
+                <button id="channelsCancelBtn" type="button" class="btn btn-secondary">Cancel</button>
+                <button id="channelsDoneBtn" type="button" class="btn btn-primary">Done</button>
+            </div>
+            <div id="channelsList" class="channels-list"></div>
+            <button id="channelsDefaultBtn" type="button" class="btn btn-secondary btn-sm">Reset to default</button>
+        </div>
+    </div>
+
+    <!-- Modal: Choose course for recording -->
+    <div id="courseChooserModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 460px;">
+            <h2>Which course?</h2>
+            <p id="courseChooserText" class="modal-text"></p>
+            <div id="courseChooserList" class="course-choice-list"></div>
+            <div class="modal-actions">
+                <button id="cancelCourseChooser" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live split screen (shown while a run is being driven) -->
+    <div id="liveOverlay" class="live-overlay hidden">
+        <button id="liveCloseBtn" class="live-close" title="Hide for this run">×</button>
+        <div class="live-top">
+            <span class="live-elapsed" id="liveElapsed">0:00.000</span>
+            <span class="live-speed"><span id="liveSpeed">0</span> <small>mph</small> <span id="liveSpeedDelta" class="live-speed-delta"></span></span>
+            <span class="live-gear">G <span id="liveGear"></span></span>
+        </div>
+        <div id="liveDelta" class="live-delta">—</div>
+        <div class="live-bar">
+            <div class="live-bar-center"></div>
+            <div id="liveBarFill" class="live-bar-fill"></div>
+        </div>
+        <div class="live-bar-labels"><span>ahead</span><span>behind</span></div>
+        <div id="liveSector" class="live-sector"></div>
+        <div class="live-predicted">Predicted <span id="livePredicted">—</span></div>
+        <div id="liveResult" class="live-result-text"></div>
+        <button id="liveRefBtn" class="live-ref"></button>
+    </div>
+
     <!-- Hidden file input for import -->
     <input type="file" id="importFileInput" accept=".json" style="display: none;">
 
@@ -253,11 +338,15 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="/src/autocross-track.js"></script>
+    <script src="/src/autocross-align.js"></script>
     <script src="/src/autocross-scripts.js"></script>
     <script src="/src/autocross-recorder.js"></script>
     <script src="/src/autocross-charts.js"></script>
     <script src="/src/autocross-map.js"></script>
     <script src="/src/autocross-scrubber.js"></script>
     <script src="/src/autocross-sectors.js"></script>
+    <script src="/src/autocross-courses.js"></script>
+    <script src="/src/autocross-live.js"></script>
 </body>
 </html>

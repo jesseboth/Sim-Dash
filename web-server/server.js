@@ -302,6 +302,23 @@ function reqGame(game) {
                 process.stdout.write(`FDT: ${data}`);
             });
 
+            // A telemetry process that fails to start or exits is no longer running
+            const child = telemetry;
+            const markStopped = () => {
+                if (telemetry === child) {
+                    telemetry = null;
+                    telemetryType = "";
+                }
+            };
+            telemetry.on('error', (err) => {
+                console.error(`FDT failed to start: ${err.message}`);
+                markStopped();
+            });
+            telemetry.on('exit', (code, signal) => {
+                console.log(`FDT exited (code ${code}, signal ${signal})`);
+                markStopped();
+            });
+
             retVal.success = true;
         } else {
             retVal.error = "Telemetry already running, stop before starting a new game"

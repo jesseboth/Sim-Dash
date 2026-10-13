@@ -8,6 +8,11 @@ const mappings = require('./autocross-mappings');
 async function handleRequest(data) {
     const { action } = data;
 
+    const idError = checkIds(data);
+    if (idError) {
+        return { success: false, error: idError };
+    }
+
     try {
         switch (action) {
             case 'getCourses':
@@ -61,6 +66,9 @@ async function handleRequest(data) {
             case 'setTrackName':
                 return handleSetTrackName(data);
 
+            case 'renameCourse':
+                return handleRenameCourse(data);
+
             case 'archiveCourse':
                 return handleArchiveCourse(data);
 
@@ -86,10 +94,31 @@ async function handleRequest(data) {
 }
 
 /**
+ * Reject course and run IDs that are not plain names, because they become file paths
+ */
+function checkIds(data) {
+    const { courseId, runId, runIds, runData } = data;
+
+    if (courseId !== undefined && !storage.isValidId(courseId)) {
+        return 'Invalid courseId';
+    }
+    if (runId !== undefined && !storage.isValidId(runId)) {
+        return 'Invalid runId';
+    }
+    if (Array.isArray(runIds) && !runIds.every(storage.isValidId)) {
+        return 'Invalid runId in runIds';
+    }
+    if (runData && runData.runId !== undefined && !storage.isValidId(runData.runId)) {
+        return 'Invalid runData.runId';
+    }
+    return null;
+}
+
+/**
  * Get all courses
  */
 function handleGetCourses() {
-    const courses = storage.loadCourses();
+    const courses = storage.loadCoursesWithStats();
     return {
         success: true,
         data: courses
@@ -150,6 +179,24 @@ function handleDeleteCourse(data) {
         success: true,
         data: { courseId }
     };
+}
+
+/**
+ * Rename a course
+ */
+function handleRenameCourse(data) {
+    const { courseId, name } = data;
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+
+    if (!courseId || !trimmed) {
+        return { success: false, error: 'courseId and name are required' };
+    }
+
+    const course = storage.renameCourse(courseId, trimmed);
+    if (!course) {
+        return { success: false, error: 'Failed to rename course' };
+    }
+    return { success: true, data: course };
 }
 
 /**

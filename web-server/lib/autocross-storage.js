@@ -1,10 +1,18 @@
 const fs = require('fs');
 const path = require('path');
+const track = require('../src/autocross-track');
 
 // Base directory for autocross data (now in telemetry/data/autocross)
 const DATA_DIR = path.join(__dirname, '../../telemetry/data/autocross');
 const COURSES_FILE = path.join(DATA_DIR, 'courses.json');
 const CONE_PENALTY = 2; // seconds per cone
+
+// IDs are used as file and directory names, so only plain names are allowed
+const VALID_ID = /^[A-Za-z0-9_-]+$/;
+
+function isValidId(id) {
+    return typeof id === 'string' && VALID_ID.test(id);
+}
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -179,38 +187,57 @@ function renameCourse(courseId, newName) {
     }
 }
 
+// Run summaries (run data without telemetry, plus sector times), keyed by file path.
+// An entry is reused while the file and the course sectors are unchanged.
+const summaryCache = new Map();
+
 /**
- * Load all runs for a course (reads individual run files)
+ * Read the summary of one run file, using the cache when nothing changed
+ */
+function readRunSummary(filePath, sectors, sectorsKey) {
+    const mtimeMs = fs.statSync(filePath).mtimeMs;
+    const cached = summaryCache.get(filePath);
+    if (cached && cached.mtimeMs === mtimeMs && cached.sectorsKey === sectorsKey) {
+        return cached.summary;
+    }
+
+    const { telemetry, ...summary } = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    summary.sectorTimes = telemetry && telemetry.timestamps && telemetry.timestamps.length > 1
+        ? track.sectorTimes(telemetry, sectors)
+        : [];
+    summaryCache.set(filePath, { mtimeMs, sectorsKey, summary });
+    return summary;
+}
+
+/**
+ * Load run summaries for a course (no telemetry), newest first
  */
 function loadRuns(courseId, limit = null, offset = 0) {
-    try {
-        const runsDir = path.join(DATA_DIR, courseId, 'runs');
-        if (!fs.existsSync(runsDir)) {
-            return [];
-        }
-
-        // Read all .json files from runs directory
-        const files = fs.readdirSync(runsDir).filter(f => f.endsWith('.json'));
-
-        let runs = files.map(file => {
-            const filePath = path.join(runsDir, file);
-            const data = fs.readFileSync(filePath, 'utf8');
-            return JSON.parse(data);
-        });
-
-        // Sort by timestamp (newest first)
-        runs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-        // Apply pagination if specified
-        if (limit !== null) {
-            runs = runs.slice(offset, offset + limit);
-        }
-
-        return runs;
-    } catch (err) {
-        console.error('Error loading runs:', err);
+    const runsDir = path.join(DATA_DIR, courseId, 'runs');
+    if (!fs.existsSync(runsDir)) {
         return [];
     }
+
+    const sectors = loadSectors(courseId);
+    const sectorsKey = JSON.stringify(sectors);
+
+    let runs = [];
+    for (const file of fs.readdirSync(runsDir)) {
+        if (!file.endsWith('.json')) continue;
+        try {
+            runs.push(readRunSummary(path.join(runsDir, file), sectors, sectorsKey));
+        } catch (err) {
+            console.error(`Skipping unreadable run file ${file}:`, err.message);
+        }
+    }
+
+    runs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    if (limit !== null) {
+        runs = runs.slice(offset, offset + limit);
+    }
+
+    return runs;
 }
 
 /**
@@ -260,8 +287,7 @@ function saveRun(courseId, runData) {
         // Update course metadata
         updateCourseMetadata(courseId);
 
-        // Update top 10 if this is a fast run
-        updateTop10(courseId, runData);
+        rebuildTop10(courseId);
 
         return runData;
     } catch (err) {
@@ -358,37 +384,75 @@ function updateCones(courseId, runId, cones) {
 }
 
 /**
+ * Compute run count and best adjusted time from the run files
+ */
+function computeCourseStats(courseId) {
+    const runs = loadRuns(courseId);
+    const validRuns = runs.filter(r => r.isValid);
+    return {
+        runCount: runs.length,
+        bestTime: validRuns.length > 0
+            ? Math.min(...validRuns.map(r => getAdjustedTime(r)))
+            : null
+    };
+}
+
+/**
  * Update course metadata (run count, best time)
  */
 function updateCourseMetadata(courseId) {
     const courses = loadCourses();
-    const courseIndex = courses.findIndex(c => c.courseId === courseId);
+    const course = courses.find(c => c.courseId === courseId);
+    if (!course) return;
 
-    if (courseIndex === -1) return;
-
-    const runs = loadRuns(courseId);
-    const validRuns = runs.filter(r => r.isValid);
-
-    courses[courseIndex].runCount = runs.length;
-    courses[courseIndex].bestTime = validRuns.length > 0
-        ? Math.min(...validRuns.map(r => getAdjustedTime(r)))
-        : null;
-
+    Object.assign(course, computeCourseStats(courseId));
     saveCourses(courses);
 }
 
 /**
- * Load top 10 runs for a course
+ * Load all courses with run count and best time taken from the run files.
+ * Runs saved by the recorder do not update courses.json, so this keeps it current.
+ */
+function loadCoursesWithStats() {
+    const courses = loadCourses();
+    let changed = false;
+
+    for (const course of courses) {
+        const stats = computeCourseStats(course.courseId);
+        if (course.runCount !== stats.runCount || course.bestTime !== stats.bestTime) {
+            Object.assign(course, stats);
+            changed = true;
+        }
+    }
+
+    if (changed) saveCourses(courses);
+    return courses;
+}
+
+/**
+ * Compute the top 10 valid runs by adjusted time
+ */
+function computeTop10(courseId) {
+    return loadRuns(courseId)
+        .filter(r => r.isValid)
+        .sort((a, b) => getAdjustedTime(a) - getAdjustedTime(b))
+        .slice(0, 10)
+        .map(run => ({
+            runId: run.runId,
+            lapTime: run.lapTime,
+            cones: run.cones || 0,
+            adjustedTime: getAdjustedTime(run),
+            timestamp: run.timestamp,
+            carId: run.carId
+        }));
+}
+
+/**
+ * Load top 10 runs for a course (computed from the run files)
  */
 function loadTop10(courseId) {
     try {
-        const top10File = path.join(DATA_DIR, courseId, 'top10.json');
-        if (!fs.existsSync(top10File)) {
-            return [];
-        }
-
-        const data = fs.readFileSync(top10File, 'utf8');
-        return JSON.parse(data);
+        return computeTop10(courseId);
     } catch (err) {
         console.error('Error loading top 10:', err);
         return [];
@@ -396,64 +460,13 @@ function loadTop10(courseId) {
 }
 
 /**
- * Update top 10 list with a new run (if it qualifies)
- */
-function updateTop10(courseId, newRun) {
-    try {
-        if (!newRun.isValid) return; // Only valid runs can be in top 10
-
-        const top10File = path.join(DATA_DIR, courseId, 'top10.json');
-        let top10 = loadTop10(courseId);
-
-        // Add new run with adjusted time
-        const adjustedTime = getAdjustedTime(newRun);
-        top10.push({
-            runId: newRun.runId,
-            lapTime: newRun.lapTime,
-            cones: newRun.cones || 0,
-            adjustedTime: adjustedTime,
-            timestamp: newRun.timestamp,
-            carId: newRun.carId
-        });
-
-        // Sort by adjusted time (fastest first) and keep only top 10
-        top10.sort((a, b) => a.adjustedTime - b.adjustedTime);
-        top10 = top10.slice(0, 10);
-
-        // Save updated top 10
-        fs.writeFileSync(top10File, JSON.stringify(top10, null, 2));
-
-        return top10;
-    } catch (err) {
-        console.error('Error updating top 10:', err);
-        return null;
-    }
-}
-
-/**
- * Rebuild top 10 list from all runs (used after deletion)
+ * Rebuild top10.json from all runs
  */
 function rebuildTop10(courseId) {
     try {
-        const runs = loadRuns(courseId);
-        const validRuns = runs.filter(r => r.isValid);
-
-        // Sort by adjusted time and take top 10
-        const top10 = validRuns
-            .sort((a, b) => getAdjustedTime(a) - getAdjustedTime(b))
-            .slice(0, 10)
-            .map(run => ({
-                runId: run.runId,
-                lapTime: run.lapTime,
-                cones: run.cones || 0,
-                adjustedTime: getAdjustedTime(run),
-                timestamp: run.timestamp,
-                carId: run.carId
-            }));
-
+        const top10 = computeTop10(courseId);
         const top10File = path.join(DATA_DIR, courseId, 'top10.json');
         fs.writeFileSync(top10File, JSON.stringify(top10, null, 2));
-
         return top10;
     } catch (err) {
         console.error('Error rebuilding top 10:', err);
@@ -497,12 +510,15 @@ function saveSectors(courseId, sectors) {
 }
 
 module.exports = {
+    isValidId,
     loadCourses,
+    loadCoursesWithStats,
     saveCourses,
     createCourse,
     getCourse,
     deleteCourse,
     archiveCourse,
+    renameCourse,
     loadRuns,
     getRun,
     saveRun,
@@ -510,7 +526,6 @@ module.exports = {
     renameRun,
     updateCones,
     loadTop10,
-    updateTop10,
     rebuildTop10,
     loadSectors,
     saveSectors

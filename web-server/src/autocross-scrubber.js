@@ -109,29 +109,46 @@ const AutocrossScrubber = (function() {
         updateAddSectorBtn();
     }
 
-    // Load multiple runs — scrubber follows frontmost (fastest) car
-    function setRuns(runs) {
+    // Load multiple runs (sorted fastest first).
+    // In time mode the fastest run drives the speed graph and the timeline covers the slowest run.
+    // In align mode the timeline is the reference run's time.
+    // With keepTime, the playback position is kept instead of going back to the start.
+    function setRuns(runs, { keepTime = false } = {}) {
         if (!runs || runs.length === 0) { clear(); return; }
 
-        // runs already sorted fastest first by autocross-scripts
         allRuns = runs;
-        currentRun = runs[0]; // frontmost car drives the speed graph
+        const alignRef = window.AutocrossAlign && AutocrossAlign.getReference();
+        currentRun = alignRef || runs[0];
 
-        // Timeline covers the slowest run (full session)
-        maxTime = Math.max(...runs.map(r => r.telemetry.timestamps[r.telemetry.timestamps.length - 1]));
+        maxTime = alignRef
+            ? endTime(alignRef)
+            : Math.max(...runs.map(endTime));
 
-        currentTime = 0;
-        isPlaying = false;
-
-        if (playbackInterval) {
-            clearInterval(playbackInterval);
-            playbackInterval = null;
+        currentTime = keepTime ? Math.min(currentTime, maxTime) : 0;
+        if (!keepTime) {
+            isPlaying = false;
+            if (playbackInterval) {
+                clearInterval(playbackInterval);
+                playbackInterval = null;
+            }
         }
 
         updatePlayPauseButton();
         render();
         updateTimeDisplay();
         updateAddSectorBtn();
+        if (keepTime) notifySeek();
+    }
+
+    function endTime(run) {
+        return run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
+    }
+
+    // Move the playback position by a number of seconds
+    function step(seconds) {
+        if (!currentRun) return;
+        if (isPlaying) stopPlayback();
+        seekTo(currentTime + seconds);
     }
 
     // Clear scrubber
@@ -469,7 +486,8 @@ const AutocrossScrubber = (function() {
 
     // Draw vertical finish lines for each loaded run
     function drawFinishLines(timelineY, timelineHeight) {
-        if (allRuns.length <= 1) return;
+        // In align mode the timeline is the reference run's time, so other finish times do not apply
+        if (allRuns.length <= 1 || (window.AutocrossAlign && AutocrossAlign.isActive())) return;
 
         const rect = canvas.getBoundingClientRect();
         const width = rect.width;
@@ -477,7 +495,7 @@ const AutocrossScrubber = (function() {
         allRuns.forEach((run, i) => {
             const finishTime = run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
             const x = 10 + (width - 20) * (finishTime / maxTime);
-            const color = COLORS[i % COLORS.length];
+            const color = run.color || COLORS[i % COLORS.length];
 
             ctx.strokeStyle = color;
             ctx.lineWidth = 1.5;
@@ -534,10 +552,11 @@ const AutocrossScrubber = (function() {
             return;
         }
 
-        // Disable past the frontmost (fastest) car's finish line
-        const frontFinish = allRuns.length > 0
-            ? allRuns[0].telemetry.timestamps[allRuns[0].telemetry.timestamps.length - 1]
-            : maxTime;
+        // Disable past the frontmost (fastest) car's finish line, or the reference run's in align mode
+        const alignRef = window.AutocrossAlign && AutocrossAlign.getReference();
+        const frontFinish = alignRef
+            ? endTime(alignRef)
+            : (allRuns.length > 0 ? endTime(allRuns[0]) : maxTime);
         btn.disabled = currentTime >= frontFinish - 0.05;
     }
 
@@ -553,7 +572,7 @@ const AutocrossScrubber = (function() {
             const x = 10 + (width - 20) * (t / maxTime);
 
             // Vertical line
-            ctx.strokeStyle = '#ffaa4a';
+            ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
             ctx.setLineDash([3, 2]);
             ctx.beginPath();
@@ -563,7 +582,7 @@ const AutocrossScrubber = (function() {
             ctx.setLineDash([]);
 
             // Label
-            ctx.fillStyle = '#ffaa4a';
+            ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 9px Arial';
             ctx.textAlign = 'center';
             ctx.fillText(`S${i + 1}`, x, timelineY - 7);
@@ -579,6 +598,7 @@ const AutocrossScrubber = (function() {
         togglePlayback,
         render,
         setRuns,
+        step,
         getCurrentTime: () => currentTime,
         getCurrentRun: () => currentRun
     };

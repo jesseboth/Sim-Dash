@@ -23,6 +23,16 @@ type TelemetrySample struct {
     PosY      float32 `json:"posY"`
     PosZ      float32 `json:"posZ"`
     LapTime   float32 `json:"lapTime"`
+    Steer     float32
+    Clutch    float32
+    Rpm       float32
+    Gear      int32
+    // Per wheel, in FL, FR, RL, RR order
+    WheelSpeed [4]float32 // mph
+    SlipAngle  [4]float32
+    SlipRatio  [4]float32
+    Load       [4]float32 // kg
+    SuspTravel [4]float32 // mm
 }
 
 // AutocrossRun represents a complete autocross run
@@ -51,6 +61,38 @@ type AutocrossTelemetry struct {
     PosX       []float32 `json:"posX"`
     PosY       []float32 `json:"posY"`
     PosZ       []float32 `json:"posZ"`
+    Steer      []float32 `json:"steer,omitempty"`
+    Clutch     []float32 `json:"clutch,omitempty"`
+    Rpm        []float32 `json:"rpm,omitempty"`
+    Gear       []int32   `json:"gear,omitempty"`
+    WheelSpeed *WheelChannel `json:"wheelSpeed,omitempty"`
+    SlipAngle  *WheelChannel `json:"slipAngle,omitempty"`
+    SlipRatio  *WheelChannel `json:"slipRatio,omitempty"`
+    Load       *WheelChannel `json:"load,omitempty"`
+    SuspTravel *WheelChannel `json:"suspTravel,omitempty"`
+}
+
+// WheelChannel holds one telemetry channel for each wheel
+type WheelChannel struct {
+    FL []float32 `json:"fl"`
+    FR []float32 `json:"fr"`
+    RL []float32 `json:"rl"`
+    RR []float32 `json:"rr"`
+}
+
+// NewWheelChannel makes a WheelChannel with n samples per wheel
+func NewWheelChannel(n int) *WheelChannel {
+    return &WheelChannel{
+        FL: make([]float32, n),
+        FR: make([]float32, n),
+        RL: make([]float32, n),
+        RR: make([]float32, n),
+    }
+}
+
+// Set stores the four wheel values of sample i
+func (w *WheelChannel) Set(i int, v [4]float32) {
+    w.FL[i], w.FR[i], w.RL[i], w.RR[i] = v[0], v[1], v[2], v[3]
 }
 
 // AutocrossStatistics holds calculated statistics
