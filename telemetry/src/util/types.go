@@ -27,6 +27,8 @@ type TelemetrySample struct {
     Clutch    float32
     Rpm       float32
     Gear      int32
+    YawRate   float32 // deg/s
+    BodySlip  float32 // deg, angle between heading and direction of travel
     // Per wheel, in FL, FR, RL, RR order
     WheelSpeed [4]float32 // mph
     SlipAngle  [4]float32
@@ -65,6 +67,8 @@ type AutocrossTelemetry struct {
     Clutch     []float32 `json:"clutch,omitempty"`
     Rpm        []float32 `json:"rpm,omitempty"`
     Gear       []int32   `json:"gear,omitempty"`
+    YawRate    []float32 `json:"yawRate,omitempty"`
+    BodySlip   []float32 `json:"bodySlip,omitempty"`
     WheelSpeed *WheelChannel `json:"wheelSpeed,omitempty"`
     SlipAngle  *WheelChannel `json:"slipAngle,omitempty"`
     SlipRatio  *WheelChannel `json:"slipRatio,omitempty"`

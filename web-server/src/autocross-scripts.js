@@ -6,12 +6,12 @@ let currentCourseData = null; // Store full course data including archive status
 let allRuns = [];
 let selectedRuns = [];
 let loadedRuns = {}; // Cache for full run data with telemetry
-let mostRecentOnTop = true; // Track "Recent on top" toggle state
+let mostRecentOnTop = true; // "Keep latest run" toggle state
 let courseLoadToken = 0; // Increments per course load so stale responses are ignored
 let runsLoadToken = 0; // Increments per visualization load so stale loads are ignored
 let lastLoadedSignature = ''; // Runs, order and cones last sent to the visualizations
 let shownRuns = []; // Run objects currently in the visualizations
-let runSortMode = 'fastest'; // 'fastest' or 'recent'
+let runSortMode = 'fastest'; // 'fastest' (with cone penalties), 'scratch' (without) or 'recent'
 let carFilter = 'all'; // 'all' or a carId
 let carNames = {}; // carId -> friendly name
 let runNumbers = new Map(); // runId -> run number in driving order
@@ -28,8 +28,6 @@ const RECENT_COLOR = '#7d5aff';
 // DOM Elements
 const courseSelector = document.getElementById('courseSelector');
 const runsList = document.getElementById('runsList');
-const top10List = document.getElementById('top10List');
-const top10Panel = document.getElementById('top10Panel');
 const deleteRunBtn = document.getElementById('deleteRunBtn');
 const loadingIndicator = document.getElementById('loadingIndicator');
 const toastContainer = document.getElementById('toastContainer');
@@ -110,12 +108,13 @@ function hideLoading() {
 async function init() {
     console.log('Initializing Autocross Telemetry Analyzer...');
 
-    // Load "Recent on top" preference
+    // Load "Keep latest run" preference
     const savedPreference = localStorage.getItem('mostRecentOnTop');
     if (savedPreference !== null) {
         mostRecentOnTop = savedPreference === 'true';
     }
-    runSortMode = localStorage.getItem('runSortMode') === 'recent' ? 'recent' : 'fastest';
+    const savedSort = localStorage.getItem('runSortMode');
+    runSortMode = ['recent', 'scratch'].includes(savedSort) ? savedSort : 'fastest';
     updateSortButtons();
 
     // Load courses
@@ -254,9 +253,10 @@ function setupEventListeners() {
         }
     }
 
-    // Listen for "Recent on top" toggle changes from map
+    // "Keep latest run" toggle: the newest run stays selected and purple
     const mostRecentToggle = document.getElementById('mostRecentOnTopToggle');
     if (mostRecentToggle) {
+        mostRecentToggle.checked = mostRecentOnTop;
         mostRecentToggle.addEventListener('change', handleMostRecentToggle);
     }
 
@@ -363,7 +363,7 @@ function updateHint() {
     }
 }
 
-// Handle "Recent on top" toggle changes
+// Handle "Keep latest run" toggle changes
 async function handleMostRecentToggle(e) {
     mostRecentOnTop = e.target.checked;
 
@@ -697,8 +697,6 @@ function renderRunsList() {
         runCountCollapsed.textContent = countText;
     }
 
-    renderTop10(runs);
-
     if (runs.length === 0) {
         runsList.innerHTML = allRuns.length === 0
             ? '<div class="empty-state">No runs recorded yet. Press Start, then drive. Each run saves when you cross the finish.</div>'
@@ -706,9 +704,12 @@ function renderRunsList() {
         return;
     }
 
-    const byTime = sortByAdjustedTime(runs);
+    // Scratch: the driven time without cone penalties
+    const scratch = runSortMode === 'scratch';
+    const shownTime = scratch ? (run => run.lapTime) : getAdjustedTime;
+    const byTime = [...runs].sort((a, b) => shownTime(a) - shownTime(b));
     const rankById = new Map(byTime.map((r, i) => [r.runId, i + 1]));
-    const fastestTime = getAdjustedTime(byTime[0]);
+    const fastestTime = shownTime(byTime[0]);
     const bestSectors = computeBestSectorTimes(runs);
     const showCar = new Set(allRuns.map(r => r.carId)).size > 1;
 
@@ -731,7 +732,7 @@ function renderRunsList() {
         const dateStr = date.toDateString() === new Date().toDateString() ? 'Today' : date.toLocaleDateString();
 
         const cones = run.cones || 0;
-        const adjustedTime = getAdjustedTime(run);
+        const adjustedTime = shownTime(run);
         const isFastest = adjustedTime === fastestTime;
         const rank = rankById.get(run.runId);
 
@@ -741,7 +742,7 @@ function renderRunsList() {
                 <div class="run-card-main">
                     <span class="run-number">Run ${runNumbers.get(run.runId)}</span>
                     <span class="run-time ${isFastest ? 'fastest' : ''}">${formatLapTime(adjustedTime)}</span>
-                    <span class="run-rank" title="Position by time">P${rank}</span>
+                    <span class="run-rank" title="${scratch ? 'Position by scratch time' : 'Position by time'}">P${rank}</span>
                     ${isNew ? '<span class="run-new-badge">NEW</span>' : ''}
                     ${run.name ? `<span class="run-name">📝 ${escapeHtml(run.name)}</span>` : ''}
                 </div>
@@ -836,41 +837,6 @@ function renderSectorTimesRow(run, bestSectors) {
     return `<div class="run-card-sectors">${cells.join('')}</div>`;
 }
 
-// Render Top 10 (valid runs in the list, by adjusted time)
-function renderTop10(runs) {
-    const top10 = sortByAdjustedTime(runs.filter(r => r.isValid)).slice(0, 10);
-
-    if (top10.length === 0) {
-        top10Panel.classList.add('hidden');
-        return;
-    }
-
-    top10Panel.classList.remove('hidden');
-    top10List.innerHTML = '';
-
-    top10.forEach((run, index) => {
-        const item = document.createElement('div');
-        item.className = 'top10-item';
-        item.dataset.runId = run.runId;
-
-        const cones = run.cones || 0;
-
-        item.innerHTML = `
-            <span class="rank">#${index + 1}</span>
-            <span class="time">${formatLapTime(getAdjustedTime(run))}</span>
-            <span class="top10-run">Run ${runNumbers.get(run.runId)}</span>
-            ${cones > 0 ? `<span class="cone-badge">🚧${cones}</span>` : ''}
-        `;
-
-        item.addEventListener('click', () => {
-            // Only scroll to the run, don't select it
-            scrollToRun(run.runId);
-        });
-
-        top10List.appendChild(item);
-    });
-}
-
 // Handle Run Selection
 async function handleRunSelection(e) {
     const runId = e.target.dataset.runId;
@@ -879,7 +845,7 @@ async function handleRunSelection(e) {
     // If trying to uncheck and this is the most recent run and toggle is on, prevent it
     if (!isChecked && mostRecentOnTop && isMostRecentRun(runId)) {
         e.target.checked = true;
-        showToast('Cannot deselect most recent run while "Recent on top" is enabled', 'warning');
+        showToast('Cannot deselect the latest run while "Keep latest run" is on', 'warning');
         return;
     }
 
@@ -943,7 +909,7 @@ function syncSelectionUI() {
     });
 }
 
-// Color of each selected run: the most recent run (with "Recent on top") is purple,
+// Color of each selected run: the most recent run (with "Keep latest run") is purple,
 // the others take palette colors from fastest to slowest
 function computeRunColors() {
     const runsById = new Map(allRuns.map(r => [r.runId, r]));
@@ -1049,6 +1015,8 @@ function handleAlignChange(reference) {
     if (shownRuns.length === 0) return;
     pushToVisualizations(shownRuns, { keepTime: true });
     if (reference) {
+        // The timeline is now the reference run's time: show the moment the runs line up
+        if (window.AutocrossScrubber) AutocrossScrubber.seekTo(AutocrossAlign.getAnchorTime());
         showToast(`Lined up with Run ${reference.runNumber}. Tap it again or press Reset to go back to time.`, 'info');
     }
     updateHint();
@@ -1083,31 +1051,6 @@ function updateArchiveButtonState() {
         archiveBtn.title = 'Select a course to archive';
     } else {
         archiveBtn.title = 'Archive this course';
-    }
-}
-
-// Scroll to Run in List
-function scrollToRun(runId) {
-    // Expand runs section if collapsed
-    const runsSection = document.querySelector('.runs-section');
-    if (runsSection && runsSection.classList.contains('collapsed')) {
-        runsSection.classList.remove('collapsed');
-        document.body.classList.remove('runs-collapsed');
-    }
-
-    // Find the run card
-    const runCard = document.querySelector(`.run-card[data-run-id="${runId}"]`);
-    if (runCard) {
-        // Scroll into view
-        runCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-        // Highlight briefly
-        runCard.style.transition = 'none';
-        runCard.style.backgroundColor = 'rgba(74, 158, 255, 0.3)';
-        setTimeout(() => {
-            runCard.style.transition = 'all 0.2s';
-            runCard.style.backgroundColor = '';
-        }, 1000);
     }
 }
 
@@ -1154,7 +1097,7 @@ async function handleDeleteRun() {
 async function handleClearSelections() {
     selectedRuns = [];
 
-    // The most recent run stays selected while "Recent on top" is enabled
+    // The most recent run stays selected while "Keep latest run" is on
     if (mostRecentOnTop) {
         applyMostRecentSelection(false);
     }
@@ -1406,7 +1349,6 @@ async function handleConeChange(runId, change) {
 // Clear Runs List
 function clearRunsList() {
     runsList.innerHTML = '<div class="empty-state">Select a course to view runs.</div>';
-    top10Panel.classList.add('hidden');
     if (runCount) {
         runCount.textContent = '0 runs';
     }

@@ -209,7 +209,9 @@ const AutocrossLive = (function () {
         setText('liveSector', '');
         if (!tracker) return;
 
-        let progress = 0;
+        // The live run starts at the start line, after the reference run's launch
+        const { timestamps, posX, posY } = reference.telemetry;
+        let progress = tracker(AutocrossTrack.interpolate(timestamps, posX, 0), AutocrossTrack.interpolate(timestamps, posY, 0));
         livePath.forEach(([x, y]) => { progress = tracker(x, y); });
         while (nextGate < gateProgress.length && gateProgress[nextGate] !== null && progress >= gateProgress[nextGate]) {
             nextGate++;

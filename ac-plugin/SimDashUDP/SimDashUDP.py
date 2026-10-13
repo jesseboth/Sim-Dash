@@ -9,6 +9,7 @@ import sys
 import os
 import platform
 import struct
+import math
 
 if platform.architecture()[0] == "64bit":
     sysdir = os.path.dirname(__file__) + '/stdlib64'
@@ -90,8 +91,7 @@ ws2.closesocket.argtypes = [SOCKET]
 # ── Global state ──────────────────────────────────────────────────────────────
 
 sock = INVALID_SOCKET
-frame_counter = 0
-frames_per_update = 0
+send_timer = 0.0  # seconds since the last packet
 destinations = []
 peak_rpm = 1000.0  # grows to observed max over time
 
@@ -114,7 +114,7 @@ def htons(port):
     return ((port & 0xFF) << 8) | ((port >> 8) & 0xFF)
 
 def apply_config(ip, port, rate):
-    global UDP_IP, UDP_PORT, UPDATE_RATE_HZ, destinations, frames_per_update
+    global UDP_IP, UDP_PORT, UPDATE_RATE_HZ, destinations
     UDP_IP = ip
     UDP_PORT = port
     UPDATE_RATE_HZ = rate
@@ -125,7 +125,6 @@ def apply_config(ip, port, rate):
     addr.sin_addr = inet_addr(ip)
     destinations = [addr]
 
-    frames_per_update = max(1, int(60.0 / rate))
 
 def on_save_clicked(dummy_x, dummy_y):
     global lbl_status
@@ -198,10 +197,13 @@ def acMain(ac_version):
     return "SimDash UDP"
 
 def acUpdate(deltaT):
-    global frame_counter
-    frame_counter += 1
-    if frame_counter >= frames_per_update:
-        frame_counter = 0
+    # Send at UPDATE_RATE_HZ by elapsed time, whatever the frame rate is
+    global send_timer
+    interval = 1.0 / UPDATE_RATE_HZ
+    send_timer += deltaT
+    if send_timer >= interval:
+        # Keep the remainder for an even rate, but do not catch up after a long frame
+        send_timer = min(send_timer - interval, interval)
         send_telemetry()
 
 def acShutdown():
@@ -269,11 +271,24 @@ def send_telemetry():
             tire_radii[i]        = float(raw_rad[i])
             suspension_travel[i] = float(raw_sus[i])
 
+        # Yaw rate (deg/s) and body slip angle (deg): rotation of the car, and the angle between
+        # where it points and where it travels. Body slip is 0 below walking pace.
+        yaw_rate = 0.0
+        body_slip = 0.0
+        try:
+            ang_vel = ac.getCarState(0, acsys.CS.LocalAngularVelocity)
+            yaw_rate = math.degrees(float(ang_vel[1]))
+            loc_vel = ac.getCarState(0, acsys.CS.LocalVelocity)
+            if math.hypot(loc_vel[0], loc_vel[2]) > 2.0:
+                body_slip = math.degrees(math.atan2(float(loc_vel[0]), float(loc_vel[2])))
+        except Exception:
+            pass
+
         if rpm > peak_rpm:
             peak_rpm = float(rpm)
 
         packet = struct.pack(
-            '<B i 3f B 3f 4i 5f i f 28f 2f 3f 2i i',
+            '<B i 3f B 3f 4i 5f i f 28f 2f 3f 2i i 2f',
             97, 0,
             float(speed_kmh), float(speed_mph), float(speed_ms),
             is_in_pit,
@@ -292,7 +307,8 @@ def send_telemetry():
             float(norm_pos), 0.0,
             float(pos[0]), float(pos[1]), float(pos[2]),
             car_id, track_id,
-            1  # IsRaceOn: always 1 while plugin is sending
+            1,  # IsRaceOn: always 1 while plugin is sending
+            yaw_rate, body_slip
         )
 
         # Fix size field

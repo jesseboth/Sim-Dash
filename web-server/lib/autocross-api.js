@@ -261,7 +261,7 @@ function handleGetRun(data) {
         };
     }
 
-    const run = storage.getRun(courseId, runId);
+    const run = storage.getRunForDisplay(courseId, runId);
 
     if (!run) {
         return {

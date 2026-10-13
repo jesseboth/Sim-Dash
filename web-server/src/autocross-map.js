@@ -16,6 +16,58 @@ const AutocrossMap = (function() {
     let offsetX = 0;
     let offsetY = 0;
     let zoom = 1;
+    // Zoom limits. Zoom 1 shows the whole course. Fully zoomed in shows about
+    // MAX_ZOOM_VIEW metres across, so a short autocross and a long rally stage both
+    // zoom to the same close-up detail.
+    const MIN_ZOOM = 0.5;
+    const MAX_ZOOM_VIEW = 40; // metres across the shorter side of the map
+    function maxZoom() {
+        const worldWidth = viewBounds.maxX - viewBounds.minX;
+        const worldHeight = viewBounds.maxY - viewBounds.minY;
+        const side = Math.min(canvas.width, canvas.height);
+        if (!(worldWidth > 0 && worldHeight > 0 && side > 0)) return 40;
+        const fitScale = Math.min(canvas.width / worldWidth, canvas.height / worldHeight);
+        return Math.max(4, side / MAX_ZOOM_VIEW / fitScale);
+    }
+    const clampZoom = z => Math.max(MIN_ZOOM, Math.min(maxZoom(), z));
+
+    // Zoom slider position (0..1000) on a log scale, so each step feels the same
+    const SLIDER_STEPS = 1000;
+    const zoomToSlider = z => Math.round(Math.log(z / MIN_ZOOM) / Math.log(maxZoom() / MIN_ZOOM) * SLIDER_STEPS);
+    const sliderToZoom = v => MIN_ZOOM * Math.pow(maxZoom() / MIN_ZOOM, v / SLIDER_STEPS);
+
+    function syncZoomSlider() {
+        const slider = document.getElementById('mapZoomSlider');
+        if (slider) slider.value = zoomToSlider(zoom);
+    }
+
+    // Zoom about the cars (the middle of the cars on screen), else the middle of the map.
+    // The point under the zoom centre stays where it is.
+    function setZoom(z) {
+        const newZoom = clampZoom(z);
+        const k = newZoom / zoom;
+        const f = zoomFocus();
+        const cx = canvas.width / 2, cy = canvas.height / 2;
+        offsetX = f.x - cx - (f.x - cx - offsetX) * k;
+        offsetY = f.y - cy - (f.y - cy - offsetY) * k;
+        zoom = newZoom;
+        clampOffset();
+        render();
+    }
+
+    function zoomFocus() {
+        const alignRef = window.AutocrossAlign && AutocrossAlign.getReference();
+        const cars = currentRuns.map(run => {
+            const t = alignRef ? AutocrossAlign.timeInRun(run, currentTime) : currentTime;
+            const i = findClosestIndex(run.telemetry.timestamps, t);
+            return worldToScreen(run.telemetry.posX[i], run.telemetry.posY[i]);
+        }).filter(p => p.x >= 0 && p.y >= 0 && p.x <= canvas.width && p.y <= canvas.height);
+        if (!cars.length) return { x: canvas.width / 2, y: canvas.height / 2 };
+        return {
+            x: cars.reduce((a, p) => a + p.x, 0) / cars.length,
+            y: cars.reduce((a, p) => a + p.y, 0) / cars.length
+        };
+    }
 
     // Pan state
     let isPanning = false;
@@ -25,13 +77,9 @@ const AutocrossMap = (function() {
     let mouseDownY = 0;
 
     // Touch state
-    let lastTouchDistance = 0;
     let touchStartX = 0;
     let touchStartY = 0;
     let touchMoved = false;
-
-    // Rendering preferences
-    let mostRecentOnTop = true;
 
     // Follow mode: the view stays centred on this run's car
     let followRunId = null;
@@ -88,23 +136,6 @@ const AutocrossMap = (function() {
 
     // Setup event listeners
     function setupEventListeners() {
-        // Load saved preference
-        const savedPreference = localStorage.getItem('mostRecentOnTop');
-        if (savedPreference !== null) {
-            mostRecentOnTop = savedPreference === 'true';
-        }
-
-        // Set toggle initial state
-        const toggle = document.getElementById('mostRecentOnTopToggle');
-        if (toggle) {
-            toggle.checked = mostRecentOnTop;
-            toggle.addEventListener('change', (e) => {
-                mostRecentOnTop = e.target.checked;
-                localStorage.setItem('mostRecentOnTop', mostRecentOnTop);
-                render();
-            });
-        }
-
         // Play button
         document.getElementById('mapPlayBtn')?.addEventListener('click', () => {
             if (window.AutocrossScrubber) {
@@ -114,15 +145,15 @@ const AutocrossMap = (function() {
 
         // Zoom controls
         document.getElementById('zoomInBtn')?.addEventListener('click', () => {
-            zoom *= 1.2;
-            clampOffset();
-            render();
+            setZoom(zoom * 1.2);
         });
 
         document.getElementById('zoomOutBtn')?.addEventListener('click', () => {
-            zoom /= 1.2;
-            clampOffset();
-            render();
+            setZoom(zoom / 1.2);
+        });
+
+        document.getElementById('mapZoomSlider')?.addEventListener('input', (e) => {
+            setZoom(sliderToZoom(Number(e.target.value)));
         });
 
         document.getElementById('fitBtn')?.addEventListener('click', () => {
@@ -234,12 +265,7 @@ const AutocrossMap = (function() {
     function handleWheel(e) {
         e.preventDefault();
 
-        const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        zoom *= delta;
-        zoom = Math.max(0.1, Math.min(10, zoom));
-
-        clampOffset();
-        render();
+        setZoom(zoom * (e.deltaY > 0 ? 0.9 : 1.1));
     }
 
     // Handle touch start
@@ -257,16 +283,10 @@ const AutocrossMap = (function() {
             touchStartY = lastMouseY;
             touchMoved = false;
             canvas.style.cursor = 'grabbing';
-        } else if (e.touches.length === 2) {
-            // Two touches - prepare for pinch zoom
+        } else {
+            // More than one finger: no pinch zoom (use the zoom slider); stop panning
             isPanning = false;
             touchMoved = true;
-            const touch1 = e.touches[0];
-            const touch2 = e.touches[1];
-            lastTouchDistance = Math.hypot(
-                touch2.clientX - touch1.clientX,
-                touch2.clientY - touch1.clientY
-            );
         }
     }
 
@@ -297,34 +317,13 @@ const AutocrossMap = (function() {
             lastMouseY = e.touches[0].clientY;
 
             render();
-        } else if (e.touches.length === 2) {
-            // Pinch zoom
-            const touch1 = e.touches[0];
-            const touch2 = e.touches[1];
-            const distance = Math.hypot(
-                touch2.clientX - touch1.clientX,
-                touch2.clientY - touch1.clientY
-            );
-
-            if (lastTouchDistance > 0) {
-                const delta = distance / lastTouchDistance;
-                zoom *= delta;
-                zoom = Math.max(0.1, Math.min(10, zoom));
-                clampOffset();
-                render();
-            }
-
-            lastTouchDistance = distance;
         }
     }
 
     // Handle touch end
     function handleTouchEnd(e) {
-        // Only prevent default if we were actually interacting with the map
-        if (isPanning || lastTouchDistance > 0) {
-            if (e.cancelable) {
-                e.preventDefault();
-            }
+        if (e.cancelable) {
+            e.preventDefault();
         }
 
         if (e.touches.length === 0) {
@@ -334,14 +333,12 @@ const AutocrossMap = (function() {
                 handleMapClick(touchStartX - rect.left, touchStartY - rect.top);
             }
             isPanning = false;
-            lastTouchDistance = 0;
             canvas.style.cursor = 'grab';
         } else if (e.touches.length === 1) {
             // One finger lifted, restart panning with remaining finger
             lastMouseX = e.touches[0].clientX;
             lastMouseY = e.touches[0].clientY;
             isPanning = true;
-            lastTouchDistance = 0;
         }
     }
 
@@ -483,6 +480,7 @@ const AutocrossMap = (function() {
     // Render the map
     function render() {
         if (!ctx) return;
+        syncZoomSlider();
 
         // Clear canvas
         ctx.fillStyle = '#1a1a1a';
@@ -507,30 +505,30 @@ const AutocrossMap = (function() {
         const runsWithIndices = currentRuns.map((run, index) => ({
             run,
             colorIndex: index, // Color assignment based on speed order (fastest gets first color)
-            adjustedTime: getAdjustedTime(run),
+            scratchTime: run.lapTime,
             isMostRecent: run.isMostRecent || false
         }));
 
-        // Sort by adjusted time (slowest to fastest) for rendering order
-        const sortedRuns = [...runsWithIndices].sort((a, b) => b.adjustedTime - a.adjustedTime);
+        // Drawing order: slowest to fastest scratch time (no cone penalties), so the fastest is on top
+        const sortedRuns = [...runsWithIndices].sort((a, b) => b.scratchTime - a.scratchTime);
 
-        // Move the most recent run to the end so it draws on top (if enabled)
-        if (mostRecentOnTop) {
-            const mostRecentIndex = sortedRuns.findIndex(item => item.isMostRecent);
-            if (mostRecentIndex !== -1 && mostRecentIndex !== sortedRuns.length - 1) {
-                const mostRecent = sortedRuns.splice(mostRecentIndex, 1)[0];
-                sortedRuns.push(mostRecent);
-            }
-        }
+        // The followed run is drawn above all others
+        const followIndex = sortedRuns.findIndex(item => item.run.runId === followRunId);
+        if (followIndex !== -1) sortedRuns.push(sortedRuns.splice(followIndex, 1)[0]);
 
-        // Draw each run in sorted order (slowest first, fastest/most recent last)
+        // Draw each run in sorted order (slowest first, fastest/followed last)
         sortedRuns.forEach(({ run, colorIndex }) => {
             drawRun(run, runColor(run, colorIndex), 1);
         });
 
+        // Start, finish and sector lines, under the cars
+        drawStartFinish(window.AutocrossAlign && AutocrossAlign.getReference() || currentRuns[0]);
+        drawSectorMarkers();
+
         // Draw position markers for all runs (color-matched).
-        // Time mode: every car at the same clock time. Align mode: every car at the
-        // reference car's track position. Gaps are to the aligned run, else the fastest run.
+        // Time mode: every car at the same clock time. Align mode: every car at its own time,
+        // shifted so all cars were together at the anchor. Gaps are to the aligned run (time
+        // gained or lost since the anchor), else to the fastest run.
         const alignRef = window.AutocrossAlign && AutocrossAlign.getReference();
         const gapRef = alignRef || sortByAdjustedTime(currentRuns)[0];
         const gaps = [];
@@ -546,7 +544,9 @@ const AutocrossMap = (function() {
                     drawReferenceRing(worldToScreen(run.telemetry.posX[runIndex], run.telemetry.posY[runIndex]));
                 }
             } else {
-                const gap = alignRef ? runTime - currentTime : timeGap(gapRef, run, currentTime);
+                // Gaps are measured from the start line, so none during the launch
+                const gap = currentTime < 0 ? null
+                    : timeGap(gapRef, run, currentTime, alignRef ? AutocrossAlign.offsetOf(run) : 0);
                 gaps.push({ gap, color, runId: run.runId, runNumber: runNumberOf(run), adjustedTime: getAdjustedTime(run) });
             }
         });
@@ -555,8 +555,6 @@ const AutocrossMap = (function() {
             drawGapPanel(gapRef, gaps.sort((a, b) => a.adjustedTime - b.adjustedTime));
         }
 
-        // Draw sector markers on top of everything
-        drawSectorMarkers();
 
         updateAlignButton(alignRef);
         updateLegend();
@@ -565,7 +563,8 @@ const AutocrossMap = (function() {
     // Time gap of run to ref where ref is at refTime: + behind, - ahead.
     // Progress along the reference path is cached per reference and run.
     let gapCache = { refId: null, dist: null, progress: new Map() };
-    function timeGap(ref, run, refTime) {
+    // offset: the run's alignment shift (align mode), so the gap counts from the anchor
+    function timeGap(ref, run, refTime, offset = 0) {
         if (gapCache.refId !== ref.runId || gapCache.runs !== currentRuns) {
             gapCache = {
                 refId: ref.runId,
@@ -580,9 +579,12 @@ const AutocrossMap = (function() {
 
         const t = Math.min(refTime, ref.telemetry.timestamps.at(-1));
         const dist = AutocrossTrack.interpolate(ref.telemetry.timestamps, gapCache.dist, t);
-        const runT = AutocrossTrack.timeAtProgress(dist, gapCache.progress.get(run.runId), run.telemetry.timestamps);
+        const progress = gapCache.progress.get(run.runId);
+        let runT = AutocrossTrack.timeAtProgress(dist, progress, run.telemetry.timestamps);
+        // A run that ended within a few metres of the point (a different line to the finish) got there
+        if (runT === null && dist - progress[progress.length - 1] < 5) runT = run.telemetry.timestamps.at(-1);
         // Not there yet: the gap is at least the time since the reference passed
-        return runT === null ? refTime - t : runT - t;
+        return runT === null ? refTime - t : runT - t - offset;
     }
 
     function runColor(run, colorIndex) {
@@ -594,7 +596,7 @@ const AutocrossMap = (function() {
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 13, 0, Math.PI * 2);
+        ctx.arc(pos.x, pos.y, arrowSize() * 0.7 + 3, 0, Math.PI * 2);
         ctx.stroke();
     }
 
@@ -613,7 +615,7 @@ const AutocrossMap = (function() {
             .concat(gaps.map(g => ({
                 runId: g.runId,
                 label: `Run ${g.runNumber}`,
-                text: `${g.gap >= 0 ? '+' : '−'}${Math.abs(g.gap).toFixed(2)}`,
+                text: g.gap === null ? '' : `${g.gap >= 0 ? '+' : '−'}${Math.abs(g.gap).toFixed(2)}`,
                 color: g.color,
                 textColor: g.gap > 0.005 ? '#ff6b6b' : (g.gap < -0.005 ? '#5dff7a' : '#ffffff')
             })));
@@ -745,7 +747,9 @@ const AutocrossMap = (function() {
             if (ref && ref.runId === run.runId) {
                 AutocrossAlign.clear();
             } else {
-                AutocrossAlign.setReference(run);
+                // Line up at this car's position now; while aligned, its time is offset from the timeline
+                const alignRef = AutocrossAlign.getReference();
+                AutocrossAlign.setReference(run, alignRef ? AutocrossAlign.timeInRun(run, currentTime) : currentTime);
             }
             return;
         }
@@ -811,6 +815,64 @@ const AutocrossMap = (function() {
         });
     }
 
+    // Start line where the run's timer started (time 0), finish line where it stopped
+    function drawStartFinish(run) {
+        if (!run) return;
+        const { posX, posY, timestamps } = run.telemetry;
+        const n = posX.length;
+        if (n < 2) return;
+
+        // Point at time 0, and the track direction from there
+        const startIdx = Math.max(0, timestamps.findIndex(t => t >= 0));
+        const sx = AutocrossTrack.interpolate(timestamps, posX, 0);
+        const sy = AutocrossTrack.interpolate(timestamps, posY, 0);
+        let ahead = startIdx;
+        while (ahead < n - 1 && Math.hypot(posX[ahead] - sx, posY[ahead] - sy) < 1) ahead++;
+
+        // Start and finish on the same line (closed course): one line, one label
+        const sameLine = Math.hypot(posX[n - 1] - sx, posY[n - 1] - sy) < 10;
+        drawGateLine(sx, sy, posX[ahead] - sx, posY[ahead] - sy, sameLine ? 'START / FINISH' : 'START');
+        if (sameLine) return;
+
+        let behind = n - 2;
+        while (behind > 0 && Math.hypot(posX[n - 1] - posX[behind], posY[n - 1] - posY[behind]) < 1) behind--;
+        drawGateLine(posX[n - 1], posY[n - 1], posX[n - 1] - posX[behind], posY[n - 1] - posY[behind], 'FINISH');
+    }
+
+    // Line across the track at a world point, with the track direction and a label
+    function drawGateLine(x, y, dirX, dirY, label) {
+        const p = worldToScreen(x, y);
+        const a = worldToScreen(x + dirX, y + dirY);
+        const perp = Math.atan2(a.y - p.y, a.x - p.x) + Math.PI / 2;
+        const len = 18;
+        const dx = Math.cos(perp) * len;
+        const dy = Math.sin(perp) * len;
+
+        ctx.save();
+        ctx.lineCap = 'butt';
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(p.x - dx, p.y - dy);
+        ctx.lineTo(p.x + dx, p.y + dy);
+        ctx.stroke();
+        // Chequered look: black dashes over the white line
+        ctx.strokeStyle = '#000000';
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(p.x - dx, p.y - dy);
+        ctx.lineTo(p.x + dx, p.y + dy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, p.x + Math.cos(perp) * (len + 16), p.y + Math.sin(perp) * (len + 16));
+        ctx.restore();
+    }
+
     // Find telemetry index closest to a world position
     function findClosestPositionIndex(run, targetX, targetY) {
         const { posX, posY } = run.telemetry;
@@ -854,38 +916,36 @@ const AutocrossMap = (function() {
     }
 
     // Draw position marker
+    // Arrow length in pixels: about a car's length on the map, so it grows with zoom,
+    // kept between a visible minimum and a maximum
+    const ARROW_WORLD_LENGTH = 6; // metres
+    function arrowSize() {
+        return Math.max(13, Math.min(36, ARROW_WORLD_LENGTH * scale));
+    }
+
+    // Car marker: an arrow in the run's color pointing the way the car is driving
     function drawPositionMarker(run, index, color) {
         if (index < 0 || index >= run.telemetry.posX.length) return;
 
         const pos = worldToScreen(run.telemetry.posX[index], run.telemetry.posY[index]);
-
-        // Draw marker circle with run color
-        ctx.fillStyle = color;
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2;
-
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        // Draw direction arrow in white for contrast
-        if (index < run.telemetry.posX.length - 1) {
-            const nextPos = worldToScreen(run.telemetry.posX[index + 1], run.telemetry.posY[index + 1]);
-            const angle = Math.atan2(nextPos.y - pos.y, nextPos.x - pos.x);
-
-            ctx.fillStyle = '#ffffff';
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 1;
-
-            ctx.beginPath();
-            ctx.moveTo(pos.x + Math.cos(angle) * 6, pos.y + Math.sin(angle) * 6);
-            ctx.lineTo(pos.x + Math.cos(angle + 2.5) * 4, pos.y + Math.sin(angle + 2.5) * 4);
-            ctx.lineTo(pos.x + Math.cos(angle - 2.5) * 4, pos.y + Math.sin(angle - 2.5) * 4);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+        const dir = AutocrossTrack.directionIndices(run.telemetry, index);
+        let angle = -Math.PI / 2;
+        if (dir) {
+            const a = worldToScreen(run.telemetry.posX[dir[0]], run.telemetry.posY[dir[0]]);
+            const b = worldToScreen(run.telemetry.posX[dir[1]], run.telemetry.posY[dir[1]]);
+            angle = Math.atan2(b.y - a.y, b.x - a.x);
         }
+
+        const points = AutocrossTrack.carArrowPolygon(pos.x, pos.y, angle, arrowSize());
+        ctx.beginPath();
+        points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
     }
 
     // Get color based on speed

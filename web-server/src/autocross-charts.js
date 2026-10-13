@@ -10,7 +10,7 @@ const AutocrossCharts = (() => {
     let enabledKeys = [];
     let channelOrder = [];
 
-    const CHART_HEIGHT = 200;
+    const CHART_HEIGHT = 160;
     const STORAGE_KEY = 'autocrossChannelSettings';
 
     // Color configuration
@@ -26,29 +26,33 @@ const AutocrossCharts = (() => {
 
     // Channel list, in display order.
     // path: telemetry field ('a' or 'a.b'). axis: fixed {min,max} | 'max' | 'symmetric' | 'auto'.
+    // stat: average shown in sector analysis, 'avg' or 'avgAbs' (average size, for signed values).
+    // smooth: seconds of centred moving average applied to the trace (noisy or coarsely stored channels).
     const WHEELS = [['fl', 'FL'], ['fr', 'FR'], ['rl', 'RL'], ['rr', 'RR']];
     const WHEEL_CHANNELS = [
-        { base: 'wheelSpeed', label: 'Wheel speed', unit: 'mph', decimals: 1 },
-        { base: 'slipAngle', label: 'Slip angle', unit: '°', decimals: 2 },
-        { base: 'slipRatio', label: 'Slip ratio', unit: '', decimals: 3 },
-        { base: 'load', label: 'Load', unit: 'kg', decimals: 0 },
-        { base: 'suspTravel', label: 'Suspension', unit: 'mm', decimals: 1 }
+        { base: 'wheelSpeed', label: 'Wheel speed', unit: 'mph', decimals: 1, stat: 'avg' },
+        { base: 'slipAngle', label: 'Slip angle', unit: '°', decimals: 2, stat: 'avgAbs' },
+        { base: 'slipRatio', label: 'Slip ratio', unit: '', decimals: 3, stat: 'avgAbs' },
+        { base: 'load', label: 'Load', unit: 'kg', decimals: 0, stat: 'avg' },
+        { base: 'suspTravel', label: 'Suspension', unit: 'mm', decimals: 1, stat: 'avg' }
     ];
 
     const CHANNELS = [
         { key: 'timeDelta', group: 'Driver', label: 'Time Delta', unit: 's', delta: true, axis: 'symmetric', decimals: 3 },
         { key: 'speed', group: 'Driver', label: 'Speed', unit: 'mph', path: 'speed', axis: 'max', decimals: 1 },
-        { key: 'throttle', group: 'Driver', label: 'Throttle', unit: '%', path: 'accel', scale: 100, axis: { min: -10, max: 100 }, decimals: 0 },
-        { key: 'brake', group: 'Driver', label: 'Brake', unit: '%', path: 'brake', scale: 100, axis: { min: -10, max: 100 }, decimals: 0 },
-        { key: 'steer', group: 'Driver', label: 'Steering', unit: '', path: 'steer', axis: 'symmetric', decimals: 2 },
-        { key: 'clutch', group: 'Driver', label: 'Clutch', unit: '%', path: 'clutch', scale: 100, axis: { min: -10, max: 100 }, decimals: 0 },
+        { key: 'throttle', group: 'Driver', label: 'Throttle', unit: '%', path: 'accel', scale: 100, axis: { min: -10, max: 100 }, decimals: 0, stat: 'avg' },
+        { key: 'brake', group: 'Driver', label: 'Brake', unit: '%', path: 'brake', scale: 100, axis: { min: -10, max: 100 }, decimals: 0, stat: 'avg' },
+        { key: 'steer', group: 'Driver', label: 'Steering', unit: '', path: 'steer', axis: 'symmetric', decimals: 2, stat: 'avgAbs' },
+        { key: 'clutch', group: 'Driver', label: 'Clutch', unit: '%', path: 'clutch', scale: 100, axis: { min: -10, max: 100 }, decimals: 0, stat: 'avg' },
         { key: 'gear', group: 'Driver', label: 'Gear', unit: '', path: 'gear', axis: 'auto', stepped: true, decimals: 0 },
-        { key: 'rpm', group: 'Driver', label: 'RPM', unit: '', path: 'rpm', axis: 'max', decimals: 0 },
-        { key: 'latG', group: 'Car', label: 'Lateral G', unit: 'g', path: 'accelX', axis: 'symmetric', decimals: 2 },
-        { key: 'longG', group: 'Car', label: 'Longitudinal G', unit: 'g', path: 'accelY', axis: 'symmetric', decimals: 2 },
+        { key: 'rpm', group: 'Driver', label: 'RPM', unit: '', path: 'rpm', axis: 'max', decimals: 0, stat: 'avg' },
+        { key: 'latG', group: 'Car', label: 'Lateral G', unit: 'g', path: 'accelX', axis: 'symmetric', decimals: 2, stat: 'avgAbs', smooth: 0.15 },
+        { key: 'longG', group: 'Car', label: 'Longitudinal G', unit: 'g', path: 'accelY', axis: 'symmetric', decimals: 2, smooth: 0.15 },
+        { key: 'yawRate', group: 'Car', label: 'Yaw rate', unit: '°/s', path: 'yawRate', axis: 'symmetric', decimals: 1, stat: 'avgAbs' },
+        { key: 'bodySlip', group: 'Car', label: 'Body slip', unit: '°', path: 'bodySlip', axis: 'symmetric', decimals: 1, stat: 'avgAbs' },
         ...WHEEL_CHANNELS.flatMap(w => WHEELS.map(([wheel, name]) => ({
             key: `${w.base}.${wheel}`, group: 'Tyres',
-            label: `${w.label} ${name}`, unit: w.unit, path: `${w.base}.${wheel}`, axis: 'auto', decimals: w.decimals
+            label: `${w.label} ${name}`, unit: w.unit, path: `${w.base}.${wheel}`, axis: 'auto', decimals: w.decimals, stat: w.stat
         })))
     ];
     const DEFAULT_KEYS = ['timeDelta', 'speed', 'throttle', 'brake', 'steer', 'latG'];
@@ -63,8 +67,7 @@ const AutocrossCharts = (() => {
                 const xAxis = chart.scales.x;
                 const yAxis = chart.scales.y;
 
-                const xValue = chart.data.labels[currentCursorIndex];
-                const x = xAxis.getPixelForValue(xValue);
+                const x = (xAxis.left + xAxis.right) / 2;
 
                 // Clip to chart area
                 ctx.save();
@@ -87,8 +90,7 @@ const AutocrossCharts = (() => {
                 const xAxis = chart.scales.x;
                 const yAxis = chart.scales.y;
 
-                const xValue = chart.data.labels[currentCursorIndex];
-                const x = xAxis.getPixelForValue(xValue);
+                const x = (xAxis.left + xAxis.right) / 2;
 
                 // Clip to chart area and draw dots
                 ctx.save();
@@ -130,8 +132,9 @@ const AutocrossCharts = (() => {
             ctx.lineWidth = 1.5;
             ctx.setLineDash([3, 2]);
             ctx.font = 'bold 9px Arial';
+            // Labels at the bottom, clear of the chart title at the top
             ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
+            ctx.textBaseline = 'bottom';
             times.forEach((t, i) => {
                 if (t === null || t === undefined || t < xAxis.min || t > xAxis.max) return;
                 const x = xAxis.getPixelForValue(t);
@@ -139,9 +142,18 @@ const AutocrossCharts = (() => {
                 ctx.moveTo(x, yAxis.top);
                 ctx.lineTo(x, yAxis.bottom);
                 ctx.stroke();
-                ctx.fillText(`S${i + 1}`, x + 3, yAxis.top + 2);
+                ctx.fillText(`S${i + 1}`, x + 3, yAxis.bottom - 2);
             });
             ctx.restore();
+        }
+    };
+
+    // Keeps the chart title at the top left of the plot, just after the y axis labels
+    const titlePositionPlugin = {
+        id: 'titlePosition',
+        afterLayout: (chart) => {
+            const title = chart.canvas.parentElement?.querySelector('h3');
+            if (title) title.style.left = `${chart.canvas.offsetLeft + chart.chartArea.left + 6}px`;
         }
     };
 
@@ -157,9 +169,16 @@ const AutocrossCharts = (() => {
         if (!Chart.registry.plugins.get('sectorLines')) {
             Chart.register(sectorLinesPlugin);
         }
+        if (!Chart.registry.plugins.get('titlePosition')) {
+            Chart.register(titlePositionPlugin);
+        }
         loadChannelSettings();
         buildCharts();
         initChannelsDialog();
+        if (window.KineticScroll) {
+            KineticScroll.attach(document.getElementById('chartsContainer'));
+            KineticScroll.attach(document.querySelector('.channels-modal-content'), { ignore: '.channel-handle' });
+        }
     }
 
     // ---- Channel selection ----
@@ -172,7 +191,12 @@ const AutocrossCharts = (() => {
             const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
             if (Array.isArray(saved?.order)) {
                 order = saved.order.filter(k => channelByKey.has(k));
-                order.push(...allKeys.filter(k => !order.includes(k)));
+                // Channels added since the order was saved go after their neighbour in the default order
+                allKeys.forEach((k, i) => {
+                    if (order.includes(k)) return;
+                    const after = order.indexOf(allKeys[i - 1]);
+                    order.splice(after + 1, 0, k);
+                });
             }
             if (Array.isArray(saved?.enabled)) {
                 enabled = saved.enabled.filter(k => channelByKey.has(k));
@@ -374,7 +398,106 @@ const AutocrossCharts = (() => {
                 <div class="chart-values"></div>`;
             container.appendChild(wrapper);
             charts[key] = createEmptyChart(channel, wrapper.querySelector('canvas'));
+            wrapper.querySelector('canvas').addEventListener('pointerdown', (e) => startChartScrub(e, charts[key]));
         });
+    }
+
+    // ---- Scrub by dragging on a chart ----
+    // The cursor stays in the centre and dragging moves the traces under it.
+    // On touch, scrubbing starts after a sideways move; a vertical swipe scrolls the list.
+    const SCRUB_DECELERATION = 0.998;  // glide velocity kept per millisecond
+    const SCRUB_MIN_VELOCITY = 0.0002; // s/ms; the glide stops below this
+    let scrubFrame = null;             // pending redraw, at most one per frame
+    let scrubPendingTime = null;
+    let scrubGlide = null;
+
+    // Seek on the next animation frame, to the latest requested time
+    function requestScrub(time) {
+        scrubPendingTime = time;
+        if (scrubFrame) return;
+        scrubFrame = requestAnimationFrame(() => {
+            scrubFrame = null;
+            if (window.AutocrossScrubber) AutocrossScrubber.seekTo(scrubPendingTime);
+            else seekTo(scrubPendingTime);
+        });
+    }
+
+    function stopScrubGlide() {
+        if (scrubGlide) cancelAnimationFrame(scrubGlide);
+        scrubGlide = null;
+    }
+
+    // After a touch flick, time keeps moving and slows down gradually
+    function startScrubGlide(velocity) {
+        let last = performance.now();
+        let time = AutocrossScrubber.getCurrentTime();
+        const step = (now) => {
+            // Something else moved the time (scrubber, playback): stop
+            if (Math.abs(AutocrossScrubber.getCurrentTime() - time) > 1e-6) { scrubGlide = null; return; }
+            const dt = now - last;
+            last = now;
+            velocity *= Math.pow(SCRUB_DECELERATION, dt);
+            AutocrossScrubber.seekTo(time + velocity * dt);
+            const reached = AutocrossScrubber.getCurrentTime();
+            // Stop when slow or at the start or end of the timeline
+            if (Math.abs(velocity) < SCRUB_MIN_VELOCITY || Math.abs(reached - time) < 1e-9) { scrubGlide = null; return; }
+            time = reached;
+            scrubGlide = requestAnimationFrame(step);
+        };
+        scrubGlide = requestAnimationFrame(step);
+    }
+
+    function startChartScrub(e, chart) {
+        if (!currentRuns.length || e.button !== 0) return;
+        // A tap during a glide only stops it
+        stopScrubGlide();
+        const canvas = chart.canvas;
+        const isTouch = e.pointerType === 'touch';
+        // Touch is captured only once a sideways drag starts, so a vertical swipe scrolls the list
+        if (!isTouch) {
+            canvas.setPointerCapture(e.pointerId);
+            e.preventDefault();
+        }
+
+        const startX = e.clientX, startY = e.clientY;
+        const startTime = window.AutocrossScrubber ? AutocrossScrubber.getCurrentTime() : 0;
+        // Seconds per screen pixel along the x axis
+        const xAxis = chart.scales.x;
+        const secPerPx = (xAxis.max - xAxis.min) / ((xAxis.right - xAxis.left) * canvas.getBoundingClientRect().width / chart.width);
+        let started = !isTouch;
+        const samples = []; // recent pointer positions, for the release velocity
+
+        const onMove = (ev) => {
+            if (ev.pointerId !== e.pointerId) return;
+            const dx = ev.clientX - startX;
+            if (!started && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(ev.clientY - startY)) {
+                started = true;
+                canvas.setPointerCapture(ev.pointerId);
+            }
+            if (!started) return;
+            samples.push({ t: ev.timeStamp, x: ev.clientX });
+            while (samples.length > 2 && ev.timeStamp - samples[0].t > 100) samples.shift();
+            requestScrub(startTime - dx * secPerPx);
+        };
+        const onEnd = (ev) => {
+            if (ev.pointerId !== e.pointerId) return;
+            canvas.removeEventListener('pointermove', onMove);
+            canvas.removeEventListener('pointerup', onEnd);
+            canvas.removeEventListener('pointercancel', onEnd);
+
+            const last = samples[samples.length - 1];
+            if (!isTouch || !started || ev.type !== 'pointerup' || samples.length < 2 || !window.AutocrossScrubber) return;
+            if (ev.timeStamp - last.t > 80) return; // finger stopped before lifting
+            const dt = last.t - samples[0].t;
+            const velocity = dt > 0 ? -(last.x - samples[0].x) / dt * secPerPx : 0;
+            if (Math.abs(velocity) > SCRUB_MIN_VELOCITY) {
+                // Let the last drag position land first
+                requestAnimationFrame(() => startScrubGlide(velocity));
+            }
+        };
+        canvas.addEventListener('pointermove', onMove);
+        canvas.addEventListener('pointerup', onEnd);
+        canvas.addEventListener('pointercancel', onEnd);
     }
 
     function createEmptyChart(channel, canvas) {
@@ -400,7 +523,7 @@ const AutocrossCharts = (() => {
                     x: { display: false, type: 'linear', min: 0, max: 5 },
                     y: {
                         display: true,
-                        title: { display: true, text: channel.label, color: '#888' },
+                        title: { display: false },
                         grid: { color: '#333' },
                         ticks: channel.stepped ? { stepSize: 1 } : {},
                         ...yRange
@@ -455,9 +578,9 @@ const AutocrossCharts = (() => {
     }
 
     function updateAllCharts() {
-        // Align mode: x-axis is the reference run's time. Time mode: the longest run's time.
+        // Align mode: x-axis is the reference run's time. Time mode: from the earliest launch to the last finish.
         const alignRef = window.AutocrossAlign && AutocrossAlign.getReference();
-        currentBase = (alignRef || findLongestRun(currentRuns)).telemetry.timestamps;
+        currentBase = alignRef ? alignModeBase(alignRef) : timeModeBase(currentRuns);
 
         Object.keys(charts).forEach(key => {
             const channel = channelByKey.get(key);
@@ -468,6 +591,25 @@ const AutocrossCharts = (() => {
         if (currentCursorIndex === null) currentCursorIndex = 0;
         updateChartWindow(currentBase[currentCursorIndex] || 0);
         updateValueDisplays(currentCursorIndex);
+        Object.values(charts).forEach(chart => chart.update('none'));
+    }
+
+    // The reference run's timestamps, extended at 50 Hz to cover every shifted run
+    function alignModeBase(ref) {
+        const ts = ref.telemetry.timestamps;
+        const { start, end } = AutocrossAlign.timeRange();
+        const before = [], after = [];
+        for (let t = ts[0] - 0.02; t >= start; t -= 0.02) before.unshift(t);
+        for (let t = ts[ts.length - 1] + 0.02; t <= end; t += 0.02) after.push(t);
+        return before.concat(ts, after);
+    }
+
+    // The longest run's timestamps, with the earliest launch added before them
+    function timeModeBase(runs) {
+        const longest = findLongestRun(runs).telemetry.timestamps;
+        const earliest = runs.reduce((a, r) => r.telemetry.timestamps[0] < a.telemetry.timestamps[0] ? r : a, runs[0]);
+        const launch = earliest.telemetry.timestamps.filter(t => t < longest[0]);
+        return launch.length ? launch.concat(longest) : longest;
     }
 
     function findLongestRun(runs) {
@@ -497,6 +639,7 @@ const AutocrossCharts = (() => {
         [...currentRuns].reverse().forEach(run => {
             let values = getChannelData(run, channel.path);
             if (!values) return;
+            if (channel.smooth) values = smoothed(run, channel, values);
             if (channel.scale) values = values.map(v => v * channel.scale);
             datasets.push(datasetFor(run, sampleRun(run, values, baseTimestamps, channel.stepped), channel));
         });
@@ -507,6 +650,26 @@ const AutocrossCharts = (() => {
         chart.data.labels = baseTimestamps;
         chart.data.datasets = datasets;
         chart.update('none');
+    }
+
+    // Centred moving average over channel.smooth seconds, cached per run and channel
+    const smoothCache = new WeakMap();
+    function smoothed(run, channel, values) {
+        let byKey = smoothCache.get(run);
+        if (!byKey) smoothCache.set(run, byKey = new Map());
+        if (byKey.has(channel.key)) return byKey.get(channel.key);
+
+        const ts = run.telemetry.timestamps;
+        const half = channel.smooth / 2;
+        const out = new Array(values.length);
+        let lo = 0, hi = 0, sum = 0;
+        for (let i = 0; i < values.length; i++) {
+            while (hi < values.length && ts[hi] <= ts[i] + half) sum += values[hi++];
+            while (ts[lo] < ts[i] - half) sum -= values[lo++];
+            out[i] = sum / (hi - lo);
+        }
+        byKey.set(channel.key, out);
+        return out;
     }
 
     function setYAxis(chart, channel, datasets) {
@@ -582,9 +745,11 @@ const AutocrossCharts = (() => {
             if (run === refRun) return;
             const runProgress = AutocrossTrack.progressAlongPath(refRun.telemetry, refDist, run.telemetry);
 
+            // Align mode: time gained or lost since the anchor, so 0 where the runs line up
+            const offset = alignRef ? AutocrossAlign.offsetOf(run) : 0;
             const deltas = refRun.telemetry.timestamps.map((refT, i) => {
                 const runT = AutocrossTrack.timeAtProgress(refDist[i], runProgress, run.telemetry.timestamps);
-                return runT === null ? null : runT - refT;
+                return runT === null ? null : runT - refT - offset;
             });
 
             // Hold the last known delta where this run did not reach the reference position
@@ -595,15 +760,18 @@ const AutocrossCharts = (() => {
             }
 
             // Interpolate onto baseTimestamps, holding flat at the final delta until this run ends
-            const runEndTime = run.telemetry.timestamps.at(-1);
+            // The run's own times on the x axis (shifted in align mode)
+            const runEndTime = run.telemetry.timestamps.at(-1) - offset;
             const interpolated = interpolateData(deltas, refRun.telemetry.timestamps, baseTimestamps);
             let lastVal = null;
             for (let i = interpolated.length - 1; i >= 0; i--) {
                 if (interpolated[i] !== null) { lastVal = interpolated[i]; break; }
             }
+            const runStartTime = Math.max(0, run.telemetry.timestamps[0]) - offset;
             interpolated.forEach((v, i) => {
-                if (baseTimestamps[i] > runEndTime) interpolated[i] = null;
-                else if (v === null && lastVal !== null) interpolated[i] = lastVal;
+                // Deltas are measured from the start line (time 0)
+                if (baseTimestamps[i] > runEndTime || baseTimestamps[i] < runStartTime) interpolated[i] = null;
+                else if (v === null && lastVal !== null && baseTimestamps[i] > refRun.telemetry.timestamps.at(-1)) interpolated[i] = lastVal;
             });
 
             const absMax = Math.max(...interpolated.filter(v => v !== null).map(Math.abs));
@@ -612,9 +780,10 @@ const AutocrossCharts = (() => {
             datasets.push(datasetFor(run, interpolated, channel));
         });
 
-        // Zero line for the reference run, until it ends
+        // Zero line for the reference run, from the start line until it ends
+        const refStartTime = Math.max(0, refRun.telemetry.timestamps[0]);
         const refEndTime = refRun.telemetry.timestamps.at(-1);
-        const ref = datasetFor(refRun, baseTimestamps.map(t => t <= refEndTime ? 0 : null), channel);
+        const ref = datasetFor(refRun, baseTimestamps.map(t => t >= refStartTime && t <= refEndTime ? 0 : null), channel);
         ref.isReference = true;
         datasets.push(ref);
 
@@ -633,40 +802,35 @@ const AutocrossCharts = (() => {
     function sampleRun(run, values, baseTimestamps, stepped = false) {
         const timestamps = run.telemetry.timestamps;
         const alignActive = window.AutocrossAlign && AutocrossAlign.isActive();
+        const runStart = timestamps[0];
         const runEnd = timestamps.at(-1);
         const valueAt = stepped
             ? t => values[findPreviousIndex(timestamps, t)]
             : t => AutocrossTrack.interpolate(timestamps, values, t);
 
         return baseTimestamps.map(t => {
-            if (alignActive) return valueAt(AutocrossAlign.timeInRun(run, t));
-            return t > runEnd ? null : valueAt(t);
+            if (alignActive) {
+                // The run's own time; nothing outside the run
+                const rt = t + AutocrossAlign.offsetOf(run);
+                return rt < runStart || rt > runEnd ? null : valueAt(rt);
+            }
+            return t < runStart || t > runEnd ? null : valueAt(t);
         });
     }
 
-    // Interpolate data onto target timestamps, null after the source ends
+    // Interpolate data onto target timestamps, null outside the source times
     function interpolateData(sourceData, sourceTimestamps, targetTimestamps) {
+        const minSourceTime = sourceTimestamps[0];
         const maxSourceTime = sourceTimestamps.at(-1);
-        return targetTimestamps.map(t =>
-            t > maxSourceTime ? null : AutocrossTrack.interpolate(sourceTimestamps, sourceData, t));
+        return targetTimestamps.map(t => t < minSourceTime || t > maxSourceTime
+            ? null : AutocrossTrack.interpolate(sourceTimestamps, sourceData, t));
     }
 
-    // Update 5-second sliding window on all charts
+    // 5-second window centred on the cursor. Before the start and after the end it shows empty space.
     function updateChartWindow(time) {
-        const half = 2.5;
-        const runMax = currentBase.length ? currentBase.at(-1) : 5;
-
-        // Clamp window to [0, runMax], keeping it exactly 5 seconds wide
-        let windowMin = Math.max(0, time - half);
-        let windowMax = windowMin + 5;
-        if (windowMax > runMax) {
-            windowMax = runMax;
-            windowMin = Math.max(0, windowMax - 5);
-        }
-
         Object.values(charts).forEach(chart => {
-            chart.options.scales.x.min = windowMin;
-            chart.options.scales.x.max = windowMax;
+            chart.options.scales.x.min = time - 2.5;
+            chart.options.scales.x.max = time + 2.5;
         });
     }
 
@@ -762,6 +926,9 @@ const AutocrossCharts = (() => {
         compareRuns,
         seekTo,
         clear,
+        // Shown channels that have a sector average, in display order
+        getStatChannels: () => shownKeys().map(k => channelByKey.get(k)).filter(c => c.stat),
+        getChannelData,
         render: () => Object.values(charts).forEach(chart => chart.update('none'))
     };
 })();

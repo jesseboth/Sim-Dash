@@ -269,6 +269,7 @@ const AutocrossSectors = (function () {
         // Update map label
         const label = document.getElementById('sectorMapLabel');
         if (label) label.textContent = `Sector ${index + 1}`;
+        renderDetailTable();
 
         restartPlayback();
     }
@@ -306,11 +307,12 @@ const AutocrossSectors = (function () {
 
         let tbody = '<tbody>';
         runSectorTimes.forEach(({ run, sectorTimes }, ri) => {
+            // Sector timing uses the driven time; cones are only counted, not added
             const cones = run.cones || 0;
-            const total = getAdjustedTime(run);
+            const total = run.lapTime;
             const label = run.name || `Run ${run.runNumber || (ri + 1)}`;
             const color = run.color || COLORS[ri % COLORS.length];
-            const coneTag = cones > 0 ? ` <span class="sector-cone-badge" title="${cones} cone${cones !== 1 ? 's' : ''}">+${cones * CONE_PENALTY}s</span>` : '';
+            const coneTag = cones > 0 ? ` <span class="sector-cone-badge" title="${cones} cone${cones !== 1 ? 's' : ''}">+${cones}</span>` : '';
             tbody += `<tr>`;
             tbody += `<td><span class="sector-run-dot" style="background:${color}"></span>${escapeHtml(label)}</td>`;
             tbody += `<td>${formatTime(total)}${coneTag}</td>`;
@@ -335,6 +337,127 @@ const AutocrossSectors = (function () {
 
         tbody += '</tbody>';
         table.innerHTML = thead + tbody;
+        renderDetailTable();
+    }
+
+    // --- Detail table for the active sector ---
+    // Fixed columns, then the average of each shown chart channel that has one.
+    const MPS_TO_MPH = 2.23694;
+    const M_TO_FT = 3.28084;
+
+    function renderDetailTable() {
+        const table = document.getElementById('sectorDetailTable');
+        const title = document.getElementById('sectorDetailTitle');
+        if (!table) return;
+        if (title) title.textContent = `Sector ${activeSectorIndex + 1}`;
+
+        const charts = window.AutocrossCharts;
+        const statChannels = charts?.getStatChannels ? charts.getStatChannels() : [];
+
+        // best: 'min' or 'max' marks the best value in the column
+        const columns = [
+            { label: 'Time', unit: 's', decimals: 3, best: 'min', value: w => w.endTime - w.startTime },
+            { label: 'Entry', unit: 's', decimals: 3, title: 'Time at the sector start, from the start line', value: w => w.startTime },
+            { label: 'Exit', unit: 's', decimals: 3, title: 'Time at the sector end, from the start line', value: w => w.endTime },
+            { label: 'Entry speed', unit: 'mph', decimals: 1, best: 'max', value: (w, run) => valueAt(run, 'speed', w.startTime) },
+            { label: 'Exit speed', unit: 'mph', decimals: 1, best: 'max', value: (w, run) => valueAt(run, 'speed', w.endTime) },
+            { label: 'Avg speed', unit: 'mph', decimals: 1, best: 'max', value: (w, run) => pathLength(run, w) / (w.endTime - w.startTime) * MPS_TO_MPH },
+            { label: 'Distance', unit: 'ft', decimals: 0, title: 'Distance driven in the sector', value: (w, run) => pathLength(run, w) * M_TO_FT },
+            ...statChannels.map(c => ({
+                label: c.stat === 'avgAbs' ? `Avg |${c.label}|` : `Avg ${c.label}`,
+                title: c.stat === 'avgAbs' ? 'Average size, left and right counted the same' : '',
+                unit: c.unit,
+                decimals: c.decimals,
+                value: (w, run) => {
+                    const data = charts.getChannelData(run, c.path);
+                    if (!data) return null;
+                    const avg = timeAverage(run.telemetry.timestamps, data, w.startTime, w.endTime, c.stat === 'avgAbs');
+                    return avg === null ? null : avg * (c.scale || 1);
+                }
+            }))
+        ];
+
+        const rows = modalRuns.map((run, ri) => {
+            const w = getSectorWindow(run, activeSectorIndex);
+            return {
+                run, ri,
+                values: columns.map(col => {
+                    if (!w) return null;
+                    const v = col.value(w, run);
+                    return Number.isFinite(v) ? v : null;
+                })
+            };
+        });
+
+        const bests = columns.map((col, ci) => {
+            if (!col.best) return null;
+            const vals = rows.map(r => r.values[ci]).filter(v => v !== null);
+            if (vals.length < 2) return null;
+            return col.best === 'min' ? Math.min(...vals) : Math.max(...vals);
+        });
+
+        // One column per run, one row per value
+        let html = '<thead><tr><th></th>';
+        rows.forEach(({ run, ri }) => {
+            const label = run.name || `Run ${run.runNumber || (ri + 1)}`;
+            const color = run.color || COLORS[ri % COLORS.length];
+            html += `<th><span class="sector-run-dot" style="background:${color}"></span>${escapeHtml(label)}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+        columns.forEach((col, ci) => {
+            html += `<tr><th scope="row" class="sector-detail-label" title="${escapeHtml(col.title || '')}">${escapeHtml(col.label)}${col.unit ? ` <span class="sector-unit">${escapeHtml(col.unit)}</span>` : ''}</th>`;
+            rows.forEach(({ values }) => {
+                const v = values[ci];
+                const isBest = v !== null && bests[ci] !== null && Math.abs(v - bests[ci]) < Math.pow(10, -col.decimals) / 2;
+                html += `<td class="${isBest ? 'sector-best' : ''}">${v === null ? '—' : v.toFixed(col.decimals)}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody>';
+        table.innerHTML = html;
+    }
+
+    // Value of a telemetry field at a time
+    function valueAt(run, field, time) {
+        const data = run.telemetry[field];
+        return data ? AutocrossTrack.interpolate(run.telemetry.timestamps, data, time) : null;
+    }
+
+    // Distance driven (metres) between the window start and end
+    function pathLength(run, w) {
+        const { timestamps, posX, posY } = run.telemetry;
+        let x = AutocrossTrack.interpolate(timestamps, posX, w.startTime);
+        let y = AutocrossTrack.interpolate(timestamps, posY, w.startTime);
+        let total = 0;
+        for (let i = 0; i < timestamps.length; i++) {
+            if (timestamps[i] <= w.startTime) continue;
+            if (timestamps[i] >= w.endTime) break;
+            total += Math.hypot(posX[i] - x, posY[i] - y);
+            x = posX[i];
+            y = posY[i];
+        }
+        return total + Math.hypot(AutocrossTrack.interpolate(timestamps, posX, w.endTime) - x,
+            AutocrossTrack.interpolate(timestamps, posY, w.endTime) - y);
+    }
+
+    // Time-weighted average of a channel between two times
+    function timeAverage(timestamps, data, start, end, absolute) {
+        if (end <= start) return null;
+        const f = absolute ? Math.abs : v => v;
+        let prevT = start;
+        let prevV = f(AutocrossTrack.interpolate(timestamps, data, start));
+        let area = 0;
+        for (let i = 0; i < timestamps.length; i++) {
+            if (timestamps[i] <= start) continue;
+            if (timestamps[i] >= end) break;
+            const v = f(data[i]);
+            area += (timestamps[i] - prevT) * (prevV + v) / 2;
+            prevT = timestamps[i];
+            prevV = v;
+        }
+        const endV = f(AutocrossTrack.interpolate(timestamps, data, end));
+        area += (end - prevT) * (prevV + endV) / 2;
+        return area / (end - start);
     }
 
     // Table listeners are added once; the table content is replaced on each render
@@ -513,38 +636,29 @@ const AutocrossSectors = (function () {
         mapCtx.globalAlpha = 1;
     }
 
+    // Car marker: an arrow in the run's color, faded once the run has finished the sector
     function drawMarker(run, idx, color, finished) {
-        const p = worldToScreen(run.telemetry.posX[idx], run.telemetry.posY[idx]);
+        const { posX, posY } = run.telemetry;
+        const p = worldToScreen(posX[idx], posY[idx]);
+        const dir = AutocrossTrack.directionIndices(run.telemetry, idx);
+        let angle = -Math.PI / 2;
+        if (dir) {
+            const a = worldToScreen(posX[dir[0]], posY[dir[0]]);
+            const b = worldToScreen(posX[dir[1]], posY[dir[1]]);
+            angle = Math.atan2(b.y - a.y, b.x - a.x);
+        }
 
-        // Always keep the run's color — just reduce opacity when finished
         mapCtx.globalAlpha = finished ? 0.5 : 1.0;
-        mapCtx.fillStyle = color;
-        mapCtx.strokeStyle = '#000';
-        mapCtx.lineWidth = 2;
         mapCtx.beginPath();
-        mapCtx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+        AutocrossTrack.carArrowPolygon(p.x, p.y, angle, 18).forEach(([x, y], i) => (i === 0 ? mapCtx.moveTo(x, y) : mapCtx.lineTo(x, y)));
+        mapCtx.closePath();
+        mapCtx.fillStyle = color;
         mapCtx.fill();
+        mapCtx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        mapCtx.lineWidth = 1.5;
+        mapCtx.lineJoin = 'round';
         mapCtx.stroke();
         mapCtx.globalAlpha = 1.0;
-
-        // Direction arrow — only while still running
-        if (!finished) {
-            const { posX, posY } = run.telemetry;
-            if (idx < posX.length - 1) {
-                const next = worldToScreen(posX[idx + 1], posY[idx + 1]);
-                const angle = Math.atan2(next.y - p.y, next.x - p.x);
-                mapCtx.fillStyle = '#ffffff';
-                mapCtx.strokeStyle = '#000';
-                mapCtx.lineWidth = 1;
-                mapCtx.beginPath();
-                mapCtx.moveTo(p.x + Math.cos(angle) * 5, p.y + Math.sin(angle) * 5);
-                mapCtx.lineTo(p.x + Math.cos(angle + 2.5) * 3, p.y + Math.sin(angle + 2.5) * 3);
-                mapCtx.lineTo(p.x + Math.cos(angle - 2.5) * 3, p.y + Math.sin(angle - 2.5) * 3);
-                mapCtx.closePath();
-                mapCtx.fill();
-                mapCtx.stroke();
-            }
-        }
     }
 
     function worldToScreen(x, y) {

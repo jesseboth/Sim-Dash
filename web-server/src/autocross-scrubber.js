@@ -11,6 +11,7 @@ const AutocrossScrubber = (function() {
     let allRuns = [];       // all loaded runs, sorted fastest first
     let currentTime = 0;
     let maxTime = 0;        // slowest run's full duration
+    let minTime = 0;        // earliest launch; time 0 is the start line
     let isPlaying = false;
     let playbackInterval = null;
 
@@ -61,11 +62,12 @@ const AutocrossScrubber = (function() {
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mouseup', handleMouseUp);
 
-        // Canvas touch interactions - use document for move/end to track outside canvas
+        // Canvas touch interactions. Touch moves go to the element the touch started on, so
+        // listening on the canvas tracks a finger outside it without slowing page scrolling.
         canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-        document.addEventListener('touchmove', handleTouchMove, { passive: false });
-        document.addEventListener('touchend', handleTouchEnd);
-        document.addEventListener('touchcancel', handleTouchEnd);
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd);
+        canvas.addEventListener('touchcancel', handleTouchEnd);
 
         // Play/pause button
         playPauseBtn?.addEventListener('click', togglePlayback);
@@ -95,7 +97,8 @@ const AutocrossScrubber = (function() {
         console.log('Loading run in scrubber:', run.runId);
         currentRun = run;
         maxTime = run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
-        currentTime = 0;
+        minTime = startTime(run);
+        currentTime = minTime;
         isPlaying = false;
 
         if (playbackInterval) {
@@ -120,11 +123,12 @@ const AutocrossScrubber = (function() {
         const alignRef = window.AutocrossAlign && AutocrossAlign.getReference();
         currentRun = alignRef || runs[0];
 
-        maxTime = alignRef
-            ? endTime(alignRef)
-            : Math.max(...runs.map(endTime));
+        // Align mode: until the last shifted run finishes
+        const range = alignRef ? AutocrossAlign.timeRange() : null;
+        maxTime = range ? range.end : Math.max(...runs.map(endTime));
+        minTime = range ? Math.min(0, range.start) : Math.min(...runs.map(startTime));
 
-        currentTime = keepTime ? Math.min(currentTime, maxTime) : 0;
+        currentTime = keepTime ? Math.max(minTime, Math.min(currentTime, maxTime)) : minTime;
         if (!keepTime) {
             isPlaying = false;
             if (playbackInterval) {
@@ -137,11 +141,25 @@ const AutocrossScrubber = (function() {
         render();
         updateTimeDisplay();
         updateAddSectorBtn();
-        if (keepTime) notifySeek();
+        notifySeek();
     }
 
     function endTime(run) {
         return run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
+    }
+
+    // Launch time (negative) of a run, or 0 for runs recorded from the start line
+    function startTime(run) {
+        return Math.min(0, run.telemetry.timestamps[0]);
+    }
+
+    // Timeline position (0..1) of a time, and the time at a position
+    function ratioOf(time) {
+        return maxTime > minTime ? (time - minTime) / (maxTime - minTime) : 0;
+    }
+
+    function timeAt(ratio) {
+        return minTime + ratio * (maxTime - minTime);
     }
 
     // Move the playback position by a number of seconds
@@ -157,6 +175,7 @@ const AutocrossScrubber = (function() {
         allRuns = [];
         currentTime = 0;
         maxTime = 0;
+        minTime = 0;
         isPlaying = false;
 
         if (playbackInterval) {
@@ -179,7 +198,7 @@ const AutocrossScrubber = (function() {
 
         isSeeking = true;
 
-        currentTime = Math.max(0, Math.min(maxTime, time));
+        currentTime = Math.max(minTime, Math.min(maxTime, time));
         render();
         updateTimeDisplay();
         updateAddSectorBtn();
@@ -219,7 +238,7 @@ const AutocrossScrubber = (function() {
     // Start playback
     function startPlayback() {
         if (currentTime >= maxTime) {
-            currentTime = 0;
+            currentTime = minTime;
         }
 
         playbackInterval = setInterval(() => {
@@ -284,7 +303,7 @@ const AutocrossScrubber = (function() {
         const rect = canvas.getBoundingClientRect();
         const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
         const ratio = x / rect.width;
-        const time = ratio * maxTime;
+        const time = timeAt(ratio);
 
         seekTo(time);
     }
@@ -302,7 +321,7 @@ const AutocrossScrubber = (function() {
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const ratio = x / rect.width;
-        const time = ratio * maxTime;
+        const time = timeAt(ratio);
 
         seekTo(time);
     }
@@ -363,7 +382,7 @@ const AutocrossScrubber = (function() {
         const rect = canvas.getBoundingClientRect();
         const x = touch.clientX - rect.left;
         const ratio = Math.max(0, Math.min(1, x / canvas.width));
-        const time = ratio * maxTime;
+        const time = timeAt(ratio);
 
         seekTo(time);
     }
@@ -397,7 +416,7 @@ const AutocrossScrubber = (function() {
         ctx.fillRect(10, timelineY, width - 20, timelineHeight);
 
         // Draw progress
-        const progress = currentTime / maxTime;
+        const progress = ratioOf(currentTime);
         const progressWidth = (width - 20) * progress;
 
         ctx.fillStyle = '#4a9eff';
@@ -408,6 +427,7 @@ const AutocrossScrubber = (function() {
 
         // Draw sector markers
         drawSectorMarkers(timelineY, timelineHeight);
+        drawStartMarker(timelineY, timelineHeight);
 
         // Draw finish lines for each run
         drawFinishLines(timelineY, timelineHeight);
@@ -437,6 +457,7 @@ const AutocrossScrubber = (function() {
         const width = rect.width;
 
         const speeds = currentRun.telemetry.speed;
+        const timestamps = currentRun.telemetry.timestamps;
         const maxSpeed = Math.max(...speeds);
 
         ctx.strokeStyle = '#ffffff';
@@ -446,7 +467,7 @@ const AutocrossScrubber = (function() {
         ctx.beginPath();
 
         speeds.forEach((speed, index) => {
-            const x = 10 + ((width - 20) * index / (speeds.length - 1));
+            const x = 10 + (width - 20) * ratioOf(timestamps[index]);
             const normalizedSpeed = speed / maxSpeed;
             const y = timelineY + timelineHeight - (normalizedSpeed * timelineHeight);
 
@@ -473,7 +494,7 @@ const AutocrossScrubber = (function() {
         const numMarkers = 5;
         for (let i = 0; i <= numMarkers; i++) {
             const ratio = i / numMarkers;
-            const time = maxTime * ratio;
+            const time = timeAt(ratio);
             const x = 10 + (width - 20) * ratio;
 
             // Draw tick
@@ -486,15 +507,17 @@ const AutocrossScrubber = (function() {
 
     // Draw vertical finish lines for each loaded run
     function drawFinishLines(timelineY, timelineHeight) {
-        // In align mode the timeline is the reference run's time, so other finish times do not apply
-        if (allRuns.length <= 1 || (window.AutocrossAlign && AutocrossAlign.isActive())) return;
+        if (allRuns.length <= 1) return;
+        // In align mode each finish is shown at the run's shifted time
+        const aligned = window.AutocrossAlign && AutocrossAlign.isActive();
 
         const rect = canvas.getBoundingClientRect();
         const width = rect.width;
 
         allRuns.forEach((run, i) => {
-            const finishTime = run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
-            const x = 10 + (width - 20) * (finishTime / maxTime);
+            const finishTime = run.telemetry.timestamps[run.telemetry.timestamps.length - 1]
+                - (aligned ? AutocrossAlign.offsetOf(run) : 0);
+            const x = 10 + (width - 20) * ratioOf(finishTime);
             const color = run.color || COLORS[i % COLORS.length];
 
             ctx.strokeStyle = color;
@@ -528,12 +551,13 @@ const AutocrossScrubber = (function() {
         timeDisplay.textContent = formatTime(currentTime);
     }
 
-    // Format time as MM:SS.mmm
+    // Format time as MM:SS.mmm, with a minus sign before the start line
     function formatTime(seconds) {
         // Handle invalid input
-        if (typeof seconds !== 'number' || isNaN(seconds) || seconds < 0) {
+        if (typeof seconds !== 'number' || isNaN(seconds)) {
             return '00:00.000';
         }
+        if (seconds < 0) return `-${formatTime(-seconds)}`;
 
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
@@ -557,7 +581,26 @@ const AutocrossScrubber = (function() {
         const frontFinish = alignRef
             ? endTime(alignRef)
             : (allRuns.length > 0 ? endTime(allRuns[0]) : maxTime);
-        btn.disabled = currentTime >= frontFinish - 0.05;
+        btn.disabled = currentTime < 0 || currentTime >= frontFinish - 0.05;
+    }
+
+    // Start line (time 0) when the launch is shown before it
+    function drawStartMarker(timelineY, timelineHeight) {
+        if (minTime >= 0) return;
+        const width = canvas.getBoundingClientRect().width;
+        const x = 10 + (width - 20) * ratioOf(0);
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, timelineY - 4);
+        ctx.lineTo(x, timelineY + timelineHeight + 4);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 9px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('START', x, timelineY - 7);
     }
 
     // Draw sector markers on the timeline
@@ -569,7 +612,7 @@ const AutocrossScrubber = (function() {
 
         times.forEach((t, i) => {
             if (t === undefined || t === null) return;
-            const x = 10 + (width - 20) * (t / maxTime);
+            const x = 10 + (width - 20) * ratioOf(t);
 
             // Vertical line
             ctx.strokeStyle = '#ffffff';

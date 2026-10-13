@@ -87,6 +87,27 @@
         return interpolate(progress, timestamps, target);
     }
 
+    // --- Car marker ---
+    // Two sample indices that give the driving direction at sample i: the next sample at
+    // least minDist metres away, else the previous one (car standing at the end). Null if never moving.
+    function directionIndices(telemetry, i, minDist = 1) {
+        const { posX, posY } = telemetry;
+        for (let j = i + 1; j < posX.length; j++) {
+            if (Math.hypot(posX[j] - posX[i], posY[j] - posY[i]) >= minDist) return [i, j];
+        }
+        for (let j = i - 1; j >= 0; j--) {
+            if (Math.hypot(posX[i] - posX[j], posY[i] - posY[j]) >= minDist) return [j, i];
+        }
+        return null;
+    }
+
+    // Corners of a navigation arrow (dart) centred on x, y and pointing along angle
+    function carArrowPolygon(x, y, angle, size) {
+        const shape = [[0.6, 0], [-0.45, 0.42], [-0.2, 0], [-0.45, -0.42]];
+        const cos = Math.cos(angle), sin = Math.sin(angle);
+        return shape.map(([u, v]) => [x + (u * cos - v * sin) * size, y + (u * sin + v * cos) * size]);
+    }
+
     // --- Sector gates ---
     // A gate is the line through a sector position, across the track
     // (perpendicular to dirX/dirY). Returns the interpolated time of the first forward
@@ -129,7 +150,7 @@
     // the previous gate. A gate the run does not pass gets null.
     function gateTimes(telemetry, sectors) {
         const times = [];
-        let afterTime = telemetry.timestamps[0];
+        let afterTime = startLineTime(telemetry);
         for (const sector of sectors) {
             let t = null;
             if (sector.dirX !== undefined && sector.dirY !== undefined) {
@@ -144,10 +165,15 @@
         return times;
     }
 
-    // Start and end time of sector i (0 = run start to gate 1, last = last gate to run end)
+    // Time 0 is the start line. Runs recorded without the launch start just after it.
+    function startLineTime(telemetry) {
+        return Math.max(0, telemetry.timestamps[0]);
+    }
+
+    // Start and end time of sector i (0 = start line to gate 1, last = last gate to the finish)
     function sectorWindow(telemetry, gates, sectorIndex) {
         const ts = telemetry.timestamps;
-        const startTime = sectorIndex === 0 ? ts[0] : gates[sectorIndex - 1];
+        const startTime = sectorIndex === 0 ? startLineTime(telemetry) : gates[sectorIndex - 1];
         const endTime = sectorIndex === gates.length ? ts[ts.length - 1] : gates[sectorIndex];
         if (startTime === null || endTime === null || endTime <= startTime) return null;
         return { startTime, endTime };
@@ -172,6 +198,9 @@
         interpolate,
         timeAtProgress,
         gateTimes,
+        directionIndices,
+        carArrowPolygon,
+        startLineTime,
         sectorWindow,
         sectorTimes
     };

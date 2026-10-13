@@ -6,6 +6,13 @@
     <title>Autocross Telemetry Analyzer</title>
     <link rel="stylesheet" href="/css/autocross-style.css">
     <!-- Chart.js CSS not needed, it uses canvas -->
+    <link rel="manifest" href="/data/manifest.json">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Sim Dash">
+    <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+    <script src="/src/pwa.js" defer></script>
 </head>
 <body>
     <!-- Header Section -->
@@ -42,13 +49,14 @@
                     <h2>Track Map</h2>
                     <div class="map-controls">
                         <button id="mapPlayBtn" class="btn-icon" title="Play/Pause">▶</button>
+                        <button id="zoomOutBtn" class="btn-icon" title="Zoom Out">−</button>
+                        <input type="range" id="mapZoomSlider" class="map-zoom-slider" min="0" max="1000" value="0" title="Zoom" aria-label="Map zoom">
                         <button id="zoomInBtn" class="btn-icon" title="Zoom In">+</button>
-                        <button id="zoomOutBtn" class="btn-icon" title="Zoom Out">-</button>
                         <button id="fitBtn" class="btn-icon" title="Fit to View">⊡</button>
                         <button id="alignResetBtn" class="btn btn-secondary btn-sm align-reset hidden" title="Back to time mode"></button>
                         <label class="toggle-label" style="margin-left: 8px; font-size: 0.85rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
                             <input type="checkbox" id="mostRecentOnTopToggle" checked style="cursor: pointer;">
-                            <span>Recent on top</span>
+                            <span>Keep latest run</span>
                         </label>
                     </div>
                 </div>
@@ -99,6 +107,7 @@
                 <span id="runCount" class="run-count">0 runs</span>
                 <div class="sort-toggle" role="group" aria-label="Sort runs">
                     <button class="sort-btn" data-sort="fastest">Fastest</button>
+                    <button class="sort-btn" data-sort="scratch" title="Fastest without cone penalties">Scratch</button>
                     <button class="sort-btn" data-sort="recent">Recent</button>
                 </div>
                 <select id="carFilter" class="car-filter hidden" title="Show runs for one car"></select>
@@ -110,12 +119,6 @@
                 <button id="clearSelectionsBtn" class="btn btn-secondary">Clear</button>
                 <button id="deleteRunBtn" class="btn btn-danger" disabled>Delete</button>
             </div>
-        </div>
-
-        <!-- Top 10 Panel -->
-        <div id="top10Panel" class="top10-panel hidden">
-            <h3>🏆 Top 10 Fastest Runs</h3>
-            <div id="top10List" class="top10-list"></div>
         </div>
 
         <!-- All Runs List -->
@@ -214,6 +217,8 @@
                 <div class="sectors-table-panel">
                     <div class="sectors-table-scroll">
                         <table id="sectorsTable" class="sectors-table"></table>
+                        <h3 id="sectorDetailTitle" class="sector-detail-title"></h3>
+                        <table id="sectorDetailTable" class="sectors-table sector-detail-table"></table>
                     </div>
                 </div>
             </div>
@@ -342,6 +347,7 @@
     <script src="/src/autocross-align.js"></script>
     <script src="/src/autocross-scripts.js"></script>
     <script src="/src/autocross-recorder.js"></script>
+    <script src="/src/autocross-kinetic.js"></script>
     <script src="/src/autocross-charts.js"></script>
     <script src="/src/autocross-map.js"></script>
     <script src="/src/autocross-scrubber.js"></script>

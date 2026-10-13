@@ -202,8 +202,9 @@ function readRunSummary(filePath, sectors, sectorsKey) {
     }
 
     const { telemetry, ...summary } = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    // Same samples as the page uses, so card and table sector times match
     summary.sectorTimes = telemetry && telemetry.timestamps && telemetry.timestamps.length > 1
-        ? track.sectorTimes(telemetry, sectors)
+        ? track.sectorTimes(reduceSampleRate(telemetry, DISPLAY_SAMPLE_RATE), sectors)
         : [];
     summaryCache.set(filePath, { mtimeMs, sectorsKey, summary });
     return summary;
@@ -258,6 +259,53 @@ function getRun(courseId, runId) {
     }
 }
 
+// Runs sent to the page keep at most DISPLAY_SAMPLE_RATE samples per second, and long runs
+// (rally stages) at most MAX_DISPLAY_SAMPLES in total. More samples make the page slow
+// without adding visible detail.
+const DISPLAY_SAMPLE_RATE = 50;
+const MAX_DISPLAY_SAMPLES = 15000;
+
+/**
+ * Load a run for display: same as getRun, with the telemetry reduced to DISPLAY_SAMPLE_RATE
+ */
+function getRunForDisplay(courseId, runId) {
+    const run = getRun(courseId, runId);
+    if (run && run.telemetry) run.telemetry = reduceSampleRate(run.telemetry, DISPLAY_SAMPLE_RATE);
+    return run;
+}
+
+// Keep a sample when at least 1/rate seconds have passed since the last kept one, plus the
+// last sample. Every channel (also the per-wheel ones) keeps the same samples.
+function reduceSampleRate(telemetry, rate) {
+    const ts = telemetry.timestamps;
+    if (!Array.isArray(ts) || ts.length < 3) return telemetry;
+    const duration = ts[ts.length - 1] - ts[0];
+    const minStep = Math.max(1 / rate, duration / MAX_DISPLAY_SAMPLES);
+    const keep = [0];
+    for (let i = 1; i < ts.length - 1; i++) {
+        if (ts[i] - ts[keep[keep.length - 1]] >= minStep) keep.push(i);
+    }
+    keep.push(ts.length - 1);
+    if (keep.length === ts.length) return telemetry;
+
+    const n = ts.length;
+    const pick = arr => keep.map(i => arr[i]);
+    const reduced = {};
+    for (const [key, value] of Object.entries(telemetry)) {
+        if (Array.isArray(value) && value.length === n) {
+            reduced[key] = pick(value);
+        } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+            reduced[key] = {};
+            for (const [sub, arr] of Object.entries(value)) {
+                reduced[key][sub] = Array.isArray(arr) && arr.length === n ? pick(arr) : arr;
+            }
+        } else {
+            reduced[key] = value;
+        }
+    }
+    return reduced;
+}
+
 /**
  * Save a new run to a course (writes individual file)
  */
@@ -282,7 +330,7 @@ function saveRun(courseId, runData) {
 
         // Save individual run file
         const runFile = path.join(runsDir, `${runData.runId}.json`);
-        fs.writeFileSync(runFile, JSON.stringify(runData, null, 2));
+        fs.writeFileSync(runFile, JSON.stringify(runData));
 
         // Update course metadata
         updateCourseMetadata(courseId);
@@ -342,7 +390,7 @@ function renameRun(courseId, runId, name) {
         run.name = name || null;
 
         // Save updated run
-        fs.writeFileSync(runFile, JSON.stringify(run, null, 2));
+        fs.writeFileSync(runFile, JSON.stringify(run));
 
         return true;
     } catch (err) {
@@ -371,7 +419,7 @@ function updateCones(courseId, runId, cones) {
         run.cones = cones;
 
         // Save updated run
-        fs.writeFileSync(runFile, JSON.stringify(run, null, 2));
+        fs.writeFileSync(runFile, JSON.stringify(run));
 
         // Rebuild top 10 since adjusted times changed
         rebuildTop10(courseId);
@@ -521,6 +569,7 @@ module.exports = {
     renameCourse,
     loadRuns,
     getRun,
+    getRunForDisplay,
     saveRun,
     deleteRun,
     renameRun,

@@ -26,15 +26,29 @@ type AssettoState struct {
 	lapFreezeTime    time.Time // when lapFreezeValue last changed
 	lastCarID        int32
 	lastTrackID      int32
-	completedLapMs   int32     // LastLap captured at run completion (most accurate time)
+	completedLapMs   int32                  // LastLap captured at run completion (most accurate time)
+	launchBuffer     []util.TelemetrySample // samples from the launch, before the timer starts
+	launchTimes      []time.Time            // wall clock of each launch sample
 }
+
+// Bytes at the end of the AC packet that older plugins do not send (YawRate, BodySlipAngle).
+// Those packets are still accepted; the missing values read as 0.
+const acNewFieldsLength = 8
+
+const (
+	sampleInterval  = time.Second / 50       // runs keep at most 50 samples per second
+	maxRunSamples   = 30 * 60 * 50           // 30 minutes at 50 Hz, for long rally stages
+	launchSpeed     = 1.0                    // mph; below this the car is waiting to launch
+	launchStillKeep = 500 * time.Millisecond // standing time kept before the launch
+	launchMaxLength = 30 * time.Second       // longest launch kept
+)
 
 // AssettoLoop is the main loop for Assetto Corsa telemetry
 func AssettoLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
 	log.Println("Starting Assetto Corsa Telemetry")
 
 	state := &AssettoState{
-		telemetryBuffer: make([]util.TelemetrySample, 0, 24000), // 10 min @ 40Hz
+		telemetryBuffer: make([]util.TelemetrySample, 0, maxRunSamples),
 		prevLapValue:    -1,
 	}
 
@@ -50,7 +64,7 @@ func AssettoReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength
 	n, addr, err := conn.ReadFromUDP(buffer)
 	if err != nil {
 		log.Fatal("Error reading UDP data:", err, addr)
-	} else if n < totalLength {
+	} else if n < totalLength-acNewFieldsLength {
 		if util.WrongData <= 5 {
 			util.WrongData++
 		} else {
@@ -144,6 +158,7 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		state.currentCourseID = apiState.CourseID
 		state.telemetryBuffer = state.telemetryBuffer[:0]
 		state.prevLapValue = -1
+		clearLaunch(state)
 		if debug {
 			log.Printf("Auto-detection enabled for course: %s", state.currentCourseID)
 		}
@@ -152,6 +167,7 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		state.recordingEnabled = false
 		state.runActive = false
 		state.telemetryBuffer = state.telemetryBuffer[:0]
+		clearLaunch(state)
 		if debug {
 			log.Println("Auto-detection disabled, in-progress run discarded")
 		}
@@ -168,11 +184,17 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		currentLap = float32(currentLapMs) / 1000.0
 	}
 
-	// Detect run start: timer transitions from 0 to >0
+	// Detect run start: timer transitions from 0 to >0.
+	// Time 0 is when the timer started; the launch before it has negative times.
 	if !state.runActive && currentLap > 0 && state.prevLapValue == 0 {
 		state.runActive = true
-		state.runStarted = time.Now()
+		state.runStarted = time.Now().Add(-time.Duration(float64(currentLap) * float64(time.Second)))
 		state.telemetryBuffer = state.telemetryBuffer[:0]
+		for i, sample := range state.launchBuffer {
+			sample.Timestamp = state.launchTimes[i].Sub(state.runStarted).Seconds()
+			state.telemetryBuffer = append(state.telemetryBuffer, sample)
+		}
+		clearLaunch(state)
 		state.completedLapMs = 0
 		state.lapFreezeValue = currentLap
 		state.lapFreezeTime = time.Now()
@@ -203,12 +225,15 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 	state.prevLapValue = currentLap
 
 	if !state.runActive {
+		bufferLaunch(state, f32map, s32map)
 		return
 	}
 
-	// Buffer sample
+	// Buffer sample, at most one per sample interval
 	sample := createTelemetrySample(f32map, s32map, state.runStarted)
-	state.telemetryBuffer = append(state.telemetryBuffer, sample)
+	if n := len(state.telemetryBuffer); n == 0 || sample.Timestamp-state.telemetryBuffer[n-1].Timestamp >= sampleInterval.Seconds() {
+		state.telemetryBuffer = append(state.telemetryBuffer, sample)
+	}
 
 	// Update elapsed time shown in UI
 	util.UpdateRecordingElapsed(time.Since(state.runStarted).Seconds())
@@ -221,6 +246,7 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		if debug {
 			log.Println("Run complete - lap timer froze")
 		}
+		trimAfterFreeze(state)
 		saveRun(state, debug)
 		state.runActive = false
 		state.telemetryBuffer = state.telemetryBuffer[:0]
@@ -228,8 +254,8 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		return
 	}
 
-	// Buffer overflow protection (10 minutes @ 40Hz = 24,000 samples)
-	if len(state.telemetryBuffer) >= 24000 {
+	// Buffer overflow protection
+	if len(state.telemetryBuffer) >= maxRunSamples {
 		if debug {
 			log.Println("Buffer full - saving run")
 		}
@@ -238,6 +264,42 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		state.telemetryBuffer = state.telemetryBuffer[:0]
 		util.NotifyRunSaved()
 	}
+}
+
+// bufferLaunch keeps the samples since the car last stood still, so a run includes its launch
+func bufferLaunch(state *AssettoState, f32map map[string]float32, s32map map[string]int32) {
+	now := time.Now()
+	if n := len(state.launchTimes); n > 0 && now.Sub(state.launchTimes[n-1]) < sampleInterval {
+		return
+	}
+	sample := createTelemetrySample(f32map, s32map, now)
+
+	// Standing still: keep only a short standing time, so the launch starts from rest
+	keepFrom := now.Add(-launchMaxLength)
+	if sample.Speed < launchSpeed {
+		keepFrom = now.Add(-launchStillKeep)
+	}
+	drop := 0
+	for drop < len(state.launchTimes) && state.launchTimes[drop].Before(keepFrom) {
+		drop++
+	}
+	state.launchBuffer = append(state.launchBuffer[drop:], sample)
+	state.launchTimes = append(state.launchTimes[drop:], now)
+}
+
+func clearLaunch(state *AssettoState) {
+	state.launchBuffer = nil
+	state.launchTimes = nil
+}
+
+// trimAfterFreeze removes the samples after the lap timer stopped, so the run ends at the finish
+func trimAfterFreeze(state *AssettoState) {
+	buf := state.telemetryBuffer
+	last := len(buf) - 1
+	for last > 0 && buf[last-1].LapTime == buf[last].LapTime {
+		last--
+	}
+	state.telemetryBuffer = buf[:last+1]
 }
 
 // createTelemetrySample creates a telemetry sample from the packet data
@@ -251,16 +313,12 @@ func createTelemetrySample(f32map map[string]float32, s32map map[string]int32, s
 		lapTime = float32(currentLapMs) / 1000.0
 	}
 
-	roundTenth := func(v float32) float32 {
-		return float32(math.Round(float64(v)*10) / 10)
-	}
-
 	sample := util.TelemetrySample{
 		Timestamp: time.Since(startTime).Seconds(),
 		Brake:     f32map["Brake"],
 		Accel:     f32map["Accel"],
-		AccelX:    roundTenth(f32map["AccelerationX"]), // Lateral G (left/right)
-		AccelY:    roundTenth(f32map["AccelerationZ"]), // Longitudinal G (accel/brake)
+		AccelX:    roundTo(f32map["AccelerationX"], 2), // Lateral G (left/right)
+		AccelY:    roundTo(f32map["AccelerationZ"], 2), // Longitudinal G (accel/brake)
 		Speed:     speed,
 		PosX:      f32map["PositionX"], // X coordinate
 		PosY:      f32map["PositionZ"], // Z coordinate for top-down map - FIXED from PositionY
@@ -270,6 +328,8 @@ func createTelemetrySample(f32map map[string]float32, s32map map[string]int32, s
 		Clutch:    roundTo(f32map["Clutch"], 3),
 		Rpm:       float32(math.Round(float64(f32map["CurrentEngineRpm"]))),
 		Gear:      s32map["Gear"],
+		YawRate:   roundTo(f32map["YawRate"], 1),
+		BodySlip:  roundTo(f32map["BodySlipAngle"], 2),
 	}
 
 	for i, wheel := range wheelNames {
@@ -323,8 +383,8 @@ func saveRun(state *AssettoState, debug bool) {
 	}
 	defer file.Close()
 
+	// Compact JSON: run files hold tens of thousands of samples
 	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
 	err = encoder.Encode(runData)
 	if err != nil {
 		log.Printf("Error writing run data: %v", err)
@@ -360,6 +420,8 @@ func prepareRunData(state *AssettoState) util.AutocrossRun {
 	slipRatio := util.NewWheelChannel(n)
 	load := util.NewWheelChannel(n)
 	suspTravel := util.NewWheelChannel(n)
+	yawRate := make([]float32, n)
+	bodySlip := make([]float32, n)
 
 	var maxSpeed float32
 	var maxLatG float32
@@ -384,6 +446,8 @@ func prepareRunData(state *AssettoState) util.AutocrossRun {
 		slipRatio.Set(i, sample.SlipRatio)
 		load.Set(i, sample.Load)
 		suspTravel.Set(i, sample.SuspTravel)
+		yawRate[i] = sample.YawRate
+		bodySlip[i] = sample.BodySlip
 
 		// Calculate statistics
 		if sample.Speed > maxSpeed {
@@ -450,6 +514,8 @@ func prepareRunData(state *AssettoState) util.AutocrossRun {
 			SlipRatio:  slipRatio,
 			Load:       load,
 			SuspTravel: suspTravel,
+			YawRate:    yawRate,
+			BodySlip:   bodySlip,
 		},
 		Statistics: util.AutocrossStatistics{
 			MaxSpeed: maxSpeed,
