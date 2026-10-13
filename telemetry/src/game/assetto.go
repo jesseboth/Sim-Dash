@@ -48,7 +48,7 @@ func AssettoLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, to
 	log.Println("Starting Assetto Corsa Telemetry")
 
 	state := &AssettoState{
-		telemetryBuffer: make([]util.TelemetrySample, 0, maxRunSamples),
+		telemetryBuffer: make([]util.TelemetrySample, 0, 4096),
 		prevLapValue:    -1,
 	}
 
@@ -78,13 +78,17 @@ func AssettoReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength
 		log.Println("UDP client connected:", addr)
 	}
 
+	// Fields an older plugin does not send read as 0
+	packet := make([]byte, totalLength)
+	copy(packet, buffer[:n])
+
 	// Parse packet into typed maps
 	f32map := make(map[string]float32)
 	u8map := make(map[string]uint8)
 	s32map := make(map[string]int32)
 
 	for i, T := range telemArray {
-		data := buffer[:n][T.StartOffset:T.EndOffset]
+		data := packet[T.StartOffset:T.EndOffset]
 
 		if debug {
 			log.Printf("Data chunk %d: %v (%s) (%s)", i, data, T.Name, T.DataType)
@@ -231,7 +235,7 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 
 	// Buffer sample, at most one per sample interval
 	sample := createTelemetrySample(f32map, s32map, state.runStarted)
-	if n := len(state.telemetryBuffer); n == 0 || sample.Timestamp-state.telemetryBuffer[n-1].Timestamp >= sampleInterval.Seconds() {
+	if n := len(state.telemetryBuffer); n == 0 || sampleSlot(sample.Timestamp) > sampleSlot(state.telemetryBuffer[n-1].Timestamp) {
 		state.telemetryBuffer = append(state.telemetryBuffer, sample)
 	}
 
@@ -266,10 +270,17 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 	}
 }
 
+// sampleSlot is the sampleInterval time slot of a run time. One sample is kept per slot:
+// packets arrive once per game frame, so their spacing is uneven and a minimum gap
+// between kept samples would drop many of them.
+func sampleSlot(t float64) int64 {
+	return int64(math.Floor(t / sampleInterval.Seconds()))
+}
+
 // bufferLaunch keeps the samples since the car last stood still, so a run includes its launch
 func bufferLaunch(state *AssettoState, f32map map[string]float32, s32map map[string]int32) {
 	now := time.Now()
-	if n := len(state.launchTimes); n > 0 && now.Sub(state.launchTimes[n-1]) < sampleInterval {
+	if n := len(state.launchTimes); n > 0 && now.UnixNano()/int64(sampleInterval) == state.launchTimes[n-1].UnixNano()/int64(sampleInterval) {
 		return
 	}
 	sample := createTelemetrySample(f32map, s32map, now)

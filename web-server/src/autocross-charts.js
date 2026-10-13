@@ -457,6 +457,7 @@ const AutocrossCharts = (() => {
         if (!isTouch) {
             canvas.setPointerCapture(e.pointerId);
             e.preventDefault();
+            window.AutocrossScrubber?.pause();
         }
 
         const startX = e.clientX, startY = e.clientY;
@@ -465,14 +466,21 @@ const AutocrossCharts = (() => {
         const xAxis = chart.scales.x;
         const secPerPx = (xAxis.max - xAxis.min) / ((xAxis.right - xAxis.left) * canvas.getBoundingClientRect().width / chart.width);
         let started = !isTouch;
+        let decided = !isTouch;
         const samples = []; // recent pointer positions, for the release velocity
 
         const onMove = (ev) => {
             if (ev.pointerId !== e.pointerId) return;
             const dx = ev.clientX - startX;
-            if (!started && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(ev.clientY - startY)) {
-                started = true;
-                canvas.setPointerCapture(ev.pointerId);
+            // Decide once, after the first 8 px, the same way the list scrolling does:
+            // mostly sideways scrubs, mostly vertical scrolls the list for the rest of the touch
+            if (!decided && Math.hypot(dx, ev.clientY - startY) > 8) {
+                decided = true;
+                started = Math.abs(dx) > Math.abs(ev.clientY - startY);
+                if (started) {
+                    canvas.setPointerCapture(ev.pointerId);
+                    window.AutocrossScrubber?.pause();
+                }
             }
             if (!started) return;
             samples.push({ t: ev.timeStamp, x: ev.clientX });

@@ -71,9 +71,18 @@ const AutocrossAlign = (function () {
         const anchorDist = AutocrossTrack.interpolate(reference.telemetry.timestamps, referenceDist, anchorTime);
         runs.forEach(run => {
             if (run.runId === reference.runId) return;
+            const ts = run.telemetry.timestamps;
             const progress = AutocrossTrack.progressAlongPath(reference.telemetry, referenceDist, run.telemetry);
-            const t = AutocrossTrack.timeAtProgress(anchorDist, progress, run.telemetry.timestamps);
-            offsetByRun.set(run.runId, t === null ? 0 : t - anchorTime);
+            const t = AutocrossTrack.timeAtProgress(anchorDist, progress, ts);
+            if (t !== null) {
+                offsetByRun.set(run.runId, t - anchorTime);
+                return;
+            }
+            // The run never got that far (a different line to the finish, or a run that stops
+            // early): line it up at the furthest point it reached instead
+            const lastProgress = progress[progress.length - 1];
+            const refTime = AutocrossTrack.interpolate(referenceDist, reference.telemetry.timestamps, lastProgress);
+            offsetByRun.set(run.runId, ts[ts.length - 1] - refTime);
         });
     }
 

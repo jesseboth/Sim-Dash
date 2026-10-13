@@ -190,12 +190,10 @@ const AutocrossMap = (function() {
         // Resize
         window.addEventListener('resize', () => {
             resizeCanvas();
-            if (currentRuns.length > 0) {
-                // Maintain the current view when resizing
-                render();
-            } else {
-                render();
-            }
+            // The zoom limit depends on the map's shape (e.g. after rotating the tablet)
+            zoom = clampZoom(zoom);
+            clampOffset();
+            render();
         });
     }
 
@@ -742,13 +740,14 @@ const AutocrossMap = (function() {
         }
 
         const run = getRunAtScreenPoint(sx, sy);
-        if (run && window.AutocrossAlign && currentRuns.length > 1) {
-            const ref = AutocrossAlign.getReference();
+        const alignRef = window.AutocrossAlign && AutocrossAlign.getReference();
+        // Tapping the aligned car always leaves align mode; aligning needs two runs
+        if (run && window.AutocrossAlign && (currentRuns.length > 1 || (alignRef && alignRef.runId === run.runId))) {
+            const ref = alignRef;
             if (ref && ref.runId === run.runId) {
                 AutocrossAlign.clear();
             } else {
                 // Line up at this car's position now; while aligned, its time is offset from the timeline
-                const alignRef = AutocrossAlign.getReference();
                 AutocrossAlign.setReference(run, alignRef ? AutocrossAlign.timeInRun(run, currentTime) : currentTime);
             }
             return;

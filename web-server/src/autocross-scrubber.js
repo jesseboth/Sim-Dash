@@ -162,6 +162,12 @@ const AutocrossScrubber = (function() {
         return minTime + ratio * (maxTime - minTime);
     }
 
+    // Timeline position under a pointer; the timeline is drawn 10 px in from each side
+    function ratioAtClientX(clientX) {
+        const rect = canvas.getBoundingClientRect();
+        return Math.max(0, Math.min(1, (clientX - rect.left - 10) / (rect.width - 20)));
+    }
+
     // Move the playback position by a number of seconds
     function step(seconds) {
         if (!currentRun) return;
@@ -300,10 +306,7 @@ const AutocrossScrubber = (function() {
         if (!isDragging || !currentRun) return;
 
         // Get position and clamp to canvas bounds
-        const rect = canvas.getBoundingClientRect();
-        const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-        const ratio = x / rect.width;
-        const time = timeAt(ratio);
+        const time = timeAt(ratioAtClientX(e.clientX));
 
         seekTo(time);
     }
@@ -318,10 +321,7 @@ const AutocrossScrubber = (function() {
     function handleSeekFromMouse(e) {
         if (!currentRun) return;
 
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const ratio = x / rect.width;
-        const time = timeAt(ratio);
+        const time = timeAt(ratioAtClientX(e.clientX));
 
         seekTo(time);
     }
@@ -379,10 +379,7 @@ const AutocrossScrubber = (function() {
     function handleSeekFromTouch(touch) {
         if (!currentRun) return;
 
-        const rect = canvas.getBoundingClientRect();
-        const x = touch.clientX - rect.left;
-        const ratio = Math.max(0, Math.min(1, x / canvas.width));
-        const time = timeAt(ratio);
+        const time = timeAt(ratioAtClientX(touch.clientX));
 
         seekTo(time);
     }
@@ -642,6 +639,7 @@ const AutocrossScrubber = (function() {
         render,
         setRuns,
         step,
+        pause: () => { if (isPlaying) stopPlayback(); },
         getCurrentTime: () => currentTime,
         getCurrentRun: () => currentRun
     };

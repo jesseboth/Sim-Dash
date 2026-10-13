@@ -40,9 +40,9 @@ const KineticScroll = (function () {
         }
 
         el.addEventListener('pointerdown', (e) => {
-            if (e.pointerType !== 'touch') return;
             // A tap during a glide only stops it
-            suppressClick = Boolean(glide);
+            suppressClick = e.pointerType === 'touch' && Boolean(glide);
+            if (e.pointerType !== 'touch') return;
             stopGlide();
             if (ignore && e.target.closest(ignore)) return;
             drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, top0: el.scrollTop, axis: null, samples: [] };

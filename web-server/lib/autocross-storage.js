@@ -274,16 +274,18 @@ function getRunForDisplay(courseId, runId) {
     return run;
 }
 
-// Keep a sample when at least 1/rate seconds have passed since the last kept one, plus the
-// last sample. Every channel (also the per-wheel ones) keeps the same samples.
+// Keep the first sample in each time slot of length 1/rate (or longer for long runs), plus
+// the last sample. Every channel (also the per-wheel ones) keeps the same samples.
 function reduceSampleRate(telemetry, rate) {
     const ts = telemetry.timestamps;
     if (!Array.isArray(ts) || ts.length < 3) return telemetry;
     const duration = ts[ts.length - 1] - ts[0];
-    const minStep = Math.max(1 / rate, duration / MAX_DISPLAY_SAMPLES);
+    const step = Math.max(1 / rate, duration / MAX_DISPLAY_SAMPLES);
+    // The small tolerance keeps exact grids (e.g. 0.02 s steps) from losing samples to rounding
+    const slot = t => Math.floor((t - ts[0]) / step + 1e-6);
     const keep = [0];
     for (let i = 1; i < ts.length - 1; i++) {
-        if (ts[i] - ts[keep[keep.length - 1]] >= minStep) keep.push(i);
+        if (slot(ts[i]) > slot(ts[keep[keep.length - 1]])) keep.push(i);
     }
     keep.push(ts.length - 1);
     if (keep.length === ts.length) return telemetry;

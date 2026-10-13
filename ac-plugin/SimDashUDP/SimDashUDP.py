@@ -117,7 +117,7 @@ def apply_config(ip, port, rate):
     global UDP_IP, UDP_PORT, UPDATE_RATE_HZ, destinations
     UDP_IP = ip
     UDP_PORT = port
-    UPDATE_RATE_HZ = rate
+    UPDATE_RATE_HZ = max(1, rate)
 
     addr = SOCKADDR_IN()
     addr.sin_family = AF_INET
@@ -272,14 +272,14 @@ def send_telemetry():
             suspension_travel[i] = float(raw_sus[i])
 
         # Yaw rate (deg/s) and body slip angle (deg): rotation of the car, and the angle between
-        # where it points and where it travels. Body slip is 0 below walking pace.
+        # where it points and where it travels. Body slip is 0 below walking pace and in reverse.
         yaw_rate = 0.0
         body_slip = 0.0
         try:
             ang_vel = ac.getCarState(0, acsys.CS.LocalAngularVelocity)
             yaw_rate = math.degrees(float(ang_vel[1]))
             loc_vel = ac.getCarState(0, acsys.CS.LocalVelocity)
-            if math.hypot(loc_vel[0], loc_vel[2]) > 2.0:
+            if loc_vel[2] > 0 and math.hypot(loc_vel[0], loc_vel[2]) > 2.0:
                 body_slip = math.degrees(math.atan2(float(loc_vel[0]), float(loc_vel[2])))
         except Exception:
             pass
