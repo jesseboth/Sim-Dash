@@ -497,6 +497,7 @@ const AutocrossMap = (function() {
         }
 
         applyFollow();
+        window.AutocrossCharts?.setFocusRun(followRunId);
 
         // Create array with run data and original indices for color mapping
         // Note: currentRuns is already sorted by speed (fastest first) from loadSelectedRuns()

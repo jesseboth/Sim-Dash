@@ -117,6 +117,7 @@ If the page cannot get the recorder status 10 times (2 s), it shows "Recorder of
 - The page decides the drag direction (time or page scroll) once, after 8 px.
 - The G channels use smoothing (`smooth: 0.15`).
 - Sector lines show on the charts, with labels at the bottom.
+- Charts draw runs in the same sequence as the map: the fastest scratch time on top, and the followed run on top of all runs. The values under the cursor stay in a fixed sequence.
 - The channel dialog: drag a row to move it. Ctrl/⌘+click or long-press selects more than one row. Then drag the selection as a group. A row moves when the pointer goes into the next row.
 
 ### 5.5 Align mode

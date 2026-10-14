@@ -629,6 +629,8 @@ const AutocrossCharts = (() => {
         const color = runColor(run);
         return {
             label: `Run ${run.runNumber}`,
+            runId: run.runId,
+            scratchTime: run.lapTime,
             data,
             borderColor: color,
             backgroundColor: color,
@@ -637,6 +639,22 @@ const AutocrossCharts = (() => {
             tension: channel.stepped ? 0 : 0.1,
             stepped: channel.stepped ? 'before' : false
         };
+    }
+
+    // Draw order, as on the map: slowest to fastest scratch time, the focused run on top
+    let focusRunId = null;
+    function stackOrder(datasets) {
+        return datasets.sort((a, b) =>
+            (a.runId === focusRunId) - (b.runId === focusRunId) || b.scratchTime - a.scratchTime);
+    }
+
+    function setFocusRun(runId) {
+        if (runId === focusRunId) return;
+        focusRunId = runId;
+        Object.values(charts).forEach(chart => {
+            stackOrder(chart.data.datasets);
+            chart.update('none');
+        });
     }
 
     function updateChannelChart(channel, baseTimestamps) {
@@ -656,7 +674,7 @@ const AutocrossCharts = (() => {
         setMissing(channel.key, datasets.length === 0);
 
         chart.data.labels = baseTimestamps;
-        chart.data.datasets = datasets;
+        chart.data.datasets = stackOrder(datasets);
         chart.update('none');
     }
 
@@ -800,7 +818,7 @@ const AutocrossCharts = (() => {
         chart.options.scales.y.max = yMax;
 
         chart.data.labels = baseTimestamps;
-        chart.data.datasets = datasets;
+        chart.data.datasets = stackOrder(datasets);
         chart.update('none');
     }
 
@@ -888,7 +906,8 @@ const AutocrossCharts = (() => {
             if (!container) return;
             if (idx === null || idx === undefined) { container.innerHTML = ''; return; }
 
-            container.innerHTML = chart.data.datasets.map(ds => {
+            // Fixed order, so the values do not move when the focused run changes
+            container.innerHTML = [...chart.data.datasets].sort((a, b) => b.scratchTime - a.scratchTime).map(ds => {
                 const v = ds.data[idx];
                 if (v === null || v === undefined || ds.isReference) return '';
                 const sign = channel.delta && v > 0 ? '+' : '';
@@ -937,6 +956,7 @@ const AutocrossCharts = (() => {
         // Shown channels that have a sector average, in display order
         getStatChannels: () => shownKeys().map(k => channelByKey.get(k)).filter(c => c.stat),
         getChannelData,
+        setFocusRun,
         render: () => Object.values(charts).forEach(chart => chart.update('none'))
     };
 })();
