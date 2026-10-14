@@ -442,22 +442,25 @@ function handleImportRuns(data) {
     const importedRuns = [];
     const errors = [];
 
-    for (const runData of runs) {
+    for (const [index, runData] of runs.entries()) {
         try {
             // Validate basic run structure
-            if (!runData.lapTime || !runData.telemetry) {
+            const lapTime = Number(runData.lapTime);
+            if (!(lapTime > 0) || !runData.telemetry) {
                 errors.push(`Invalid run data: missing lapTime or telemetry`);
                 continue;
             }
 
-            // Generate new runId to avoid conflicts
+            // Generate new runId to avoid conflicts (the index keeps ids unique within one import)
             const timestamp = Date.now();
             const randomSuffix = Math.floor(Math.random() * 1000);
-            const newRunId = `run-${timestamp}-${randomSuffix}`;
+            const newRunId = `run-${timestamp}-${index}-${randomSuffix}`;
 
             // Preserve custom name if it exists
             const importedRun = {
                 ...runData,
+                lapTime,
+                cones: Math.max(0, Math.floor(Number(runData.cones) || 0)),
                 runId: newRunId,
                 courseId: courseId,
                 timestamp: new Date().toISOString(),

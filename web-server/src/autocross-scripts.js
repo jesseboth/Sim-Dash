@@ -562,6 +562,8 @@ async function handleCourseChange() {
 
         localStorage.setItem('selectedCourse', courseId);
 
+        // Run data is kept only for the course on screen, so memory does not grow on a tablet
+        if (courseId !== currentCourse) loadedRuns = {};
         currentCourse = courseId;
         selectedRuns = readStoredSelection(courseId);
         carFilter = localStorage.getItem(`carFilter_${courseId}`) || 'all';
@@ -731,7 +733,7 @@ function renderRunsList() {
         const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const dateStr = date.toDateString() === new Date().toDateString() ? 'Today' : date.toLocaleDateString();
 
-        const cones = run.cones || 0;
+        const cones = Math.max(0, Math.floor(Number(run.cones) || 0));
         const adjustedTime = shownTime(run);
         const isFastest = adjustedTime === fastestTime;
         const rank = rankById.get(run.runId);
@@ -1135,7 +1137,8 @@ async function handleExportRuns() {
         link.href = url;
         link.download = `autocross-runs-${new Date().toISOString().split('T')[0]}.json`;
         link.click();
-        URL.revokeObjectURL(url);
+        // Released a moment later: an immediate release can cancel the download on iPad Safari
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
 
         showToast(`Exported ${selectedRuns.length} run(s)`, 'success');
         hideLoading();
@@ -1320,11 +1323,14 @@ async function handleRenameSubmit(e) {
     }
 }
 
-// Handle Cone Penalty Change
-async function handleConeChange(runId, change) {
+// Handle Cone Penalty Change. The count on the card changes at once; the final count is
+// saved shortly after the last tap, so quick repeated taps all count.
+const CONE_SAVE_DELAY_MS = 500;
+const pendingConeSaves = new Map(); // runId -> timer
+
+function handleConeChange(runId, change) {
     if (!currentCourse) return;
 
-    // Use the latest local count so quick repeated clicks all count
     const run = allRuns.find(r => r.runId === runId);
     if (!run) return;
     const newConeCount = Math.max(0, (run.cones || 0) + change);
@@ -1332,18 +1338,22 @@ async function handleConeChange(runId, change) {
     run.cones = newConeCount;
     if (loadedRuns[runId]) loadedRuns[runId].cones = newConeCount;
 
-    try {
-        await apiRequest('updateCones', {
-            courseId: currentCourse,
-            runId: runId,
-            cones: newConeCount
-        });
+    const countEl = document.querySelector(`.run-card[data-run-id="${runId}"] .cone-count`);
+    if (countEl) countEl.textContent = newConeCount;
 
-        await refreshRuns();
-    } catch (error) {
-        console.error('Failed to update cone count:', error);
-        showToast('Failed to update cone count', 'error');
-    }
+    clearTimeout(pendingConeSaves.get(runId));
+    const courseId = currentCourse;
+    pendingConeSaves.set(runId, setTimeout(async () => {
+        pendingConeSaves.delete(runId);
+        try {
+            await apiRequest('updateCones', { courseId, runId, cones: run.cones });
+        } catch (error) {
+            console.error('Failed to update cone count:', error);
+            showToast('Failed to update cone count', 'error');
+        }
+        // Times, ranks and the saved count come back from the server
+        if (courseId === currentCourse && pendingConeSaves.size === 0) await refreshRuns();
+    }, CONE_SAVE_DELAY_MS));
 }
 
 // Clear Runs List

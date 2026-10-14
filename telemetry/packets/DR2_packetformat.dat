@@ -100,7 +100,7 @@ f32 TyrePressureFR;          // 232
 
 // Session info
 f32 LapsCompleted;           // 236 unknown
-f32 LapNumber;               // 240
+f32 TotalLaps;               // 240
 f32 StageLength;             // 244
 f32 LastLap;                 // 248
 

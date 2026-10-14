@@ -147,20 +147,27 @@ func DirtReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength in
     // Add the IsRaceOn field
     combinedMap["IsRaceOn"] = true
 
-    combinedMap["CurrentEngineRpm"] = combinedMap["CurrentEngineRpm"].(float32) * 10
-    combinedMap["EngineMaxRpm"] = combinedMap["EngineMaxRpm"].(float32) * 10
-    combinedMap["EngineIdleRpm"] = combinedMap["EngineIdleRpm"].(float32) * 10
+    // RPM values are sent divided by 10. Fields missing from the packet format are skipped.
+    for _, name := range []string{"CurrentEngineRpm", "EngineMaxRpm", "EngineIdleRpm"} {
+        if v, ok := combinedMap[name].(float32); ok {
+            combinedMap[name] = v * 10
+        }
+    }
 
     combinedMap["GearNeutral"] = 0
     combinedMap["GearReverse"] =  -1
 
-    combinedMap["LapNumber"] = combinedMap["LapNumber"].(float32) + 1
+    // Lap number is sent starting at 0
+    if v, ok := combinedMap["LapNumber"].(float32); ok {
+        combinedMap["LapNumber"] = v + 1
+    }
 
     // Fuel? = capacity / level
 
     finalJSON, err := json.Marshal(combinedMap)
     if err != nil {
-        log.Fatalf("Error marshalling combined JSON: %v", err)
+        log.Printf("Error marshalling combined JSON: %v", err)
+        return
     }
 
     if debug {

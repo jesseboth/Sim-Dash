@@ -69,6 +69,9 @@ const dashboardNext = () => {
 const server = http.createServer((req, res) =>  {
     myEmitter.emit('log', `${req.url}\t${req.method}`, 'reqLog.txt');
 
+    // Route on the path only: a query string (e.g. a cache-buster) is ignored
+    req.url = req.url.split('?')[0];
+
     // Handle autocross route early
     if (req.url === '/autocross') {
         req.url = '/autocross.html';
@@ -104,13 +107,12 @@ const server = http.createServer((req, res) =>  {
 
     else if (req.url === '/autocross/api' && req.method === 'POST') {
         const autocrossAPI = require('./lib/autocross-api');
-        let body = '';
-        req.on('data', (chunk) => {
-            body += chunk.toString();
-        });
+        // Join the raw chunks before decoding, so characters split across chunks stay intact
+        const chunks = [];
+        req.on('data', (chunk) => chunks.push(chunk));
         req.on('end', async () => {
             try {
-                const data = JSON.parse(body);
+                const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
                 const result = await autocrossAPI.handleRequest(data);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(result));
@@ -125,14 +127,12 @@ const server = http.createServer((req, res) =>  {
     else if (req.url === '/config' && req.method === 'POST') {
         retJson = JSON.parse(JSON.stringify(postReturn));
 
-        let body = '';
-        req.on('data', (chunk) => {
-            body += chunk.toString(); // convert Buffer to string
-        });
+        const chunks = [];
+        req.on('data', (chunk) => chunks.push(chunk));
 
         req.on('end', () => {
             try {
-                const data = JSON.parse(body);
+                const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
                 retJson.success = true;
 
                 let x = 0;
@@ -213,6 +213,10 @@ const server = http.createServer((req, res) =>  {
         if(req.url == "/src/animate.js"){
             if(animate) {
                 serveFile(filePath, contentType, res);
+            } else {
+                // Animations off: an empty script, so pages that load it finish loading
+                res.writeHead(200, { 'Content-Type': contentType });
+                res.end('');
             }
         }
         else {
@@ -345,7 +349,10 @@ function reqScale(data) {
         scaleTime = Date.now();
     }
 
-    if (data.hasOwnProperty("set") && data.set != "custom") {
+    if (data.hasOwnProperty("set") && data.set != "custom" && !Object.prototype.hasOwnProperty.call(scales, data.set)) {
+        retVal.error = "Unknown scale";
+    }
+    else if (data.hasOwnProperty("set") && data.set != "custom") {
         if(data.set != config.scale){
             config.scale = data.set;
             fs.writeFileSync('data/config.json', JSON.stringify(config, null, 4));
@@ -429,19 +436,17 @@ function reqDash(input) {
         retVal.return = config.dash;
     }
     else {
-        const filePath = 'views/' + input + '-dash.html';
-        fs.access(filePath, fs.constants.F_OK, (err) => {
-            if (err) {
-                retVal.error = "Invalid dash type"
-            } else {
-                if(input != config.dash){
-                    config.dash = input;
-                    fs.writeFileSync('data/config.json', JSON.stringify(config, null, 4));
-                }
+        // Checked before replying, so the reply says whether the dash changed
+        const filePath = path.join(__dirname, 'views', path.basename(String(input)) + '-dash.html');
+        if (!fs.existsSync(filePath)) {
+            retVal.error = "Invalid dash type"
+        } else {
+            if(input != config.dash){
                 config.dash = input;
-                retVal.success = true;
+                fs.writeFileSync('data/config.json', JSON.stringify(config, null, 4));
             }
-        });
+            retVal.success = true;
+        }
     }
     return retVal;
 }

@@ -1,0 +1,9 @@
+# Not needed in the image. telemetry/data and web-server/data are mounted at run time.
+.git
+telemetry/data
+telemetry/fdt
+telemetry/bin
+web-server/node_modules
+ac-plugin
+testing
+*.md

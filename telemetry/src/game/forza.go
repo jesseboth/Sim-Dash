@@ -11,6 +11,7 @@ import (
     "os"
     "path/filepath"
     "strconv"
+    "time"
 
     "jesseboth/fdt/src/util"
 )
@@ -269,7 +270,8 @@ func ForzaReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength i
         // Marshal the combined map into a single JSON object
         finalJSON, err := json.Marshal(combinedMap)
         if err != nil {
-            log.Fatalf("Error marshalling combined JSON: %v", err)
+            log.Printf("Error marshalling combined JSON: %v", err)
+            return
         }
 
         util.SetJson(fmt.Sprintf("%s", finalJSON))
@@ -457,8 +459,9 @@ func updateSplit(timingData *TimingData, distance float32, lap uint16, time floa
 }
 
 const odometerBounce = 25.0
-const frameTime float32 = 1.0 / 30.0
+const maxOdometerStep = 0.1 // seconds; longer gaps (pause, lag) add no distance
 var prevVelocity float32 = -1
+var prevOdometerTime time.Time
 func updateOdometer(distance float32, carNumber uint32, velocity float32) float32 {
     if(odometer.carNumber <= 0) {
         odometer.carNumber = int(carNumber);
@@ -469,9 +472,14 @@ func updateOdometer(distance float32, carNumber uint32, velocity float32) float3
         prevVelocity = -1;
     } else if (distance == 0 && velocity > 5){
         odometer.offset = 0;
-        if(velocity != prevVelocity) {
-            odometer.distance += (velocity * frameTime)
+        // Integrate speed over the real time between packets
+        now := time.Now()
+        if(velocity != prevVelocity && !prevOdometerTime.IsZero()) {
+            if dt := now.Sub(prevOdometerTime).Seconds(); dt <= maxOdometerStep {
+                odometer.distance += velocity * float32(dt)
+            }
         }
+        prevOdometerTime = now;
         prevVelocity = velocity;
     } else if (distance == 0 && prevVelocity != -1) {
         setOdometer(odometer);

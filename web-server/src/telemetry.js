@@ -16,11 +16,17 @@ setTimeout(function () {
     get_telemetryType()
 }, 250);
 
+// One request at a time: if the telemetry server is slow, ticks are skipped instead of
+// stacking up requests whose late answers would overwrite newer data
+let dataRequestPending = false;
+
 function get_data() {
     if (telemetryType == null) {
         telemetry = null;
         return;
     }
+    if (dataRequestPending) return;
+    dataRequestPending = true;
     fetch('http://' + ipAddress + ':8888/telemetry')
         .then(response => {
             // Check if the response is successful
@@ -40,6 +46,9 @@ function get_data() {
             // Handle any errors that occur during the fetch operation
             telemetry = null;
             get_telemetryType()
+        })
+        .finally(() => {
+            dataRequestPending = false;
         });
 }
 

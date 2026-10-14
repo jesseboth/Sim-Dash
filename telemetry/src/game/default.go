@@ -132,7 +132,8 @@ func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLengt
 
     finalJSON, err := json.Marshal(combinedMap)
     if err != nil {
-        log.Fatalf("Error marshalling combined JSON: %v", err)
+        log.Printf("Error marshalling combined JSON: %v", err)
+        return
     }
 
     if debug {

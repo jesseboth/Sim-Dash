@@ -27,18 +27,34 @@ function getAdjustedTime(run) {
     return run.lapTime + (cones * CONE_PENALTY);
 }
 
+// Write a file through a temporary file and a rename, so a crash or power loss
+// during the write never leaves a half-written file
+function writeFileAtomic(file, text) {
+    const tmp = `${file}.tmp-${process.pid}`;
+    fs.writeFileSync(tmp, text);
+    fs.renameSync(tmp, file);
+}
+
+// True while courses.json exists but cannot be read. Saving then would replace
+// every course with the empty list that loadCourses returns.
+let coursesUnreadable = false;
+
 /**
  * Load all courses from courses.json
  */
 function loadCourses() {
     try {
         if (!fs.existsSync(COURSES_FILE)) {
+            coursesUnreadable = false;
             return [];
         }
         const data = fs.readFileSync(COURSES_FILE, 'utf8');
-        return JSON.parse(data);
+        const courses = JSON.parse(data);
+        coursesUnreadable = false;
+        return courses;
     } catch (err) {
         console.error('Error loading courses:', err);
+        coursesUnreadable = true;
         return [];
     }
 }
@@ -47,8 +63,12 @@ function loadCourses() {
  * Save courses array to courses.json
  */
 function saveCourses(courses) {
+    if (coursesUnreadable) {
+        console.error('Not saving courses: courses.json could not be read, so it is left as it is');
+        return false;
+    }
     try {
-        fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2));
+        writeFileAtomic(COURSES_FILE, JSON.stringify(courses, null, 2));
         return true;
     } catch (err) {
         console.error('Error saving courses:', err);
@@ -332,7 +352,7 @@ function saveRun(courseId, runData) {
 
         // Save individual run file
         const runFile = path.join(runsDir, `${runData.runId}.json`);
-        fs.writeFileSync(runFile, JSON.stringify(runData));
+        writeFileAtomic(runFile, JSON.stringify(runData));
 
         // Update course metadata
         updateCourseMetadata(courseId);
@@ -392,7 +412,7 @@ function renameRun(courseId, runId, name) {
         run.name = name || null;
 
         // Save updated run
-        fs.writeFileSync(runFile, JSON.stringify(run));
+        writeFileAtomic(runFile, JSON.stringify(run));
 
         return true;
     } catch (err) {
@@ -421,7 +441,7 @@ function updateCones(courseId, runId, cones) {
         run.cones = cones;
 
         // Save updated run
-        fs.writeFileSync(runFile, JSON.stringify(run));
+        writeFileAtomic(runFile, JSON.stringify(run));
 
         // Rebuild top 10 since adjusted times changed
         rebuildTop10(courseId);
@@ -551,7 +571,7 @@ function saveSectors(courseId, sectors) {
             return false;
         }
         const sectorsFile = path.join(courseDir, 'sectors.json');
-        fs.writeFileSync(sectorsFile, JSON.stringify(sectors, null, 2));
+        writeFileAtomic(sectorsFile, JSON.stringify(sectors, null, 2));
         return true;
     } catch (err) {
         console.error('Error saving sectors:', err);

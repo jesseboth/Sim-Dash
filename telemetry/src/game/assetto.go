@@ -166,6 +166,12 @@ func handleRecording(state *AssettoState, f32map map[string]float32, s32map map[
 		if debug {
 			log.Printf("Auto-detection enabled for course: %s", state.currentCourseID)
 		}
+	} else if apiState.IsRecording && apiState.CourseID != state.currentCourseID {
+		// Armed again for another course: runs go to the course now selected
+		state.currentCourseID = apiState.CourseID
+		if debug {
+			log.Printf("Recording course changed to: %s", state.currentCourseID)
+		}
 	} else if !apiState.IsRecording && state.recordingEnabled {
 		// User stopped - discard any in-progress run, do NOT save
 		state.recordingEnabled = false
@@ -387,18 +393,15 @@ func saveRun(state *AssettoState, debug bool) {
 	runData.RunID = fmt.Sprintf("run-%d", timestamp)
 	filename := filepath.Join(runDir, fmt.Sprintf("run-%d.json", timestamp))
 
-	file, err := os.Create(filename)
+	// Compact JSON: run files hold tens of thousands of samples. The file is written only
+	// when the data encodes, so a failed save leaves no empty run file.
+	encoded, err := json.Marshal(runData)
 	if err != nil {
-		log.Printf("Error creating run file: %v", err)
+		log.Printf("Error encoding run data: %v", err)
 		return
 	}
-	defer file.Close()
-
-	// Compact JSON: run files hold tens of thousands of samples
-	encoder := json.NewEncoder(file)
-	err = encoder.Encode(runData)
-	if err != nil {
-		log.Printf("Error writing run data: %v", err)
+	if err := os.WriteFile(filename, encoded, 0644); err != nil {
+		log.Printf("Error writing run file: %v", err)
 		return
 	}
 

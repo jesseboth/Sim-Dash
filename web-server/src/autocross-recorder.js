@@ -70,15 +70,33 @@ const AutocrossRecorder = (function() {
         console.log('Recorder initialized');
     }
 
-    // Set current course (for manual override if needed)
+    // Set current course. While armed, the recorder is armed again for the new course,
+    // so runs save to the course on screen.
     function setCourse(courseId) {
+        const changed = courseId && courseId !== currentCourseId;
         currentCourseId = courseId;
+        if (changed && state === STATE.RECORDING) rearm(courseId);
         if (courseId) {
             localStorage.setItem('recorder_courseId', courseId);
         } else {
             localStorage.removeItem('recorder_courseId');
         }
         console.log('Recorder: Course set to', courseId);
+    }
+
+    async function rearm(courseId) {
+        try {
+            const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseId })
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || 'not armed');
+        } catch (e) {
+            console.error('Recorder: could not arm for the new course', e);
+            showToast('Could not switch recording to this course. Press Stop, then Start.', 'error');
+        }
     }
 
     // Toggle recording
@@ -417,6 +435,8 @@ const AutocrossRecorder = (function() {
     // Poll recording status for UI updates
     let lastRunSavedAt = 0;
     let statusRequestPending = false;
+    let failedPolls = 0;
+    const OFFLINE_AFTER_FAILURES = 10; // 2 s of failed polls
 
     function startStatusPolling() {
         if (statusPollingInterval) return;
@@ -428,6 +448,7 @@ const AutocrossRecorder = (function() {
             try {
                 const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/status`);
                 const status = await response.json();
+                failedPolls = 0;
 
                 if (window.AutocrossLive) AutocrossLive.onStatus(status);
 
@@ -455,6 +476,14 @@ const AutocrossRecorder = (function() {
                 }
             } catch (error) {
                 console.error('Error polling recording status:', error);
+                // The recorder stopped answering: say so, and end any live run on screen
+                if (++failedPolls === OFFLINE_AFTER_FAILURES) {
+                    if (window.AutocrossLive) AutocrossLive.onStatus({ isRecording: false, runActive: false });
+                    if (statusElement) {
+                        statusElement.textContent = 'Recorder offline';
+                        statusElement.className = 'recording-status offline';
+                    }
+                }
             } finally {
                 statusRequestPending = false;
             }

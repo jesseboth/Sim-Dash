@@ -5,3 +5,5 @@ fdt
 */node_modules
 telemetry/data/*
 *.md
+telemetry/bin/
+!ac-plugin/README.md

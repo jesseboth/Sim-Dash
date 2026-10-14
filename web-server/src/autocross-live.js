@@ -152,6 +152,8 @@ const AutocrossLive = (function () {
         } catch (e) {
             console.error('Live: failed to load reference run', e);
         }
+        // A run in progress is measured against the new reference from here on
+        if (runActive) resetTracking();
         renderReferenceLabel();
     }
 

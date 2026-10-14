@@ -149,7 +149,8 @@ func main() {
         go game.DefaultLoop(gameSTR, listener, telemArray, totalLength, debugMode)
     }
 
-    for {}
+    // The game loop runs in its goroutine; wait here without using the CPU
+    select {}
 }
 
 func setupCloseHandler() {

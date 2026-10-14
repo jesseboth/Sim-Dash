@@ -3,6 +3,8 @@ allowRefresh = false;
 async function getConfig() {
     const types = ["scale", "dash", "shift", "refresh"];
     const retdata = await fetchConfig(types);
+    // The web server did not answer: try again on the next tick
+    if (!retdata) return;
 
     getDashStyle(retdata.dash);
     getDashPosition(retdata.scale);

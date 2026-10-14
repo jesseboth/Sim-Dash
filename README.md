@@ -49,9 +49,10 @@ A customizable telemetry dashboard system for racing and rally simulation games.
 
 #### 1. Build and Start the Container
 ```bash
-./docker.sh
+./docker.sh start
 ```
-- Builds the `sim-telemetry` Docker image (if it does not exist) and starts the container with the specified ports and volume mappings.
+- This command builds the `sim-telemetry` Docker image and starts the container.
+- To start the container each time the computer starts, use `./docker.sh daemon`.
 
 ---
 
@@ -60,14 +61,20 @@ A customizable telemetry dashboard system for racing and rally simulation games.
 #### Docker Variables
 - **`IMAGENAME`**: Name of the Docker image (`sim-telemetry`).
 - **`CONTAINERNAME`**: Name of the Docker container (`sim-telemetry-container`).
-- **`PORTS`**: Ports exposed by the container (`8888`, `3000`, `9999`).
+
+#### Ports
+The container uses the host network. These ports are on the host:
+- **`3000`** (TCP): The web pages.
+- **`8888`** (TCP): The live telemetry data and the autocross recorder.
+- **`9999`** (UDP): The telemetry from the game. You can set a different port with the **Sim Hub** button.
 
 ### Script Details
-- **`./docker.sh`**: Builds and starts the container.
-- **`./docker.sh stop`**: Stops the container.
-- **`./docker.sh restart`**: Stops, removes, rebuilds, and restarts the container.
-- **`./docker.sh remove`**: Stops and removes the container.
-- **`./docker.sh enter`**: Opens a shell inside the running container.
+- **`./docker.sh start`**: Builds and starts the container.
+- **`./docker.sh daemon`**: Builds and starts the container. The container starts again when the computer starts.
+- **`./docker.sh stop`**: Stops and removes the container.
+- **`./docker.sh restart`**: Stops the container, then builds and starts it again.
+- **`./docker.sh log`**: Shows the container log.
+- **`./docker.sh help`**: Shows the commands.
 
 </details>
 
@@ -100,10 +107,10 @@ A customizable telemetry dashboard system for racing and rally simulation games.
 - **Shift Light Type**: Off, Left-Right, or Outside-In patterns
 - **Split Type**: Class, Car, or Session-based timing splits
 
-**Port Config Button** - Configure UDP port settings:
-- **Toggle**: Enable/disable custom port (default: 9999)
-- **Port Number**: Set custom UDP port (1024-65535)
-- Useful for PortConfig integration or custom telemetry setups
+**Sim Hub Button** - Opens the port configuration:
+- **Use Custom Port**: Turn on to use a port that is not the default port (9999).
+- **Port Number**: The UDP port for the game telemetry (1024-65535).
+- **Sim Hub Dash URL**: The address of a Sim Hub dash.
 
 **Stop Button** - Halts the telemetry process and resets the dashboard
 
@@ -134,6 +141,32 @@ A customizable telemetry dashboard system for racing and rally simulation games.
 ---
 
 <details>
+<summary>Autocross</summary>
+
+### Autocross Analyzer
+
+The autocross analyzer records Assetto Corsa runs. It shows the runs on a track map, on charts and in sector tables.
+
+1. Open `http://<IP>:3000/autocross`.
+2. Click **Start**. The recorder is armed.
+3. Drive the course. Each run starts when the game timer starts. Each run stops when the game timer stops.
+4. The run shows in the **Runs** list. Select runs to compare them.
+
+#### Recorded Data
+- The recorder keeps the launch before the start line. Times before the start line are negative.
+- Time `0` is the start line. The last sample is the finish line.
+- The recorder keeps a maximum of 50 samples each second.
+
+#### Install as an App
+The web page can operate as an app on a tablet. The browser installs an app only from a secure address.
+- **Android (Chrome)**: Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`. Add `http://<IP>:3000` and enable the flag. Then open the page and select **Install app**.
+- **iPad (Safari)**: Open the page, then select **Share > Add to Home Screen**.
+
+</details>
+
+---
+
+<details>
 <summary>Game Setup</summary>
 
 ### Forza (Motorsport/Horizon)
@@ -144,7 +177,7 @@ A customizable telemetry dashboard system for racing and rally simulation games.
 4. Set **IP address** to the machine running the Docker container
 5. Set **Port** to `9999` (or your custom port)
 
-### Dirt Rally / EA WRC
+### Dirt Rally / Dirt Rally 2.0 / EA WRC
 
 1. **Navigate to game installation directory**
 2. Find `hardware_settings_config.xml` (usually in Documents/My Games/)
@@ -153,13 +186,23 @@ A customizable telemetry dashboard system for racing and rally simulation games.
    <udp enabled="true" extradata="3" ip="127.0.0.1" port="9999" delay="1" />
    ```
 4. Replace IP with your Docker host machine IP
-5. Set `extradata="3"` for full telemetry data
+5. Set `extradata="3"`. Dirt Rally and Dirt Rally 2.0 send the full telemetry packet only with this value.
 
 ### Assetto Corsa
 
-1. **Enable UDP telemetry** in game settings
-2. Set **UDP Port** to `9999` (or your custom port)
-3. Set **UDP IP** to the Docker host machine IP
+Assetto Corsa sends telemetry through the SimDash UDP app. The app is in `ac-plugin/`.
+
+1. Install the app. Use one of these procedures:
+   - Drag `ac-plugin/SimDashUDP.zip` into Content Manager.
+   - Copy the folder `ac-plugin/SimDashUDP` to `<AC root>\apps\python\`.
+2. Start Assetto Corsa. Go to **Options > General > Apps** and enable **SimDash UDP**.
+3. In the **SimDash UDP** window, set the IP address of the Docker host.
+4. Set the same UDP port in the app and on the SimDash server:
+   - The app sends to port `20778` by default.
+   - On the game selection page, click **Sim Hub**. Turn on **Use Custom Port** and set `20778`.
+5. Select **Assetto Corsa** on the game selection page.
+
+For more data about the app, refer to `ac-plugin/README.md`.
 
 ### Assetto Corsa Competizione
 

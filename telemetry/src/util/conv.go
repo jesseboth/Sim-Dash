@@ -5,10 +5,14 @@ import (
     "math"
 )
 
-// Float32frombytes converts bytes into a float32
+// Float32frombytes converts bytes into a float32. NaN and infinity read as 0: they carry no
+// telemetry value and JSON cannot hold them.
 func Float32frombytes(bytes []byte) float32 {
     bits := binary.LittleEndian.Uint32(bytes)
     float := math.Float32frombits(bits)
+    if math.IsNaN(float64(float)) || math.IsInf(float64(float), 0) {
+        return 0
+    }
     return float
 }
 
@@ -19,5 +23,9 @@ func Float64frombytes(b []byte) float64 {
 	}
 	bits := uint64(b[0]) | uint64(b[1])<<8 | uint64(b[2])<<16 | uint64(b[3])<<24 |
 		uint64(b[4])<<32 | uint64(b[5])<<40 | uint64(b[6])<<48 | uint64(b[7])<<56
-	return math.Float64frombits(bits)
+	float := math.Float64frombits(bits)
+	if math.IsNaN(float) || math.IsInf(float, 0) {
+		return 0
+	}
+	return float
 }
