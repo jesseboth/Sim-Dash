@@ -90,8 +90,9 @@ func Forza(game string) bool {
             setMotorport(true)
         case "FM7":
             setMotorport(true)
-        case "FH5":
         case "FH4":
+        case "FH5":
+        case "FH6":
         default:
             return false
         
@@ -111,7 +112,7 @@ func ForzaGame(game string) string {
         case "FH4":
             gameSTR = "Forza Horizon 4"
         default:
-            return "Unknown"
+            return "Forza Unknown"
         
         }
     return gameSTR;
@@ -132,6 +133,7 @@ func ForzaSetSplit(split string) {
 
 func ForzaReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
     buffer := make([]byte, 1500)
+
 
     n, addr, err := conn.ReadFromUDP(buffer)
     if err != nil {

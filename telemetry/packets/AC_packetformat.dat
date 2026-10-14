@@ -1,8 +1,8 @@
 u8 Identifier; AC RTCarInfo packet identifier (usually 'a' = 97)
 s32 Size; Packet size
 f32 SpeedKmh; Speed in km/h
-f32 Speed; Speed in mph (converted from km/h)
-f32 SpeedMs; Speed in m/s
+f32 SpeedMph; Speed in mph (converted from km/h)
+f32 Speed; Speed in m/s
 u8 IsInPit; Car is in pit lane
 f32 AccelerationY; Vertical G-force
 f32 AccelerationX; Horizontal G-force
