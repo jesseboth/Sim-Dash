@@ -107,6 +107,8 @@ func ForzaGame(game string) string {
             gameSTR = "Forza Motorsport"
         case "FM7":
             gameSTR = "Forza Motorsport 7"
+        case "FH6":
+            gameSTR = "Forza Horizon 6"
         case "FH5":
             gameSTR = "Forza Horizon 5"
         case "FH4":

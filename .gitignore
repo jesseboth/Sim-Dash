@@ -7,3 +7,4 @@ telemetry/data/*
 *.md
 telemetry/bin/
 !ac-plugin/README.md
+!docs/*.md

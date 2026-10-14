@@ -147,6 +147,8 @@ The container uses the host network. These ports are on the host:
 
 The autocross analyzer records Assetto Corsa runs. It shows the runs on a track map, on charts and in sector tables.
 
+For the design rules of the analyzer, refer to [docs/AUTOCROSS.md](docs/AUTOCROSS.md).
+
 1. Open `http://<IP>:3000/autocross`.
 2. Click **Start**. The recorder is armed.
 3. Drive the course. Each run starts when the game timer starts. Each run stops when the game timer stops.

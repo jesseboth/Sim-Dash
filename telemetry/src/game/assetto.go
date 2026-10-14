@@ -321,8 +321,8 @@ func trimAfterFreeze(state *AssettoState) {
 
 // createTelemetrySample creates a telemetry sample from the packet data
 func createTelemetrySample(f32map map[string]float32, s32map map[string]int32, startTime time.Time) util.TelemetrySample {
-	// Use Speed which is already in mph
-	speed := f32map["Speed"]
+	// Run speed is stored in mph
+	speed := f32map["SpeedMph"]
 
 	// CurrentLap is in milliseconds, convert to seconds
 	var lapTime float32 = 0
