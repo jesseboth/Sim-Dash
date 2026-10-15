@@ -530,6 +530,9 @@ const AutocrossMap = (function() {
         // gained or lost since the anchor), else to the fastest run.
         const alignRef = window.AutocrossAlign && AutocrossAlign.getReference();
         const gapRef = alignRef || sortByAdjustedTime(currentRuns)[0];
+
+        if (alignRef) drawAnchorGhost(alignRef);
+
         const gaps = [];
         sortedRuns.forEach(({ run, colorIndex }) => {
             const color = runColor(run, colorIndex);
@@ -543,7 +546,7 @@ const AutocrossMap = (function() {
                     drawReferenceRing(worldToScreen(run.telemetry.posX[runIndex], run.telemetry.posY[runIndex]));
                 }
             } else {
-                // Gaps are measured from the start line, so none during the launch
+                // Gaps are measured from the S1 line, so none during the launch
                 const gap = currentTime < 0 ? null
                     : timeGap(gapRef, run, currentTime, alignRef ? AutocrossAlign.offsetOf(run) : 0);
                 gaps.push({ gap, color, runId: run.runId, runNumber: runNumberOf(run), adjustedTime: getAdjustedTime(run) });
@@ -810,12 +813,12 @@ const AutocrossMap = (function() {
             ctx.font = 'bold 10px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(`S${i + 1}`, p.x + Math.cos(perpAngle) * labelOffset, p.y + Math.sin(perpAngle) * labelOffset);
+            ctx.fillText(AutocrossSectors.lineLabel(i), p.x + Math.cos(perpAngle) * labelOffset, p.y + Math.sin(perpAngle) * labelOffset);
             ctx.textBaseline = 'alphabetic';
         });
     }
 
-    // Start line where the run's timer started (time 0), finish line where it stopped
+    // START line at the launch, S1 line where the run's timer started (time 0), finish line where it stopped
     function drawStartFinish(run) {
         if (!run) return;
         const { posX, posY, timestamps } = run.telemetry;
@@ -829,9 +832,16 @@ const AutocrossMap = (function() {
         let ahead = startIdx;
         while (ahead < n - 1 && Math.hypot(posX[ahead] - sx, posY[ahead] - sy) < 1) ahead++;
 
-        // Start and finish on the same line (closed course): one line, one label
+        // Launch point, when the launch is clear of the timing line
+        if (timestamps[0] < 0 && Math.hypot(posX[0] - sx, posY[0] - sy) >= 3) {
+            let next = 1;
+            while (next < n - 1 && Math.hypot(posX[next] - posX[0], posY[next] - posY[0]) < 1) next++;
+            drawGateLine(posX[0], posY[0], posX[next] - posX[0], posY[next] - posY[0], 'START');
+        }
+
+        // Timing start and finish on the same line (closed course): one line, one label
         const sameLine = Math.hypot(posX[n - 1] - sx, posY[n - 1] - sy) < 10;
-        drawGateLine(sx, sy, posX[ahead] - sx, posY[ahead] - sy, sameLine ? 'START / FINISH' : 'START');
+        drawGateLine(sx, sy, posX[ahead] - sx, posY[ahead] - sy, sameLine ? 'S1 / FINISH' : 'S1');
         if (sameLine) return;
 
         let behind = n - 2;
@@ -946,6 +956,34 @@ const AutocrossMap = (function() {
         ctx.lineWidth = 1.5;
         ctx.lineJoin = 'round';
         ctx.stroke();
+    }
+
+    // Ghost arrow where the runs are lined up: see-through white, with a dashed outline
+    function drawAnchorGhost(run) {
+        const ts = run.telemetry.timestamps;
+        const index = findClosestIndex(ts, AutocrossAlign.getAnchorTime());
+        const pos = worldToScreen(run.telemetry.posX[index], run.telemetry.posY[index]);
+        const dir = AutocrossTrack.directionIndices(run.telemetry, index);
+        let angle = -Math.PI / 2;
+        if (dir) {
+            const a = worldToScreen(run.telemetry.posX[dir[0]], run.telemetry.posY[dir[0]]);
+            const b = worldToScreen(run.telemetry.posX[dir[1]], run.telemetry.posY[dir[1]]);
+            angle = Math.atan2(b.y - a.y, b.x - a.x);
+        }
+
+        const points = AutocrossTrack.carArrowPolygon(pos.x, pos.y, angle, arrowSize());
+        ctx.save();
+        ctx.beginPath();
+        points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.lineJoin = 'round';
+        ctx.setLineDash([3, 2]);
+        ctx.stroke();
+        ctx.restore();
     }
 
     // Get color based on speed

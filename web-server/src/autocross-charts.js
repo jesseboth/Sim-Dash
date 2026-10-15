@@ -99,7 +99,7 @@ const AutocrossCharts = (() => {
                 ctx.clip();
 
                 chart.data.datasets.forEach((dataset) => {
-                    const value = dataset.data[currentCursorIndex];
+                    const value = dataset.full[currentCursorIndex];
                     if (value !== null && value !== undefined) {
                         const y = yAxis.getPixelForValue(value);
                         ctx.beginPath();
@@ -135,14 +135,16 @@ const AutocrossCharts = (() => {
             // Labels at the bottom, clear of the chart title at the top
             ctx.textAlign = 'left';
             ctx.textBaseline = 'bottom';
-            times.forEach((t, i) => {
+            // Each line is labelled with the sector that starts there; S1 starts where timing starts (time 0)
+            const lines = [[0, 'S1'], ...times.map((t, i) => [t, AutocrossSectors.lineLabel(i)])];
+            lines.forEach(([t, label]) => {
                 if (t === null || t === undefined || t < xAxis.min || t > xAxis.max) return;
                 const x = xAxis.getPixelForValue(t);
                 ctx.beginPath();
                 ctx.moveTo(x, yAxis.top);
                 ctx.lineTo(x, yAxis.bottom);
                 ctx.stroke();
-                ctx.fillText(`S${i + 1}`, x + 3, yAxis.bottom - 2);
+                ctx.fillText(label, x + 3, yAxis.bottom - 2);
             });
             ctx.restore();
         }
@@ -673,8 +675,7 @@ const AutocrossCharts = (() => {
         setYAxis(chart, channel, datasets);
         setMissing(channel.key, datasets.length === 0);
 
-        chart.data.labels = baseTimestamps;
-        chart.data.datasets = stackOrder(datasets);
+        setChartData(chart, baseTimestamps, stackOrder(datasets));
         chart.update('none');
     }
 
@@ -754,8 +755,7 @@ const AutocrossCharts = (() => {
         const channel = channelByKey.get('timeDelta');
         if (!chart) return;
         if (currentRuns.length < 2) {
-            chart.data.labels = baseTimestamps;
-            chart.data.datasets = [];
+            setChartData(chart, baseTimestamps, []);
             chart.update('none');
             return;
         }
@@ -795,7 +795,7 @@ const AutocrossCharts = (() => {
             }
             const runStartTime = Math.max(0, run.telemetry.timestamps[0]) - offset;
             interpolated.forEach((v, i) => {
-                // Deltas are measured from the start line (time 0)
+                // Deltas are measured from the S1 line (time 0)
                 if (baseTimestamps[i] > runEndTime || baseTimestamps[i] < runStartTime) interpolated[i] = null;
                 else if (v === null && lastVal !== null && baseTimestamps[i] > refRun.telemetry.timestamps.at(-1)) interpolated[i] = lastVal;
             });
@@ -806,7 +806,7 @@ const AutocrossCharts = (() => {
             datasets.push(datasetFor(run, interpolated, channel));
         });
 
-        // Zero line for the reference run, from the start line until it ends
+        // Zero line for the reference run, from the S1 line until it ends
         const refStartTime = Math.max(0, refRun.telemetry.timestamps[0]);
         const refEndTime = refRun.telemetry.timestamps.at(-1);
         const ref = datasetFor(refRun, baseTimestamps.map(t => t >= refStartTime && t <= refEndTime ? 0 : null), channel);
@@ -817,8 +817,7 @@ const AutocrossCharts = (() => {
         chart.options.scales.y.min = -yMax;
         chart.options.scales.y.max = yMax;
 
-        chart.data.labels = baseTimestamps;
-        chart.data.datasets = stackOrder(datasets);
+        setChartData(chart, baseTimestamps, stackOrder(datasets));
         chart.update('none');
     }
 
@@ -857,7 +856,35 @@ const AutocrossCharts = (() => {
         Object.values(charts).forEach(chart => {
             chart.options.scales.x.min = time - 2.5;
             chart.options.scales.x.max = time + 2.5;
+            sliceToWindow(chart);
         });
+    }
+
+    // Each chart gets only the data near its window, so a long run does not slow every redraw.
+    // The full data stays in chart.fullLabels and in each dataset's full array.
+    const SLICE_MARGIN = 10; // s of data kept beyond each side of the window
+    function setChartData(chart, labels, datasets) {
+        chart.fullLabels = labels;
+        datasets.forEach(ds => { ds.full = ds.data; });
+        chart.data.datasets = datasets;
+        chart.slice = null;
+        sliceToWindow(chart);
+    }
+
+    function sliceToWindow(chart) {
+        const labels = chart.fullLabels;
+        if (!labels) return;
+        const { min, max } = chart.options.scales.x;
+        if (chart.slice && min >= chart.slice.from && max <= chart.slice.to) return;
+
+        const lo = Math.max(0, findPreviousIndex(labels, min - SLICE_MARGIN));
+        const hi = Math.min(labels.length, findClosestIndex(labels, max + SLICE_MARGIN) + 2);
+        chart.data.labels = labels.slice(lo, hi);
+        chart.data.datasets.forEach(ds => { ds.data = ds.full.slice(lo, hi); });
+        chart.slice = {
+            from: lo === 0 ? -Infinity : labels[lo],
+            to: hi >= labels.length ? Infinity : labels[hi - 1]
+        };
     }
 
     // Seek to specific time
@@ -908,7 +935,7 @@ const AutocrossCharts = (() => {
 
             // Fixed order, so the values do not move when the focused run changes
             container.innerHTML = [...chart.data.datasets].sort((a, b) => b.scratchTime - a.scratchTime).map(ds => {
-                const v = ds.data[idx];
+                const v = ds.full[idx];
                 if (v === null || v === undefined || ds.isReference) return '';
                 const sign = channel.delta && v > 0 ? '+' : '';
                 return `<span class="chart-value-item" style="color: ${ds.borderColor};">${sign}${v.toFixed(channel.decimals)}${channel.unit}</span>`;
@@ -923,8 +950,7 @@ const AutocrossCharts = (() => {
         currentBase = [];
 
         Object.entries(charts).forEach(([key, chart]) => {
-            chart.data.labels = [0];
-            chart.data.datasets = [];
+            setChartData(chart, [0], []);
             chart.update('none');
             setMissing(key, false);
         });

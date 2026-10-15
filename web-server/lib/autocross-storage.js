@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const track = require('../src/autocross-track');
+const autoSectors = require('./autocross-auto-sectors');
 
 // Base directory for autocross data (now in telemetry/data/autocross)
 const DATA_DIR = path.join(__dirname, '../../telemetry/data/autocross');
@@ -392,31 +393,28 @@ function deleteRun(courseId, runId) {
     }
 }
 
+const RUN_DETAIL_FIELDS = ['name', 'driver', 'car', 'notes'];
+
 /**
- * Rename a run (updates individual file)
+ * Set the user details of a run: name, driver, car and notes.
+ * Only the given fields change. An empty value removes the field.
  */
-function renameRun(courseId, runId, name) {
+function updateRunDetails(courseId, runId, details) {
     try {
         const runFile = path.join(DATA_DIR, courseId, 'runs', `${runId}.json`);
+        if (!fs.existsSync(runFile)) return false;
 
-        // Check if file exists
-        if (!fs.existsSync(runFile)) {
-            return false; // Run not found
-        }
-
-        // Read run data
-        const data = fs.readFileSync(runFile, 'utf8');
-        const run = JSON.parse(data);
-
-        // Update name
-        run.name = name || null;
-
-        // Save updated run
+        const run = JSON.parse(fs.readFileSync(runFile, 'utf8'));
+        RUN_DETAIL_FIELDS.forEach(field => {
+            if (details[field] === undefined) return;
+            const value = String(details[field] ?? '').trim();
+            if (value) run[field] = value;
+            else delete run[field];
+        });
         writeFileAtomic(runFile, JSON.stringify(run));
-
         return true;
     } catch (err) {
-        console.error('Error renaming run:', err);
+        console.error('Error updating run details:', err);
         return false;
     }
 }
@@ -545,13 +543,13 @@ function rebuildTop10(courseId) {
 }
 
 /**
- * Load sectors for a course
+ * Load sectors for a course. A course with runs and no sectors file gets its first sectors.
  */
 function loadSectors(courseId) {
     try {
         const sectorsFile = path.join(DATA_DIR, courseId, 'sectors.json');
         if (!fs.existsSync(sectorsFile)) {
-            return [];
+            return createSectors(courseId);
         }
         const data = fs.readFileSync(sectorsFile, 'utf8');
         return JSON.parse(data);
@@ -559,6 +557,66 @@ function loadSectors(courseId) {
         console.error('Error loading sectors:', err);
         return [];
     }
+}
+
+const AUTO_SECTOR_RUNS = 3; // fastest runs used to make the first sectors of a course
+
+// First sectors of a course: the lines of an earlier course on the same track when the
+// fastest run passes all of them, else lines made from the runs. They are saved, so this
+// happens only once; the user's changes are never replaced.
+function createSectors(courseId) {
+    const runs = loadFastestRuns(courseId, AUTO_SECTOR_RUNS);
+    if (runs.length === 0) return [];
+    const lines = sectorsFromEarlierCourse(courseId, runs[0]) || autoSectors.generate(runs);
+    const stamp = Date.now();
+    const sectors = lines.map((line, i) => ({ sectorId: `s-${stamp}-${i}`, ...line }));
+    saveSectors(courseId, sectors);
+    return sectors;
+}
+
+function loadFastestRuns(courseId, count) {
+    const runsDir = path.join(DATA_DIR, courseId, 'runs');
+    if (!fs.existsSync(runsDir)) return [];
+    const runs = [];
+    for (const file of fs.readdirSync(runsDir)) {
+        if (!file.endsWith('.json')) continue;
+        try {
+            const run = JSON.parse(fs.readFileSync(path.join(runsDir, file), 'utf8'));
+            if (run.lapTime > 0 && run.telemetry && run.telemetry.timestamps && run.telemetry.timestamps.length > 1) {
+                run.telemetry = reduceSampleRate(run.telemetry, DISPLAY_SAMPLE_RATE);
+                runs.push(run);
+            }
+        } catch (err) {
+            console.error(`Skipping unreadable run file ${file}:`, err.message);
+        }
+    }
+    return runs.sort((a, b) => a.lapTime - b.lapTime).slice(0, count);
+}
+
+// Lines of the most recently changed other course with runs on the same track, if the run passes all of them
+function sectorsFromEarlierCourse(courseId, run) {
+    const candidates = [];
+    for (const dir of fs.readdirSync(DATA_DIR)) {
+        const file = path.join(DATA_DIR, dir, 'sectors.json');
+        if (dir === courseId || !fs.existsSync(file)) continue;
+        candidates.push({ dir, file, mtimeMs: fs.statSync(file).mtimeMs });
+    }
+    candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+    for (const { dir, file } of candidates) {
+        let sectors;
+        try {
+            sectors = JSON.parse(fs.readFileSync(file, 'utf8'));
+        } catch (err) {
+            continue;
+        }
+        if (!Array.isArray(sectors) || sectors.length === 0) continue;
+        const other = loadRuns(dir, 1)[0];
+        if (!other || String(other.trackId) !== String(run.trackId)) continue;
+        if (track.gateTimes(run.telemetry, sectors).some(t => t === null)) continue;
+        return sectors.map(({ sectorId, name, ...line }) => line);
+    }
+    return null;
 }
 
 /**
@@ -594,7 +652,7 @@ module.exports = {
     getRunForDisplay,
     saveRun,
     deleteRun,
-    renameRun,
+    updateRunDetails,
     updateCones,
     loadTop10,
     rebuildTop10,

@@ -41,6 +41,7 @@ const AutocrossRecorder = (function() {
         fetch(`http://${window.location.hostname}:8888/autocross/recording/status`)
             .then(r => r.json())
             .then(status => {
+                setCurrentDriver(status.driver, status.car);
                 if (status.isRecording && status.courseId) {
                     currentCourseId = status.courseId;
                     localStorage.setItem('recorder_courseId', currentCourseId);
@@ -327,109 +328,83 @@ const AutocrossRecorder = (function() {
         return result.success ? (result.data || {}) : {};
     }
 
-    // Open naming modal (triggered by button click)
-    async function openNamingModal() {
-        const telem = await getLiveTelemetry();
-        if (!telem || !telem.CarId || !telem.TrackId) {
-            showToast('No telemetry available. Start Assetto Corsa and begin driving.', 'warning');
-            return;
-        }
+    // Driver and car that the recorder gives to new runs
+    let currentDriver = { driver: '', car: '' };
 
-        const carId = String(telem.CarId);
-        const trackId = String(telem.TrackId);
-
-        await showNamingModal(carId, trackId);
+    function setCurrentDriver(driver, car) {
+        currentDriver = { driver: driver || '', car: car || '' };
+        const text = document.getElementById('driverBtnText');
+        if (text) text.textContent = currentDriver.driver || 'Driver / Car';
     }
 
-    // Show naming modal for car/track
-    async function showNamingModal(carId, trackId) {
-        return new Promise((resolve) => {
-            const modal = document.getElementById('nameIdentifiersModal');
-            const form = document.getElementById('nameIdentifiersForm');
-            const carIdDisplay = document.getElementById('carIdDisplay');
-            const trackIdDisplay = document.getElementById('trackIdDisplay');
-            const carNameInput = document.getElementById('carNameInput');
-            const trackNameInput = document.getElementById('trackNameInput');
-            const cancelBtn = document.getElementById('cancelNameIdentifiers');
-
-            // Load existing mappings and populate form
-            Promise.all([
-                fetch('/autocross/api', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'getCarMappings' })
-                }).then(r => r.json()),
-                fetch('/autocross/api', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'getTrackMappings' })
-                }).then(r => r.json())
-            ]).then(([carResult, trackResult]) => {
-                const carMappings = carResult.data || {};
-                const trackMappings = trackResult.data || {};
-
-                // Set display values
-                carIdDisplay.value = carId;
-                trackIdDisplay.value = trackId;
-                carNameInput.value = carMappings[carId] || '';
-                trackNameInput.value = trackMappings[trackId] || '';
-                carNameInput.placeholder = carMappings[carId] || 'e.g., Mazda Miata, BMW M3';
-                trackNameInput.placeholder = trackMappings[trackId] || 'e.g., Laguna Seca, Silverstone';
-            });
-
-            // Show modal
-            modal.classList.remove('hidden');
-
-            // Handle form submission
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-
-                const carName = carNameInput.value.trim();
-                const trackName = trackNameInput.value.trim();
-
-                // Save mappings if provided
-                if (carName) {
-                    const response = await fetch('/autocross/api', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'setCarName', carId, name: carName })
-                    });
-                    const result = await response.json();
-                    if (result.success) {
-                        console.log('Car name saved:', carName);
-                    }
-                }
-
-                if (trackName) {
-                    const response = await fetch('/autocross/api', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'setTrackName', trackId, name: trackName })
-                    });
-                    const result = await response.json();
-                    if (result.success) {
-                        console.log('Track name saved:', trackName);
-                    }
-                }
-
-                // Close modal and resolve
-                modal.classList.add('hidden');
-                form.removeEventListener('submit', handleSubmit);
-                cancelBtn.removeEventListener('click', handleCancel);
-                resolve(true);
-            };
-
-            // Handle cancel/skip
-            const handleCancel = () => {
-                modal.classList.add('hidden');
-                form.removeEventListener('submit', handleSubmit);
-                cancelBtn.removeEventListener('click', handleCancel);
-                resolve(false);
-            };
-
-            form.addEventListener('submit', handleSubmit);
-            cancelBtn.addEventListener('click', handleCancel);
+    async function saveCurrentDriver(driver, car) {
+        const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/driver`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ driver, car })
         });
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'not saved');
+        setCurrentDriver(driver, car);
+    }
+
+    // Driver and car dialog. With a live game car ID, the car name is saved for that ID.
+    // Without one, the recorder gives the car name to new runs.
+    async function openNamingModal() {
+        const modal = document.getElementById('nameIdentifiersModal');
+        const form = document.getElementById('nameIdentifiersForm');
+        const driverInput = document.getElementById('driverInput');
+        const carNameInput = document.getElementById('carNameInput');
+        const trackNameInput = document.getElementById('trackNameInput');
+        const cancelBtn = document.getElementById('cancelNameIdentifiers');
+
+        const [telem, carMappings, trackMappings] = await Promise.all([
+            getLiveTelemetry(),
+            apiRequest('getCarMappings').catch(() => ({})),
+            getTrackMappings().catch(() => ({}))
+        ]);
+        const carId = telem && telem.CarId ? String(telem.CarId) : '';
+        const trackId = telem && telem.TrackId ? String(telem.TrackId) : '';
+
+        window.AutocrossApp?.fillDetailOptions(carMappings);
+        driverInput.value = currentDriver.driver;
+        carNameInput.value = carId ? (carMappings[carId] || '') : currentDriver.car;
+        document.getElementById('carIdNote').textContent = carId
+            ? `Game car ID ${carId}. All runs with this ID get this car name.`
+            : 'No car ID from the game. New runs get this car name.';
+        document.getElementById('trackNameGroup').classList.toggle('hidden', !trackId);
+        trackNameInput.value = trackMappings[trackId] || '';
+        document.getElementById('trackIdNote').textContent = trackId ? `Game track ID ${trackId}` : '';
+
+        modal.classList.remove('hidden');
+        setTimeout(() => driverInput.focus(), 100);
+
+        const close = () => {
+            modal.classList.add('hidden');
+            form.removeEventListener('submit', handleSubmit);
+            cancelBtn.removeEventListener('click', close);
+        };
+
+        const handleSubmit = async (e) => {
+            e.preventDefault();
+            const driver = driverInput.value.trim();
+            const carName = carNameInput.value.trim();
+            const trackName = trackNameInput.value.trim();
+            try {
+                if (carId && carName) await apiRequest('setCarName', { carId, name: carName });
+                if (trackId && trackName) await apiRequest('setTrackName', { trackId, name: trackName });
+                await saveCurrentDriver(driver, carId ? '' : carName);
+                window.AutocrossApp?.rememberDriver(driver);
+                close();
+                await window.AutocrossApp?.refreshRuns();
+            } catch (err) {
+                console.error('Could not save driver and car:', err);
+                showToast('Could not save the driver on the telemetry recorder (port 8888).', 'error');
+            }
+        };
+
+        form.addEventListener('submit', handleSubmit);
+        cancelBtn.addEventListener('click', close);
     }
 
     // Poll recording status for UI updates

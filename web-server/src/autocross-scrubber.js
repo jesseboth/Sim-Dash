@@ -11,7 +11,7 @@ const AutocrossScrubber = (function() {
     let allRuns = [];       // all loaded runs, sorted fastest first
     let currentTime = 0;
     let maxTime = 0;        // slowest run's full duration
-    let minTime = 0;        // earliest launch; time 0 is the start line
+    let minTime = 0;        // earliest launch; time 0 is the S1 line
     let isPlaying = false;
     let playbackInterval = null;
 
@@ -148,7 +148,7 @@ const AutocrossScrubber = (function() {
         return run.telemetry.timestamps[run.telemetry.timestamps.length - 1];
     }
 
-    // Launch time (negative) of a run, or 0 for runs recorded from the start line
+    // Launch time (negative) of a run, or 0 for runs recorded from the S1 line
     function startTime(run) {
         return Math.min(0, run.telemetry.timestamps[0]);
     }
@@ -548,7 +548,7 @@ const AutocrossScrubber = (function() {
         timeDisplay.textContent = formatTime(currentTime);
     }
 
-    // Format time as MM:SS.mmm, with a minus sign before the start line
+    // Format time as MM:SS.mmm, with a minus sign before the S1 line
     function formatTime(seconds) {
         // Handle invalid input
         if (typeof seconds !== 'number' || isNaN(seconds)) {
@@ -581,7 +581,7 @@ const AutocrossScrubber = (function() {
         btn.disabled = currentTime < 0 || currentTime >= frontFinish - 0.05;
     }
 
-    // Start line (time 0) when the launch is shown before it
+    // S1 line where timing starts (time 0), and START at the launch when the launch is shown before it
     function drawStartMarker(timelineY, timelineHeight) {
         if (minTime >= 0) return;
         const width = canvas.getBoundingClientRect().width;
@@ -597,7 +597,12 @@ const AutocrossScrubber = (function() {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 9px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('START', x, timelineY - 7);
+        ctx.fillText('S1', x, timelineY - 7);
+        // START only when it does not overlap S1
+        if (x - 10 > ctx.measureText('START').width + 12) {
+            ctx.textAlign = 'left';
+            ctx.fillText('START', 10, timelineY - 7);
+        }
     }
 
     // Draw sector markers on the timeline
@@ -625,7 +630,7 @@ const AutocrossScrubber = (function() {
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 9px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(`S${i + 1}`, x, timelineY - 7);
+            ctx.fillText(AutocrossSectors.lineLabel(i), x, timelineY - 7);
         });
     }
 

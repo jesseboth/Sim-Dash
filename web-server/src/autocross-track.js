@@ -15,13 +15,21 @@
     const SEARCH_BACK = 5;              // reference segments searched behind the last match
     const SEARCH_AHEAD = 150;           // reference segments searched ahead of the last match
 
+    // Results for a run's telemetry are cached, because run data does not change.
+    // Callers must not change the returned arrays.
+    const distanceCache = new WeakMap();  // posX array -> cumulative distance
+    const progressCache = new WeakMap();  // reference telemetry -> (telemetry -> progress)
+
     // Cumulative distance along a path
     function cumulativeDistance(posX, posY) {
+        const cached = distanceCache.get(posX);
+        if (cached) return cached;
         const dist = new Array(posX.length);
         dist[0] = 0;
         for (let i = 1; i < posX.length; i++) {
             dist[i] = dist[i - 1] + Math.hypot(posX[i] - posX[i - 1], posY[i] - posY[i - 1]);
         }
+        distanceCache.set(posX, dist);
         return dist;
     }
 
@@ -54,14 +62,21 @@
         };
     }
 
-    // Progress along the reference path for each sample of a run
+    // Progress along the reference path for each sample of a run.
+    // refDist must be the cumulative distance of refTelemetry.
     function progressAlongPath(refTelemetry, refDist, telemetry) {
+        let byRun = progressCache.get(refTelemetry);
+        if (!byRun) progressCache.set(refTelemetry, byRun = new WeakMap());
+        const cached = byRun.get(telemetry);
+        if (cached) return cached;
+
         const update = createProgressTracker(refTelemetry.posX, refTelemetry.posY, refDist);
         const { posX, posY } = telemetry;
         const progress = new Array(posX.length);
         for (let k = 0; k < posX.length; k++) {
             progress[k] = update(posX[k], posY[k]);
         }
+        byRun.set(telemetry, progress);
         return progress;
     }
 
@@ -165,12 +180,12 @@
         return times;
     }
 
-    // Time 0 is the start line. Runs recorded without the launch start just after it.
+    // Time 0 is the S1 line. Runs recorded without the launch start just after it.
     function startLineTime(telemetry) {
         return Math.max(0, telemetry.timestamps[0]);
     }
 
-    // Start and end time of sector i (0 = start line to gate 1, last = last gate to the finish)
+    // Start and end time of sector i (0 = S1 line to gate 1, last = last gate to the finish)
     function sectorWindow(telemetry, gates, sectorIndex) {
         const ts = telemetry.timestamps;
         const startTime = sectorIndex === 0 ? startLineTime(telemetry) : gates[sectorIndex - 1];

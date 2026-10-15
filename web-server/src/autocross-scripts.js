@@ -12,7 +12,7 @@ let runsLoadToken = 0; // Increments per visualization load so stale loads are i
 let lastLoadedSignature = ''; // Runs, order and cones last sent to the visualizations
 let shownRuns = []; // Run objects currently in the visualizations
 let runSortMode = 'fastest'; // 'fastest' (with cone penalties), 'scratch' (without) or 'recent'
-let carFilter = 'all'; // 'all' or a carId
+let carFilter = 'all'; // 'all' or a car name
 let carNames = {}; // carId -> friendly name
 let runNumbers = new Map(); // runId -> run number in driving order
 let newRunIds = new Map(); // runId -> time the NEW highlight ends
@@ -171,7 +171,7 @@ function setupEventListeners() {
         clearSelectionsBtn.addEventListener('click', handleClearSelections);
     }
 
-    // Rename modal
+    // Run details modal
     const renameModal = document.getElementById('renameModal');
     const renameRunForm = document.getElementById('renameRunForm');
     const cancelRename = document.getElementById('cancelRename');
@@ -180,15 +180,6 @@ function setupEventListeners() {
         cancelRename.addEventListener('click', () => {
             renameModal.classList.add('hidden');
             renameRunForm.reset();
-        });
-    }
-
-    if (renameModal) {
-        renameModal.addEventListener('click', (e) => {
-            if (e.target === renameModal) {
-                renameModal.classList.add('hidden');
-                renameRunForm.reset();
-            }
         });
     }
 
@@ -245,12 +236,10 @@ function setupEventListeners() {
             }
         };
 
-        if (runsToggle) {
-            runsToggle.addEventListener('click', toggleCollapse);
-        }
-        if (runsToggleExpanded) {
-            runsToggleExpanded.addEventListener('click', toggleCollapse);
-        }
+        // Collapsed: the whole bar opens the list. Open: the arrow or the title closes it.
+        runsToggle?.closest('.runs-collapsed-header')?.addEventListener('click', toggleCollapse);
+        runsToggleExpanded?.addEventListener('click', toggleCollapse);
+        runsToggleExpanded?.parentElement.querySelector('h2')?.addEventListener('click', toggleCollapse);
     }
 
     // "Keep latest run" toggle: the newest run stays selected and purple
@@ -635,6 +624,11 @@ async function refreshRuns({ deselectOldMostRecent = true } = {}) {
     updateArchiveButtonState();
     updateHint();
 
+    // The server makes the first sectors of a course when its first run arrives
+    if (runs.length && window.AutocrossSectors && AutocrossSectors.getSectors().length === 0) {
+        await AutocrossSectors.loadSectors(courseId);
+    }
+
     await loadSelectedRuns();
 }
 
@@ -662,9 +656,15 @@ function getCarName(carId) {
     return carId ? (carNames[carId] || `Car ${carId}`) : 'Unknown car';
 }
 
+// Car of a run: the name set on the run, else the name of its game car ID
+function getRunCarName(run) {
+    if (run.car) return run.car;
+    return run.carId ? getCarName(run.carId) : '';
+}
+
 // Runs shown in the list: filtered by car
 function getVisibleRuns() {
-    return carFilter === 'all' ? allRuns : allRuns.filter(r => r.carId === carFilter);
+    return carFilter === 'all' ? allRuns : allRuns.filter(r => getRunCarName(r) === carFilter);
 }
 
 // Show the car filter only when the course has runs from more than one car
@@ -672,16 +672,16 @@ function updateCarFilter() {
     const select = document.getElementById('carFilter');
     if (!select) return;
 
-    const carIds = [...new Set(allRuns.map(r => r.carId).filter(Boolean))];
-    if (carFilter !== 'all' && !carIds.includes(carFilter)) {
+    const cars = [...new Set(allRuns.map(getRunCarName).filter(Boolean))].sort();
+    if (carFilter !== 'all' && !cars.includes(carFilter)) {
         carFilter = 'all';
     }
 
-    select.innerHTML = '<option value="all">All cars</option>' + carIds
-        .map(id => `<option value="${escapeHtml(id)}">${escapeHtml(getCarName(id))}</option>`)
+    select.innerHTML = '<option value="all">All cars</option>' + cars
+        .map(car => `<option value="${escapeHtml(car)}">${escapeHtml(car)}</option>`)
         .join('');
     select.value = carFilter;
-    select.classList.toggle('hidden', carIds.length < 2);
+    select.classList.toggle('hidden', cars.length < 2);
 }
 
 // Render Runs List
@@ -713,7 +713,7 @@ function renderRunsList() {
     const rankById = new Map(byTime.map((r, i) => [r.runId, i + 1]));
     const fastestTime = shownTime(byTime[0]);
     const bestSectors = computeBestSectorTimes(runs);
-    const showCar = new Set(allRuns.map(r => r.carId)).size > 1;
+    const showCar = new Set(allRuns.map(getRunCarName)).size > 1;
 
     const ordered = runSortMode === 'recent'
         ? [...runs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
@@ -750,10 +750,12 @@ function renderRunsList() {
                 </div>
                 <div class="run-card-details">
                     <span>${dateStr} ${timeStr}</span>
-                    ${showCar ? `<span class="run-car">🚗 ${escapeHtml(getCarName(run.carId))}</span>` : ''}
+                    ${run.driver ? `<span class="run-driver">👤 ${escapeHtml(run.driver)}</span>` : ''}
+                    ${showCar && getRunCarName(run) ? `<span class="run-car">🚗 ${escapeHtml(getRunCarName(run))}</span>` : ''}
                     ${cones > 0 ? `<span style="color: var(--accent-warning)">🚧 ${cones} cone${cones !== 1 ? 's' : ''} (+${cones * CONE_PENALTY}s)</span>` : ''}
                     ${run.isValid ? '' : '<span style="color: var(--accent-secondary)">❌ Invalid</span>'}
                 </div>
+                ${run.notes ? `<div class="run-notes" title="${escapeHtml(run.notes)}">🗒 ${escapeHtml(run.notes)}</div>` : ''}
                 ${renderSectorTimesRow(run, bestSectors)}
             </div>
             <div class="run-card-actions">
@@ -762,7 +764,7 @@ function renderRunsList() {
                     <span class="cone-count">${cones}</span>
                     <button class="btn-icon cone-plus" title="Add cone">+</button>
                 </div>
-                <button class="btn btn-secondary btn-sm rename-run" title="Rename">✏️</button>
+                <button class="btn btn-secondary btn-sm rename-run" title="Name, driver, car and notes">✏️</button>
             </div>
         `;
 
@@ -775,7 +777,7 @@ function renderRunsList() {
         const renameBtn = card.querySelector('.rename-run');
         renameBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            showRenameModal(run.runId, run.name || '');
+            showRunDetails(run);
         });
 
         card.querySelector('.cone-plus').addEventListener('click', (e) => {
@@ -868,7 +870,32 @@ async function handleRunSelection(e) {
     saveSelectedRunsToStorage();
     updateButtonStates();
 
-    await loadSelectedRuns();
+    if (isChecked) fetchRun(currentCourse, runId);
+    scheduleLoadSelectedRuns();
+}
+
+// A tap shows at once; the map and charts update a moment later, once for quick taps in a row
+const SELECTION_SETTLE_MS = 150;
+let selectionTimer = null;
+function scheduleLoadSelectedRuns() {
+    clearTimeout(selectionTimer);
+    selectionTimer = setTimeout(loadSelectedRuns, SELECTION_SETTLE_MS);
+}
+
+// Full run data, downloaded once. A download that is in progress is shared.
+const runFetches = new Map(); // runId -> promise of run data
+function fetchRun(courseId, runId) {
+    if (loadedRuns[runId]) return Promise.resolve(loadedRuns[runId]);
+    if (!runFetches.has(runId)) {
+        const request = apiRequest('getRun', { courseId, runId })
+            .then(runData => {
+                if (courseId === currentCourse) loadedRuns[runId] = runData;
+                return runData;
+            })
+            .finally(() => runFetches.delete(runId));
+        runFetches.set(runId, request);
+    }
+    return runFetches.get(runId);
 }
 
 // Check if a run is the most recent run (by timestamp)
@@ -896,6 +923,7 @@ function applyMostRecentSelection(deselectOldMostRecent) {
 // Selected cards are highlighted in the color the run has on the map and charts.
 function syncSelectionUI() {
     const colors = computeRunColors();
+    const shownIds = new Set(shownRuns.map(r => r.runId));
     document.querySelectorAll('.run-card-checkbox').forEach(checkbox => {
         const runId = checkbox.dataset.runId;
         const isSelected = selectedRuns.includes(runId);
@@ -903,6 +931,8 @@ function syncSelectionUI() {
         const card = checkbox.closest('.run-card');
         if (!card) return;
         card.classList.toggle('selected', isSelected);
+        // Selected, but not on the map and charts yet
+        card.classList.toggle('loading', isSelected && !shownIds.has(runId));
         if (isSelected && colors[runId]) {
             card.style.setProperty('--run-color', colors[runId]);
         } else {
@@ -961,10 +991,7 @@ async function loadSelectedRuns() {
 
     try {
         // Fetch full telemetry for runs that are not cached
-        const fetched = await Promise.all(
-            missing.map(runId => apiRequest('getRun', { courseId, runId }))
-        );
-        fetched.forEach(runData => { loadedRuns[runData.runId] = runData; });
+        await Promise.all(missing.map(runId => fetchRun(courseId, runId)));
 
         // Ignore the result if a newer load started meanwhile
         if (token !== runsLoadToken) return;
@@ -1000,6 +1027,7 @@ async function loadSelectedRuns() {
         showToast('Failed to load runs', 'error');
     } finally {
         if (window.AutocrossMap) window.AutocrossMap.setLoading(false);
+        if (token === runsLoadToken) syncSelectionUI();
     }
 }
 
@@ -1267,60 +1295,103 @@ async function handleArchiveSubmit(e) {
     }
 }
 
-// Show Rename Modal
-let currentRenameRunId = null;
-function showRenameModal(runId, currentName) {
-    currentRenameRunId = runId;
-    const renameModal = document.getElementById('renameModal');
-    const runNameInput = document.getElementById('runName');
+// Run details dialog: name, driver, car and notes
+let detailsRun = null;
+function showRunDetails(run) {
+    detailsRun = run;
+    const runCarName = getRunCarName(run);
+    const mapped = run.carId ? carNames[run.carId] : '';
 
-    if (runNameInput) {
-        runNameInput.value = currentName;
-    }
+    document.getElementById('runDetailsTitle').textContent = `Run ${runNumbers.get(run.runId)} Details`;
+    document.getElementById('runName').value = run.name || '';
+    document.getElementById('runDriver').value = run.driver || '';
+    document.getElementById('runCar').value = run.car || mapped || '';
+    document.getElementById('runNotes').value = run.notes || '';
 
-    if (renameModal) {
-        renameModal.classList.remove('hidden');
-        setTimeout(() => runNameInput?.focus(), 100);
+    // With a game car ID, the car name can apply to all runs with that ID
+    const mapLabel = document.getElementById('runCarMapLabel');
+    mapLabel.classList.toggle('hidden', !run.carId);
+    if (run.carId) {
+        document.getElementById('runCarMapText').textContent = `Use for all runs with game car ID ${run.carId}`;
+        document.getElementById('runCarMap').checked = !run.car;
     }
+    fillDetailOptions();
+
+    document.getElementById('runCar').placeholder = runCarName || 'e.g., Mk8 Golf R';
+    document.getElementById('renameModal').classList.remove('hidden');
 }
 
-// Handle Rename Submit
 async function handleRenameSubmit(e) {
     e.preventDefault();
+    const run = detailsRun;
+    if (!run || !currentCourse) return;
 
-    const runNameInput = document.getElementById('runName');
-    const newName = runNameInput?.value.trim() || '';
-
-    if (!currentRenameRunId || !currentCourse) return;
+    const car = document.getElementById('runCar').value.trim();
+    const driver = document.getElementById('runDriver').value.trim();
+    const mapCar = !!run.carId && document.getElementById('runCarMap').checked;
+    const details = {
+        name: document.getElementById('runName').value.trim(),
+        driver,
+        notes: document.getElementById('runNotes').value.trim(),
+        car
+    };
 
     try {
         showLoading();
-
-        await apiRequest('renameRun', {
+        await apiRequest('updateRun', {
             courseId: currentCourse,
-            runId: currentRenameRunId,
-            name: newName
+            runId: run.runId,
+            ...details,
+            carId: mapCar ? run.carId : undefined
         });
+        rememberDriver(driver);
 
-        // Close modal
-        const renameModal = document.getElementById('renameModal');
-        const renameRunForm = document.getElementById('renameRunForm');
-        if (renameModal) renameModal.classList.add('hidden');
-        if (renameRunForm) renameRunForm.reset();
+        document.getElementById('renameModal').classList.add('hidden');
+        document.getElementById('renameRunForm').reset();
 
-        if (loadedRuns[currentRenameRunId]) {
-            loadedRuns[currentRenameRunId].name = newName || null;
+        const loaded = loadedRuns[run.runId];
+        if (loaded) {
+            ['name', 'driver', 'notes'].forEach(k => { loaded[k] = details[k] || undefined; });
+            loaded.car = mapCar ? undefined : (car || undefined);
         }
 
         await refreshRuns();
-
-        showToast(newName ? 'Run renamed successfully' : 'Run name cleared', 'success');
+        showToast('Run details saved', 'success');
     } catch (error) {
-        console.error('Failed to rename run:', error);
+        console.error('Failed to save run details:', error);
     } finally {
         hideLoading();
-        currentRenameRunId = null;
     }
+}
+
+// Drivers entered on this device, for the driver lists
+const KNOWN_DRIVERS_KEY = 'autocross_knownDrivers';
+function knownDrivers() {
+    try {
+        return JSON.parse(localStorage.getItem(KNOWN_DRIVERS_KEY)) || [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function rememberDriver(driver) {
+    if (!driver) return;
+    const drivers = [driver, ...knownDrivers().filter(d => d !== driver)].slice(0, 20);
+    try {
+        localStorage.setItem(KNOWN_DRIVERS_KEY, JSON.stringify(drivers));
+    } catch (e) { /* the list is only a convenience */ }
+}
+
+// Choices for the driver and car fields. carMappings: all game car ID names, when known.
+function fillDetailOptions(carMappings = {}) {
+    const fill = (id, values) => {
+        const list = document.getElementById(id);
+        if (!list) return;
+        list.innerHTML = [...new Set(values.filter(Boolean))].sort()
+            .map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
+    };
+    fill('driverOptions', [...knownDrivers(), ...allRuns.map(r => r.driver)]);
+    fill('carOptions', [...Object.values(carMappings), ...Object.values(carNames), ...allRuns.map(r => r.car)]);
 }
 
 // Handle Cone Penalty Change. The count on the card changes at once; the final count is
@@ -1427,6 +1498,9 @@ window.AutocrossApp = {
     getCurrentCourseData: () => currentCourseData,
     getAllRuns: () => allRuns,
     getCarName,
+    getRunCarName,
+    fillDetailOptions,
+    rememberDriver,
     getRunNumber: (runId) => runNumbers.get(runId),
     refreshRuns,
     updateHint,

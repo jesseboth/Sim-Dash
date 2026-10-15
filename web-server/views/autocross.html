@@ -23,7 +23,7 @@
                 <option value="">Select course...</option>
             </select>
             <button id="courseMenuBtn" class="btn btn-secondary" title="Rename, create or delete courses">⚙ Course</button>
-            <button id="nameIdentifiersBtn" class="btn btn-secondary" style="font-size: 0.85rem;" title="Name current car/track">🏷️ Name Car/Track</button>
+            <button id="nameIdentifiersBtn" class="btn btn-secondary driver-btn" title="Driver and car for new runs">👤 <span id="driverBtnText">Driver / Car</span></button>
         </div>
         <div class="header-right">
             <button id="liveToggleBtn" class="btn btn-secondary live-toggle" title="Live split screen">⏱ Live</button>
@@ -127,47 +127,64 @@
         </div>
     </section>
 
-    <!-- Modal: Rename Run -->
+    <!-- Modal: Run Details -->
     <div id="renameModal" class="modal hidden">
         <div class="modal-content">
-            <h2>Rename Run</h2>
+            <h2 id="runDetailsTitle">Run Details</h2>
             <form id="renameRunForm">
                 <div class="form-group">
                     <label for="runName">Run Name:</label>
                     <input type="text" id="runName" name="runName" placeholder="e.g., Perfect Run, Morning Session">
                 </div>
+                <div class="form-group">
+                    <label for="runDriver">Driver:</label>
+                    <input type="text" id="runDriver" list="driverOptions" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="runCar">Car:</label>
+                    <input type="text" id="runCar" list="carOptions" autocomplete="off" placeholder="e.g., Mk8 Golf R">
+                    <label id="runCarMapLabel" class="checkbox-label hidden">
+                        <input type="checkbox" id="runCarMap">
+                        <span id="runCarMapText"></span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="runNotes">Notes:</label>
+                    <textarea id="runNotes" rows="4" placeholder="e.g., Late on the brakes into the offset, tire pressures 32/30"></textarea>
+                </div>
                 <div class="modal-actions">
                     <button type="button" id="cancelRename" class="btn btn-secondary">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Rename</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
                 </div>
             </form>
         </div>
     </div>
+    <datalist id="driverOptions"></datalist>
+    <datalist id="carOptions"></datalist>
 
-    <!-- Modal: Name Car/Track -->
+    <!-- Modal: Driver, Car and Track -->
     <div id="nameIdentifiersModal" class="modal hidden">
         <div class="modal-content">
-            <h2>Name Car & Track</h2>
+            <h2>Driver & Car</h2>
+            <p class="modal-note">New runs get this driver and car. You can change them later in the run details (✏️).</p>
             <form id="nameIdentifiersForm">
                 <div class="form-group">
-                    <label for="carIdDisplay">Car ID:</label>
-                    <input type="text" id="carIdDisplay" readonly style="background-color: #f5f5f5;">
+                    <label for="driverInput">Driver:</label>
+                    <input type="text" id="driverInput" list="driverOptions" autocomplete="off" placeholder="e.g., Jesse">
                 </div>
                 <div class="form-group">
-                    <label for="carNameInput">Car Name:</label>
-                    <input type="text" id="carNameInput" name="carName" placeholder="e.g., Mazda Miata, BMW M3">
+                    <label for="carNameInput">Car:</label>
+                    <input type="text" id="carNameInput" name="carName" list="carOptions" autocomplete="off" placeholder="e.g., Mk8 Golf R">
+                    <div id="carIdNote" class="form-note"></div>
                 </div>
-                <div class="form-group">
-                    <label for="trackIdDisplay">Track ID:</label>
-                    <input type="text" id="trackIdDisplay" readonly style="background-color: #f5f5f5;">
-                </div>
-                <div class="form-group">
-                    <label for="trackNameInput">Track Name:</label>
+                <div id="trackNameGroup" class="form-group hidden">
+                    <label for="trackNameInput">Track:</label>
                     <input type="text" id="trackNameInput" name="trackName" placeholder="e.g., Laguna Seca, Silverstone">
+                    <div id="trackIdNote" class="form-note"></div>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" id="cancelNameIdentifiers" class="btn btn-secondary">Skip</button>
-                    <button type="submit" class="btn btn-primary">Save & Continue</button>
+                    <button type="button" id="cancelNameIdentifiers" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
                 </div>
             </form>
         </div>

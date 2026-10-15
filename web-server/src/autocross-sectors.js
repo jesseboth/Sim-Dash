@@ -65,10 +65,15 @@ const AutocrossSectors = (function () {
     // --- Delete confirmation modal ---
     let pendingDeleteSectorId = null;
 
+    // A sector line is where the next sector starts: line 1 starts S2 (S1 starts where timing starts, time 0)
+    function lineLabel(index) {
+        return `S${index + 2}`;
+    }
+
     function confirmRemoveSector(sector) {
         pendingDeleteSectorId = sector.sectorId;
         const msg = document.getElementById('deleteSectorMsg');
-        if (msg) msg.textContent = `Remove "${sector.name}"?`;
+        if (msg) msg.textContent = `Remove the ${lineLabel(sectors.indexOf(sector))} line?`;
         document.getElementById('deleteSectorModal')?.classList.remove('hidden');
     }
 
@@ -195,10 +200,10 @@ const AutocrossSectors = (function () {
         if (!container) return;
         container.innerHTML = '';
 
-        sectors.forEach((s) => {
+        sectors.forEach((s, i) => {
             const chip = document.createElement('span');
             chip.className = 'sector-chip';
-            chip.innerHTML = `${s.name} <button class="sector-chip-remove" data-id="${s.sectorId}" title="Remove sector">×</button>`;
+            chip.innerHTML = `${lineLabel(i)} <button class="sector-chip-remove" data-id="${s.sectorId}" title="Remove sector">×</button>`;
             chip.querySelector('.sector-chip-remove').addEventListener('click', (e) => {
                 e.stopPropagation();
                 removeSector(s.sectorId);
@@ -211,7 +216,7 @@ const AutocrossSectors = (function () {
         if (openBtn) {
             openBtn.disabled = sectors.length === 0;
             openBtn.textContent = sectors.length > 0
-                ? `Sectors (${sectors.length})`
+                ? `Sectors (${sectors.length + 1})`
                 : 'Sectors';
         }
     }
@@ -357,8 +362,8 @@ const AutocrossSectors = (function () {
         // best: 'min' or 'max' marks the best value in the column
         const columns = [
             { label: 'Time', unit: 's', decimals: 3, best: 'min', value: w => w.endTime - w.startTime },
-            { label: 'Entry', unit: 's', decimals: 3, title: 'Time at the sector start, from the start line', value: w => w.startTime },
-            { label: 'Exit', unit: 's', decimals: 3, title: 'Time at the sector end, from the start line', value: w => w.endTime },
+            { label: 'Entry', unit: 's', decimals: 3, title: 'Time at the sector start, from the S1 line', value: w => w.startTime },
+            { label: 'Exit', unit: 's', decimals: 3, title: 'Time at the sector end, from the S1 line', value: w => w.endTime },
             { label: 'Entry speed', unit: 'mph', decimals: 1, best: 'max', value: (w, run) => valueAt(run, 'speed', w.startTime) },
             { label: 'Exit speed', unit: 'mph', decimals: 1, best: 'max', value: (w, run) => valueAt(run, 'speed', w.endTime) },
             { label: 'Avg speed', unit: 'mph', decimals: 1, best: 'max', value: (w, run) => pathLength(run, w) / (w.endTime - w.startTime) * MPS_TO_MPH },
@@ -791,6 +796,7 @@ const AutocrossSectors = (function () {
         loadSectors,
         getSectors: () => sectors,
         getSectorTimesForRun,
+        lineLabel,
         renderSectorControls,
         confirmRemoveSector
     };

@@ -94,6 +94,7 @@ sock = INVALID_SOCKET
 send_timer = 0.0  # seconds since the last packet
 destinations = []
 peak_rpm = 1000.0  # grows to observed max over time
+id_cache = {}  # name -> stable id
 
 # Config values (loaded on start, reloaded on save)
 UDP_IP = '127.0.0.1'
@@ -137,6 +138,17 @@ def on_save_clicked(dummy_x, dummy_y):
         ac.log("SimDash UDP: Config saved - {}:{}".format(new_ip, new_port))
     except Exception as e:
         ac.setText(lbl_status, "Error: {}".format(str(e)))
+
+
+def stable_id(name):
+    """Same id for the same name in every session (FNV-1a, 31 bits)."""
+    if name not in id_cache:
+        h = 0x811C9DC5
+        for b in name.encode('utf-8'):
+            h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
+        id_cache[name] = h & 0x7FFFFFFF
+    return id_cache[name]
+
 
 def acMain(ac_version):
     global sock, app_id, lbl_status, input_ip, input_port
@@ -236,8 +248,8 @@ def send_telemetry():
         lap_count      = ac.getCarState(0, acsys.CS.LapCount)
 
         is_in_pit  = 1 if ac.isCarInPitline(0) else 0
-        car_id     = hash(ac.getCarName(0)) & 0x7FFFFFFF
-        track_id   = hash(ac.getTrackName(0)) & 0x7FFFFFFF
+        car_id     = stable_id(ac.getCarName(0))
+        track_id   = stable_id(ac.getTrackName(0) + '/' + ac.getTrackConfiguration(0))
 
         accg    = ac.getCarState(0, acsys.CS.AccG)
         accel_x = accg[0]

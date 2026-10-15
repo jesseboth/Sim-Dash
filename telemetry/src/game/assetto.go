@@ -490,6 +490,8 @@ func prepareRunData(state *AssettoState) util.AutocrossRun {
 	// RunID will be overwritten in saveRun with the same timestamp as the filename
 	runID := fmt.Sprintf("run-%d", time.Now().UnixMilli())
 
+	apiState := util.GetRecordingState()
+
 	// Extract CarId and TrackId from last sample
 	var carID, trackID string
 	if state.lastCarID != 0 {
@@ -508,6 +510,8 @@ func prepareRunData(state *AssettoState) util.AutocrossRun {
 		TrackID:   trackID,
 		Cones:     0,
 		Name:      "",
+		Driver:    apiState.Driver,
+		Car:       apiState.Car,
 		IsValid:   true,
 		Telemetry: util.AutocrossTelemetry{
 			Timestamps: timestamps,

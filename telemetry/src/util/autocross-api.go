@@ -17,6 +17,8 @@ const armedStateFile = "data/autocross/armed.json"
 type armedState struct {
 	IsArmed  bool   `json:"isArmed"`
 	CourseID string `json:"courseId"`
+	Driver   string `json:"driver"`
+	Car      string `json:"car"`
 }
 
 // Course IDs are used as directory names, so only plain names are allowed
@@ -37,6 +39,8 @@ func loadArmedState() {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return
 	}
+	recordingState.Driver = s.Driver
+	recordingState.Car = s.Car
 	if s.IsArmed && validCourseID.MatchString(s.CourseID) {
 		recordingState.IsRecording = true
 		recordingState.CourseID = s.CourseID
@@ -44,10 +48,19 @@ func loadArmedState() {
 	}
 }
 
-// saveArmedState writes the armed/disarmed state to disk
-func saveArmedState(armed bool, courseID string) {
+// saveArmedState writes the armed state, the driver and the car to disk. Hold recordingMutex.
+func saveArmedState() {
 	os.MkdirAll(filepath.Dir(armedStateFile), 0755)
-	data, _ := json.Marshal(armedState{IsArmed: armed, CourseID: courseID})
+	courseID := ""
+	if recordingState.IsRecording {
+		courseID = recordingState.CourseID
+	}
+	data, _ := json.Marshal(armedState{
+		IsArmed:  recordingState.IsRecording,
+		CourseID: courseID,
+		Driver:   recordingState.Driver,
+		Car:      recordingState.Car,
+	})
 	os.WriteFile(armedStateFile, data, 0644)
 }
 
@@ -57,6 +70,7 @@ func SetupAutocrossRoutes() {
 	http.HandleFunc("/autocross/recording/start", handleStartRecording)
 	http.HandleFunc("/autocross/recording/stop", handleStopRecording)
 	http.HandleFunc("/autocross/recording/status", handleRecordingStatus)
+	http.HandleFunc("/autocross/recording/driver", handleSetDriver)
 	log.Println("Autocross API routes registered")
 }
 
@@ -102,7 +116,7 @@ func handleStartRecording(w http.ResponseWriter, r *http.Request) {
 	recordingState.IsRecording = true
 	recordingState.CourseID = req.CourseID
 	recordingState.Elapsed = 0
-	saveArmedState(true, req.CourseID)
+	saveArmedState()
 
 	log.Printf("Recording started for course: %s", req.CourseID)
 
@@ -133,11 +147,49 @@ func handleStopRecording(w http.ResponseWriter, r *http.Request) {
 	recordingState.IsRecording = false
 	recordingState.RunActive = false
 	recordingState.Elapsed = 0
-	saveArmedState(false, "")
+	saveArmedState()
 
 	log.Println("Recording stopped by user")
 
 	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+	})
+}
+
+// handleSetDriver sets the driver and the car that the recorder gives to new runs
+func handleSetDriver(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Driver string `json:"driver"`
+		Car    string `json:"car"`
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid request body",
+		})
+		return
+	}
+
+	recordingMutex.Lock()
+	recordingState.Driver = req.Driver
+	recordingState.Car = req.Car
+	saveArmedState()
+	recordingMutex.Unlock()
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 	})
@@ -191,5 +243,5 @@ func StopRecording() {
 	recordingState.IsRecording = false
 	recordingState.RunActive = false
 	recordingState.Elapsed = 0
-	saveArmedState(false, "")
+	saveArmedState()
 }

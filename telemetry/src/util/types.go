@@ -47,6 +47,8 @@ type AutocrossRun struct {
     TrackID    string              `json:"trackId"`
     Cones      int                 `json:"cones"`
     Name       string              `json:"name,omitempty"`
+    Driver     string              `json:"driver,omitempty"`
+    Car        string              `json:"car,omitempty"`
     IsValid    bool                `json:"isValid"`
     Telemetry  AutocrossTelemetry  `json:"telemetry"`
     Statistics AutocrossStatistics `json:"statistics"`
@@ -113,6 +115,8 @@ type RecordingState struct {
     CourseID    string  `json:"courseId"`
     Elapsed     float64 `json:"elapsed"`
     RunSavedAt  int64   `json:"runSavedAt"` // unix ms, increments each time a run is auto-saved
+    Driver      string  `json:"driver"`     // given to each new run
+    Car         string  `json:"car"`        // given to each new run; empty when the game sends a car ID
 }
 
 // Top10Entry represents a top 10 run entry

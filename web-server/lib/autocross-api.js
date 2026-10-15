@@ -39,8 +39,8 @@ async function handleRequest(data) {
             case 'getTop10':
                 return handleGetTop10(data);
 
-            case 'renameRun':
-                return handleRenameRun(data);
+            case 'updateRun':
+                return handleUpdateRun(data);
 
             case 'exportRuns':
                 return handleExportRuns(data);
@@ -362,31 +362,26 @@ function handleGetTop10(data) {
 }
 
 /**
- * Rename a run
+ * Set the name, driver, car and notes of a run.
+ * With carId, the car name is also used for all runs with that game car ID.
  */
-function handleRenameRun(data) {
-    const { courseId, runId, name } = data;
+function handleUpdateRun(data) {
+    const { courseId, runId, name, driver, car, notes, carId } = data;
 
-    if (!courseId || !runId || name === undefined) {
-        return {
-            success: false,
-            error: 'courseId, runId, and name are required'
-        };
+    if (!courseId || !runId) {
+        return { success: false, error: 'courseId and runId are required' };
     }
 
-    const result = storage.renameRun(courseId, runId, name);
-
-    if (!result) {
-        return {
-            success: false,
-            error: 'Failed to rename run or run not found'
-        };
+    if (carId && car && !mappings.setCarName(carId, String(car).trim())) {
+        return { success: false, error: 'Failed to save car name' };
     }
 
-    return {
-        success: true,
-        data: { runId, name }
-    };
+    const details = { name, driver, notes, car: carId ? '' : car };
+    if (!storage.updateRunDetails(courseId, runId, details)) {
+        return { success: false, error: 'Failed to update run or run not found' };
+    }
+
+    return { success: true, data: { runId } };
 }
 
 /**
@@ -456,9 +451,10 @@ function handleImportRuns(data) {
             const randomSuffix = Math.floor(Math.random() * 1000);
             const newRunId = `run-${timestamp}-${index}-${randomSuffix}`;
 
-            // Preserve custom name if it exists
+            // Preserve custom name if it exists. Sector data belongs to the course, not the run.
+            const { sectorTimes, sectors, ...runFields } = runData;
             const importedRun = {
-                ...runData,
+                ...runFields,
                 lapTime,
                 cones: Math.max(0, Math.floor(Number(runData.cones) || 0)),
                 runId: newRunId,
