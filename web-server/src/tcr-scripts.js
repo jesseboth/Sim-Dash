@@ -155,6 +155,7 @@ function buildText(svg) {
     for (let i = 0; i < FUEL_SEGMENTS; i++) {
         tcr.fuelSegs.push(el("rect", { x: 282 + i * 16, y: 602, width: 12, height: 20, fill: "#2a2b30" }, svg));
     }
+    tcr.fuelValue = el("text", { x: 450, y: 612, class: "value", "font-size": 26 }, svg, "--");
     tcr.clock = el("text", { x: 210, y: 665, class: "value", "font-size": 44 }, svg, "");
 
     // Traction light; updateTraction in dash-scripts.js blinks it
@@ -244,9 +245,13 @@ function updateSplit(split) {
     tcr.split.style.fill = split <= 0 ? "#2ad460" : RED;
 }
 
+// Fuel as segments, and the exact percentage after them
 function updateFuel(percentage) {
     if (!tcr.fuelSegs) return;
-    const lit = Number.isFinite(percentage) ? Math.round(Math.max(0, Math.min(100, percentage)) / 100 * FUEL_SEGMENTS) : 0;
+    const known = Number.isFinite(percentage);
+    tcr.fuelValue.textContent = known ? `${Math.round(Math.max(0, Math.min(100, percentage)))}%` : "--";
+    tcr.fuelValue.style.fill = known && percentage < 15 ? RED : "";
+    const lit = known ? Math.round(Math.max(0, Math.min(100, percentage)) / 100 * FUEL_SEGMENTS) : 0;
     tcr.fuelSegs.forEach((seg, i) => {
         seg.setAttribute("fill", i < lit ? (percentage < 15 ? RED : "#f2f2f2") : "#2a2b30");
     });

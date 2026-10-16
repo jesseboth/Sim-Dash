@@ -152,6 +152,7 @@ function buildText(svg) {
     for (let i = 0; i < FUEL_SEGMENTS; i++) {
         rally.fuelSegs.push(el("rect", { x: 392 + i * 16, y: 735, width: 12, height: 20, fill: "#2a2b30" }, svg));
     }
+    rally.fuelValue = el("text", { x: 560, y: 745, class: "value", "font-size": 26 }, svg, "--");
 }
 
 function buildCluster() {
@@ -262,9 +263,13 @@ function updateSplit(split) {
     rally.split.style.fill = split <= 0 ? "#2ad460" : RED;
 }
 
+// Fuel as segments, and the exact percentage after them
 function updateFuel(percentage) {
     if (!rally.fuelSegs) return;
-    const lit = Number.isFinite(percentage) ? Math.round(Math.max(0, Math.min(100, percentage)) / 100 * FUEL_SEGMENTS) : 0;
+    const known = Number.isFinite(percentage);
+    rally.fuelValue.textContent = known ? `${Math.round(Math.max(0, Math.min(100, percentage)))}%` : "--";
+    rally.fuelValue.style.fill = known && percentage < 15 ? RED : "";
+    const lit = known ? Math.round(Math.max(0, Math.min(100, percentage)) / 100 * FUEL_SEGMENTS) : 0;
     rally.fuelSegs.forEach((seg, i) => {
         seg.setAttribute("fill", i < lit ? (percentage < 15 ? RED : "#f2f2f2") : "#2a2b30");
     });
