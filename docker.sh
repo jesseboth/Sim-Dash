@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 
 
-PORT="3000"
+PORT=""
 IMAGENAME="sim-telemetry"
 CONTAINERNAME="${IMAGENAME}-container"
-PORTS="-p 8888:8888 -p $PORT:3000 -p 9999:9999"
 
 SCRIPT_DIR=$(realpath $(dirname "$0"))
 VOLUMES="-v ${SCRIPT_DIR}/web-server/data:/usr/src/app/web-server/data \
@@ -21,6 +20,7 @@ function help() {
     echo -e "  \033[1;32mstop\033[0m      : Stops the container"
     echo -e "  \033[1;32mrestart\033[0m   : Restarts the container"
     echo -e "  \033[1;32mlog\033[0m       : Shows Docker logs"
+    echo -e "  \033[1;32manimate\033[0m   : Uses a second container with demo animations on port 3001"
     echo -e "  \033[1;32mhelp\033[0m      : Display this help message"
     echo ""
     echo -e "\033[1;33mFlags:\033[0m"
@@ -30,6 +30,7 @@ function help() {
     echo -e "  $0 \033[1;32m[argument argument ...]\033[0m \033[1;36m[flags]\033[0m"
     echo -e ""
     echo -e "  Example: \033[1;32m./docker restart daemon\033[0m \033[1;36m-p 8000\033[0m"
+    echo -e "  Example: \033[1;32m./docker animate\033[0m (or \033[1;32m./docker animate stop\033[0m)"
     echo ""
 }
 
@@ -67,6 +68,7 @@ BUILD=FALSE
 STOP=FALSE
 LOG=FALSE
 DAEMON=FALSE
+ANIMATE=FALSE
 if [ ! $# -gt 0 ]; then
     help
     exit 1
@@ -95,6 +97,10 @@ while [[ $# -gt 0 ]]; do
             DAEMON=TRUE
             shift
         ;;
+        animate)
+            ANIMATE=TRUE
+            shift
+        ;;
         log|logs)
             LOG=TRUE
             shift
@@ -112,6 +118,20 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# The animate container runs beside the normal one, with its own name and port
+ENVS=""
+if [ $ANIMATE == TRUE ]; then
+    CONTAINERNAME="${IMAGENAME}-animate-container"
+    PORT=${PORT:-3001}
+    ENVS="-e ANIMATE=1"
+    if [ $STOP == FALSE ] && [ $LOG == FALSE ] && [ $BUILD == FALSE ]; then
+        BUILD=TRUE
+    fi
+fi
+PORT=${PORT:-3000}
+ENVS="$ENVS -e PORT=$PORT"
+PORTS="-p 8888:8888 -p $PORT:$PORT -p 9999:9999"
+
 if [ $STOP == TRUE ]; then
   if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINERNAME}$"; then
     print "Stopping container"
@@ -128,11 +148,11 @@ fi
 
 if [ $DAEMON == TRUE ]; then
     print "Starting daemon container"
-    run docker run -d $PORTS $VOLUMES --network host --restart always --name "$CONTAINERNAME" "$IMAGENAME"
+    run docker run -d $PORTS $VOLUMES --network host $ENVS --restart always --name "$CONTAINERNAME" "$IMAGENAME"
     print "\nContainer running on port $PORT\n"
 elif [ $BUILD = TRUE ]; then
     print "Starting container"
-    run docker run -d $PORTS $VOLUMES --network host --name "$CONTAINERNAME" "$IMAGENAME"
+    run docker run -d $PORTS $VOLUMES --network host $ENVS --name "$CONTAINERNAME" "$IMAGENAME"
     print "\nContainer running on port $PORT\n"
 fi
 
