@@ -5,15 +5,24 @@
   height: 0;
   top: 60px;
   padding-bottom: 56.25%; 
+  font-size: calc(16 * var(--u));
   position: relative;
   overflow: hidden;
 }
 
+/* The dash scales as one picture. --u is one pixel of the 1920 px wide reference screen;
+   sizes use it so they keep their size relative to the dash on every screen. The dash is
+   at most as wide as fits the screen height; on a wider screen it moves right by half the
+   unused width, so it is centred. Scale Dash sets top, left, width and zoom on top of this. */
 #all {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%; 
+  max-width: calc((100vh - 60px) / 0.50625);
+  margin-left: max(0px, calc((100vw - (100vh - 60px) / 0.50625) / 2));
+  container-type: inline-size;
+  --u: calc(100cqw / 1920);
   zoom: 100%;
 }
 
@@ -81,7 +90,7 @@ body {
 
 #color-box {
   width: 20%;
-  border-right: #aeaeae 5px solid;
+  border-right: #aeaeae calc(5 * var(--u)) solid;
 }
 
 #rpm-mask {
@@ -91,7 +100,7 @@ body {
 
 .gear-container {
   height: 18;
-  width: 200px;
+  width: calc(200 * var(--u));
   position: absolute;
   
   top: 15%;
@@ -109,7 +118,7 @@ body {
 }
 
 .tire-container-container{
-  margin: 20px auto;
+  margin: calc(20 * var(--u)) auto;
   width:14%;
   height:14%;
   display:grid;
@@ -130,8 +139,8 @@ body {
   display:flex;
   align-items:center;
   justify-content:center;
-  height: 6.4rem;
-  width: 3.5rem;
+  height: calc(102.4 * var(--u));
+  width: calc(56 * var(--u));
 }
 
 
@@ -188,7 +197,7 @@ body {
 
 .fuel-container {
   width: 100%;
-  height: 5px;
+  height: calc(5 * var(--u));
   position: absolute;
   bottom: 30%;
   left: 0%;
@@ -196,7 +205,7 @@ body {
 
 .fuel {
   width: 5%;
-  height: 5px;
+  height: calc(5 * var(--u));
   background-color: #505050;
   left: 13.5%;
   position: absolute;
@@ -232,7 +241,7 @@ body {
 
 #container-time {
   height: 18;
-  width: 200px;
+  width: calc(200 * var(--u));
   /* right: 33%; */
   right: 37.7%;
   top: 38%;
@@ -241,7 +250,7 @@ body {
 
 #container-clock {
   height: 18;
-  width: 200px;
+  width: calc(200 * var(--u));
   right: 77.5%;
   top: 71%;
   display: none;
@@ -260,7 +269,7 @@ body {
   /* right: 50%; */
   right: 55%;
   top: 38%;
-  width: 200px;
+  width: calc(200 * var(--u));
   display: none;
 }
 
@@ -330,7 +339,7 @@ body {
   padding-left: 3%;
   padding-right: 15%;
   padding-bottom: 14%;
-  width: .5rem;
+  width: .calc(80 * var(--u));
 }
 
 #caution{
@@ -340,7 +349,7 @@ body {
 
 /* #split-container {
   height: 18;
-  width: 200px;
+  width: calc(200 * var(--u));
   top: 5%;
 } */
 
@@ -370,8 +379,8 @@ body {
   position: absolute;
   bottom: 33%;
   left: 14.5%;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: calc(40 * var(--u));
+  height: calc(40 * var(--u));
   display: none;
 
 }
@@ -381,13 +390,13 @@ body {
   justify-content: space-between;
   align-items: center;
   position: relative;
-  margin: 20px;
+  margin: calc(20 * var(--u));
   width: 80%;
   left: 8.5%;
   top: -43.3%;
   /* background-color: aqua; */
   /* border-top: 2px solid rgb(255, 255, 255); */
-  height: 40px;
+  height: calc(40 * var(--u));
 }
 
 .grid-line {
