@@ -78,7 +78,8 @@ body {
   height: 100%;
   justify-self: center;
   background-color: #a7a7a7;
-  border-radius: 10%;
+  /* The image corners are round with about 96 px on 565 x 932 */
+  border-radius: 18% / 11%;
   display: flex;
   align-items: center;
   justify-content: center;
