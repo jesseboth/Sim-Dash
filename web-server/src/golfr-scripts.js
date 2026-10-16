@@ -63,10 +63,10 @@ function configureRPM(maxRPM) {
         document.querySelector('.grid-container').classList.remove('over-ten');
     }
 
-    // yellow start
+    // yellow starts at the left edge of its number's cell, one cell (1000) after the strip start
     rpm = (rpmboxes - 4) * 1000;
     totalRPM = (Math.ceil(maxRPM / 1000) + 3) * 1000;
-    percentage = ((RPM_OFFSET + rpm) / (totalRPM)) * 100;
+    percentage = ((1000 + rpm) / (totalRPM)) * 100;
     yellowRPMPecentage = percentage
     document.getElementById("rpm-yellow").style.left = percentage + "%"
 
