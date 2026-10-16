@@ -3,9 +3,12 @@ config["seperateTime"] = true;
 config["dash"] = "golfr";
 
 yellowRPMPecentage = 0;
+// Each number is centred on its RPM: the strip starts 1.5 cells before 0 RPM
+const RPM_OFFSET = 1500;
+const INDICATOR_HALF_WIDTH = 1.2;   // half of the #rpm-indicator width in golfr-style.css
 function updateRPM(rpm, maxRPM) {
     totalRPM = (Math.ceil(maxRPM / 1000) + 3) * 1000;
-    percentage = ((1000 + rpm) / (totalRPM)) * 100;
+    percentage = ((RPM_OFFSET + rpm) / (totalRPM)) * 100;
 
     var greenWidth = Math.min(percentage, yellowRPMPecentage); // Limit to 15%
     document.getElementById("rpm").style.width = greenWidth + "%";
@@ -17,7 +20,7 @@ function updateRPM(rpm, maxRPM) {
     }
 
     // document.getElementById("rpm").style.width = (percentage) + "%";
-    document.getElementById("rpm-indicator").style.left = (percentage - .5) + "%";
+    document.getElementById("rpm-indicator").style.left = (percentage - INDICATOR_HALF_WIDTH) + "%";
 }
 
 function configureRPM(maxRPM) {
@@ -63,7 +66,27 @@ function configureRPM(maxRPM) {
     // yellow start
     rpm = (rpmboxes - 4) * 1000;
     totalRPM = (Math.ceil(maxRPM / 1000) + 3) * 1000;
-    percentage = ((1000 + rpm) / (totalRPM)) * 100;
+    percentage = ((RPM_OFFSET + rpm) / (totalRPM)) * 100;
     yellowRPMPecentage = percentage
     document.getElementById("rpm-yellow").style.left = percentage + "%"
+
+    updateRPMNumbers(gridContainer);
+}
+
+// The numbers are a second layer above the moving line, so the line passes under them.
+// The cells below keep the colours and borders.
+function updateRPMNumbers(gridContainer) {
+    let numbers = document.getElementById("rpm-numbers");
+    if (!numbers) {
+        numbers = document.createElement("div");
+        numbers.id = "rpm-numbers";
+        numbers.className = "grid-container rpm-numbers";
+        document.getElementById("rpm-container").appendChild(numbers);
+    }
+    numbers.replaceChildren(...[...gridContainer.children].map(cell => {
+        const number = document.createElement("div");
+        number.className = "rpm-number";
+        number.textContent = cell.textContent;
+        return number;
+    }));
 }
