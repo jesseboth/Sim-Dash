@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Subaru BRZ Dash</title>
+    <link rel="stylesheet" type="text/css" href="css/brz-style.css" />
+    <link rel="manifest" href="/data/manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Sim Dash">
+    <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+    <script src="/src/pwa.js" defer></script>
+</head>
+
+<body>
+  <div id="shift-light-container"></div>
+  <div class="size">
+    <div id="all">
+      <svg id="cluster" viewBox="0 0 1600 760" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div id="load"></div>
+  </div>
+</body>
+
+<script src="src/dash-scripts.js"></script>
+<script src="src/brz-scripts.js"></script>
+<script src="src/shift-lights.js"></script>
+<script src="src/config.js"></script>
+<script src="src/telemetry.js"></script>
+<script src="src/config.js"></script>  <!-- Intentional Duplicate -->
+
+<script src="src/animate.js"></script>
+
+</html>

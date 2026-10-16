@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:ital,wght@0,500;0,600;0,700;1,600&family=Oxanium:wght@400;500&display=swap');
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: #000;
+  font-family: 'Barlow Semi Condensed', 'Noto Sans', sans-serif;
+}
+
+.size {
+  width: 100%;
+  height: 0;
+  padding-bottom: 45%;
+  position: relative;
+  overflow: hidden;
+}
+
+#all {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  zoom: 100%;
+}
+
+#cluster {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+#load {
+  background-color: #000;
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  top: 0;
+  z-index: 10;
+}
+
+/* Needles turn about the gauge centre, given in viewBox units */
+.needle {
+  transform-box: view-box;
+  transition: transform 60ms linear;
+}
+
+.dial-number {
+  fill: #ffffff;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+/* Numbers on the blue band have a dark edge */
+.band-number {
+  stroke: #062a66;
+  stroke-width: 3px;
+  paint-order: stroke;
+}
+
+.unit {
+  fill: #e8e8e8;
+  font-weight: 500;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.lcd {
+  fill: #f4f4f4;
+  font-family: 'Oxanium', monospace;
+  font-weight: 500;
+  dominant-baseline: central;
+}
+
+.unit-span {
+  fill: #e8e8e8;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-weight: 500;
+}
+
+.logo {
+  fill: #ffffff;
+  font-style: italic;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
+  letter-spacing: 1px;
+}
+
+.selector {
+  fill: #5c5c60;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.selector.active {
+  fill: #ffffff;
+}
+
+.screen-header {
+  fill: #111;
+  font-weight: 600;
+  dominant-baseline: central;
+}
+
+.screen-label {
+  fill: #cfcfcf;
+  font-weight: 500;
+  dominant-baseline: central;
+}

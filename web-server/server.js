@@ -180,6 +180,9 @@ const server = http.createServer((req, res) =>  {
         case '.png':
             contentType = 'image/png';
             break;
+        case '.svg':
+            contentType = 'image/svg+xml';
+            break;
         case '.txt':
             contentType = 'text/plain';
             break;

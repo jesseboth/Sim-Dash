@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@500;600;700&display=swap');
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: #000;
+  font-family: 'Saira Semi Condensed', 'Noto Sans', sans-serif;
+}
+
+.size {
+  width: 100%;
+  height: 0;
+  padding-bottom: 47.5%;
+  position: relative;
+  overflow: hidden;
+}
+
+#all {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  zoom: 100%;
+}
+
+#cluster {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+#load {
+  background-color: #000;
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  top: 0;
+  z-index: 10;
+}
+
+text {
+  dominant-baseline: central;
+}
+
+.value {
+  fill: #ffffff;
+  font-weight: 600;
+}
+
+.label {
+  fill: #e8ebf2;
+  font-weight: 600;
+}
+
+.small {
+  fill: #e8ebf2;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.tach-number {
+  fill: #ffffff;
+  font-weight: 600;
+  text-anchor: middle;
+}

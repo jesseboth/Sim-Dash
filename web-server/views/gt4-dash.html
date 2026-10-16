@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Porsche GT4 Dash</title>
+    <link rel="stylesheet" type="text/css" href="css/gt4-style.css" />
+    <link rel="manifest" href="/data/manifest.json">
+    <meta name="theme-color" content="#09080e">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Sim Dash">
+    <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+    <script src="/src/pwa.js" defer></script>
+</head>
+
+<body>
+  <div id="shift-light-container"></div>
+  <div class="size">
+    <div id="all">
+      <svg id="cluster" viewBox="0 0 1600 720" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div id="load"></div>
+  </div>
+</body>
+
+<script src="src/dash-scripts.js"></script>
+<script src="src/gt4-scripts.js"></script>
+<script src="src/shift-lights.js"></script>
+<script src="src/config.js"></script>
+<script src="src/telemetry.js"></script>
+<script src="src/config.js"></script>  <!-- Intentional Duplicate -->
+
+<script src="src/animate.js"></script>
+
+</html>

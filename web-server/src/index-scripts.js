@@ -213,8 +213,11 @@ async function refreshBtn(type, value=undefined) {
         element.style.border = "none";
     });
 
+    // Button IDs are "<type>-<value>" in any letter case
     if(config[type] != undefined && config[type] != "") {
-      document.getElementById(type+ "-" + config[type].toLowerCase()).style.border = "4px solid #67e088";
+      const id = (type + "-" + config[type]).toLowerCase();
+      const button = [...document.querySelectorAll('.'+type+'Btn')].find(element => element.id.toLowerCase() === id);
+      if (button) button.style.border = "4px solid #67e088";
     }
 }
 

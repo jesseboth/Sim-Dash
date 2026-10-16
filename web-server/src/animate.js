@@ -1,5 +1,4 @@
-// indicates if RPM max should increase or be constant
-const incRPM = false;
+gear = 0;
 
 animateRPM();
 animateGears();
@@ -19,36 +18,35 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Async function to loop with sleep
+// RPM sweeps up and down. Each sweep the maximum RPM goes up 1000, from 5000 to 16000, then starts again.
 async function animateRPM() {
-    const MaxRPM = 20000;
-    const MinRPM = 6000;
-    let minmaxRPM = 1000;
-    let maxRPM = 8000;
+    const lowestMaxRPM = 5000;
+    const highestMaxRPM = 16000;
     const minRPM = 800;
+    const sweepTicks = 60; // ticks from minimum to maximum
 
+    let maxRPM = lowestMaxRPM;
     let i = minRPM;
-    let inc = 40
+    let up = true;
 
     while (true) {
         updateRpm(i, maxRPM, gear);
 
-        i += inc;
-        if (i > maxRPM-750 || i < minRPM) {
-            if(maxRPM >= MaxRPM || maxRPM >= MinRPM){
-                minmaxRPM = -minmaxRPM;
-            }
-            if(incRPM && i < minRPM){
-                maxRPM = maxRPM + minmaxRPM;
-            }
-            inc = -inc;
+        const step = (maxRPM - minRPM) / sweepTicks;
+        i += up ? step : -step;
+        if (up && i >= maxRPM) {
+            i = maxRPM;
+            up = false;
+        } else if (!up && i <= minRPM) {
+            i = minRPM;
+            up = true;
+            maxRPM = maxRPM >= highestMaxRPM ? lowestMaxRPM : maxRPM + 1000;
         }
 
-        await sleep(25); // Pause for 10ms
+        await sleep(25);
     }
 }
 
-gear = 0;
 async function animateGears() {
     let i = 0;
     let inc = 1;
