@@ -159,7 +159,7 @@ function buildText(svg) {
     tcr.clock = el("text", { x: 210, y: 665, class: "value", "font-size": 44 }, svg, "");
 
     // Traction light; updateTraction in dash-scripts.js blinks it
-    const traction = el("image", { id: "traction", x: 470, y: 590, width: 48, height: 46, href: "img/traction.png" }, svg);
+    const traction = el("image", { id: "traction", x: 540, y: 589, width: 48, height: 46, href: "img/traction.png" }, svg);
     traction.style.display = "none";
 }
 
