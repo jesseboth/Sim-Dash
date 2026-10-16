@@ -179,7 +179,8 @@ function updateScreen() {
 // Other games: the distance only.
 function updateStage(data) {
     const length = data && data["StageLength"] > 0 ? data["StageLength"] : null;
-    const driven = data && Number.isFinite(data["Odometer"]) ? Math.max(0, data["Odometer"]) : null;
+    const odometer = data && Number.isFinite(data["Odometer"]) ? data["Odometer"] : rally.distance;
+    const driven = Number.isFinite(odometer) ? Math.max(0, odometer) : null;
     let progress = null;
     if (data && data["StageProgress"] > 0) progress = data["StageProgress"];
     else if (length && driven !== null) progress = driven / length;
@@ -269,8 +270,9 @@ function updateFuel(percentage) {
     });
 }
 
-function updateDistance(_distance) {
-    // Distance shows in the stage area, from updateStage
+// Distance from telemetry.js or animate.js; updateStage shows it when there is no stage length
+function updateDistance(distance) {
+    rally.distance = Number.isFinite(distance) ? distance : null;
 }
 
 // --- Shift light ---
