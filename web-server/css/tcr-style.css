@@ -339,7 +339,7 @@ body {
   padding-left: 3%;
   padding-right: 15%;
   padding-bottom: 14%;
-  width: .calc(80 * var(--u));
+  width: calc(8 * var(--u));
 }
 
 #caution{

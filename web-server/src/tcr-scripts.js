@@ -104,7 +104,8 @@ function configureRPM(maxRPM) {
         number.style.left = `${numberLeft}%`;
         // starting pt = 0
         if (numberLeft < 25) {
-            number.style.bottom = `${calculateBottom(numberLeft)}rem`;
+            // In reference pixels (--u in tcr-style.css), so the number follows the curve on every screen
+            number.style.bottom = `calc(${calculateBottom(numberLeft) * 16} * var(--u))`;
         }   
 
         // Add elements to the container
