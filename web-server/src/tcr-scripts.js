@@ -105,12 +105,6 @@ function buildDefs(svg) {
     el("stop", { offset: "0%", "stop-color": "#2a2b2f" }, unlit);
     el("stop", { offset: "100%", "stop-color": "#17181b" }, unlit);
 
-    // Speed reflection fades out downwards
-    const fade = el("linearGradient", { id: "fade", x1: "0", y1: "0", x2: "0", y2: "1" }, defs);
-    el("stop", { offset: "0%", "stop-color": "#fff", "stop-opacity": 0.35 }, fade);
-    el("stop", { offset: "60%", "stop-color": "#fff", "stop-opacity": 0 }, fade);
-    const mask = el("mask", { id: "fadeMask", maskContentUnits: "userSpaceOnUse" }, defs);
-    el("rect", { x: 600, y: 625, width: 400, height: 135, fill: "url(#fade)" }, mask);
 }
 
 function buildSwoosh(svg) {
@@ -155,12 +149,6 @@ function buildText(svg) {
 
     el("text", { x: 800, y: 470, class: "label", "font-size": 20, "text-anchor": "middle" }, svg, "MPH");
     tcr.speed = el("text", { x: 800, y: 555, class: "value", "font-size": 150, "text-anchor": "middle" }, svg, "0");
-    // Reflection under the speed
-    const reflection = el("g", { mask: "url(#fadeMask)" }, svg);
-    tcr.speedReflection = el("text", {
-        x: 800, y: 555, class: "value", "font-size": 150, "text-anchor": "middle",
-        transform: "translate(0 1240) scale(1 -1)"
-    }, reflection, "0");
 
     el("text", { x: 210, y: 612, class: "label", "font-size": 20 }, svg, "FUEL");
     tcr.fuelSegs = [];
@@ -226,7 +214,6 @@ function updateSpeed(speed) {
     if (!tcr.speed) return;
     const text = Math.round(Number.isFinite(speed) ? Math.max(0, speed) : 0);
     tcr.speed.textContent = text;
-    tcr.speedReflection.textContent = text;
 }
 
 function updateGear(gear, gearMax = null, gearNeutral = null, gearReverse = null) {
