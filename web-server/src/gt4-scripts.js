@@ -6,7 +6,6 @@ config["dash"] = "gt4";
 // The update functions replace the ones in dash-scripts.js.
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const NEEDLE_COLOR = "#f6a21c";
 const TICK_COLOR = "#f5c518";
 const RED = "#e0261b";
 const UNLIT = "rgba(255, 255, 255, 0.18)";
@@ -63,15 +62,28 @@ function tick(parent, g, angle, outer, length, width, color = TICK_COLOR) {
     el("line", { x1, y1, x2, y2, stroke: color, "stroke-width": width }, parent);
 }
 
+// Needle with a ridge down the middle: a lit half and a shaded half. The shadow is on an
+// outer group that does not turn, so the light comes from the same side at every angle.
 function needle(parent, g, length, tail, width) {
     const { cx, cy } = g;
-    const group = el("g", { class: "needle" }, parent);
+    const shadow = el("g", { filter: "url(#needleShadow)" }, parent);
+    const group = el("g", { class: "needle" }, shadow);
     group.style.transformOrigin = `${cx}px ${cy}px`;
     el("path", {
-        d: `M${cx - width} ${cy + tail} L${cx - 1.2} ${cy - length} L${cx + 1.2} ${cy - length} L${cx + width} ${cy + tail} Z`,
-        fill: NEEDLE_COLOR
+        d: `M${cx - width} ${cy + tail} L${cx - 1.2} ${cy - length} L${cx} ${cy - length - 1} L${cx} ${cy + tail} Z`,
+        fill: "url(#needleLit)"
+    }, group);
+    el("path", {
+        d: `M${cx} ${cy + tail} L${cx} ${cy - length - 1} L${cx + 1.2} ${cy - length} L${cx + width} ${cy + tail} Z`,
+        fill: "url(#needleShade)"
     }, group);
     return group;
+}
+
+// Metal cap over the needle centre, with a highlight at the top left
+function hubCap(parent, g, r) {
+    el("circle", { cx: g.cx, cy: g.cy, r, fill: "url(#hubCap)", stroke: "#050506", "stroke-width": 1.5, filter: "url(#needleShadow)" }, parent);
+    el("ellipse", { cx: g.cx - r * 0.3, cy: g.cy - r * 0.35, rx: r * 0.45, ry: r * 0.28, fill: "rgba(255, 255, 255, 0.28)" }, parent);
 }
 
 const LOGO_FILES = ["img/gt4-logo.png"];
@@ -150,6 +162,24 @@ function buildDefs(svg) {
     el("stop", { offset: "0%", "stop-color": "#141416" }, housing);
     el("stop", { offset: "100%", "stop-color": "#060607" }, housing);
 
+    // Needles: lit and shaded halves, brighter towards the tip
+    const lit = el("linearGradient", { id: "needleLit", x1: "0", y1: "0", x2: "0", y2: "1" }, defs);
+    el("stop", { offset: "0%", "stop-color": "#ffe08a" }, lit);
+    el("stop", { offset: "45%", "stop-color": "#ffbb3a" }, lit);
+    el("stop", { offset: "100%", "stop-color": "#e08d12" }, lit);
+    const shade = el("linearGradient", { id: "needleShade", x1: "0", y1: "0", x2: "0", y2: "1" }, defs);
+    el("stop", { offset: "0%", "stop-color": "#e89a20" }, shade);
+    el("stop", { offset: "45%", "stop-color": "#c97a0c" }, shade);
+    el("stop", { offset: "100%", "stop-color": "#8f5205" }, shade);
+
+    const cap = el("radialGradient", { id: "hubCap", cx: "35%", cy: "30%", r: "75%" }, defs);
+    el("stop", { offset: "0%", "stop-color": "#6a6c72" }, cap);
+    el("stop", { offset: "55%", "stop-color": "#25262a" }, cap);
+    el("stop", { offset: "100%", "stop-color": "#08080a" }, cap);
+
+    const shadowFilter = el("filter", { id: "needleShadow", x: "-50%", y: "-50%", width: "200%", height: "200%" }, defs);
+    el("feDropShadow", { dx: 3, dy: 4, stdDeviation: 2.5, "flood-color": "#000", "flood-opacity": 0.75 }, shadowFilter);
+
     const clip = el("clipPath", { id: "screenClip" }, defs);
     el("circle", { cx: SCREEN.cx, cy: SCREEN.cy, r: SCREEN.r - 2 }, clip);
 }
@@ -191,8 +221,8 @@ function buildSpeedo(svg) {
     gt4.trip = readout(svg, 452, 564, 30);
     gt4.trip.textContent = "0.0";
 
-    gt4.speedNeedle = needle(svg, g, 190, 0, 3.5);
-    el("circle", { cx: g.cx, cy: g.cy, r: 10, fill: "#0d0d0f", stroke: "#2a2a2e", "stroke-width": 2 }, svg);
+    gt4.speedNeedle = needle(svg, g, 190, 0, 4);
+    hubCap(svg, g, 12);
 }
 
 // --- Tachometer ---
@@ -263,8 +293,8 @@ function buildTach(svg) {
     gt4.digitalSpeed = readout(svg, g.cx, g.cy + 208, 48, "mph", 16);
     gt4.digitalSpeed.textContent = "0";
 
-    gt4.rpmNeedle = needle(svg, g, 240, 0, 4.5);
-    el("circle", { cx: g.cx, cy: g.cy, r: 13, fill: "#0d0d0f", stroke: "#2a2a2e", "stroke-width": 2 }, svg);
+    gt4.rpmNeedle = needle(svg, g, 240, 0, 5.5);
+    hubCap(svg, g, 16);
 }
 
 // --- Screen ---
