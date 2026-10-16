@@ -133,7 +133,7 @@ function configureRPM(maxRPM) {
 }
 
 function buildText(svg) {
-    tcr.gear = el("text", { x: 232, y: 215, class: "value", "font-size": 130, "text-anchor": "middle" }, svg, "N");
+    tcr.gear = el("text", { x: 280, y: 292, class: "value", "font-size": 130, "text-anchor": "middle" }, svg, "N");
 
     el("text", { x: 650, y: 340, class: "label", "font-size": 20, "text-anchor": "middle" }, svg, "BEST");
     tcr.best = el("text", { x: 650, y: 378, class: "value", "font-size": 42, "text-anchor": "middle" }, svg, "-:--.--");
