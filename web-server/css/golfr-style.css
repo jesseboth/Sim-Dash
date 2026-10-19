@@ -287,26 +287,57 @@ body {
   background: linear-gradient(to bottom, #fff07a 0%, #ffdb28 45%, #c9a400 100%);
 }
 
-/* The number under the moving line grows; in the red zone it also shakes */
+/* The number under the moving line grows. It shakes in the yellow zone, and harder in the red. */
 .rpm-number.current {
   transform: scale(1.35);
 }
 
 .rpm-number.current.shake {
-  animation: rpm-shake 90ms linear infinite;
+  animation: rpm-shake 110ms linear infinite;
+}
+
+.rpm-number.current.shake-hard {
+  animation: rpm-shake-hard 70ms linear infinite;
 }
 
 @keyframes rpm-shake {
   0%   { transform: scale(1.35) translate(0, 0); }
-  25%  { transform: scale(1.35) translate(calc(-2 * var(--u)), calc(1 * var(--u))); }
-  50%  { transform: scale(1.35) translate(calc(2 * var(--u)), calc(-1 * var(--u))); }
-  75%  { transform: scale(1.35) translate(calc(-1 * var(--u)), calc(-1 * var(--u))); }
+  25%  { transform: scale(1.35) translate(calc(-1 * var(--u)), calc(0.5 * var(--u))); }
+  50%  { transform: scale(1.35) translate(calc(1 * var(--u)), calc(-0.5 * var(--u))); }
+  75%  { transform: scale(1.35) translate(calc(-0.5 * var(--u)), calc(-0.5 * var(--u))); }
   100% { transform: scale(1.35) translate(0, 0); }
+}
+
+@keyframes rpm-shake-hard {
+  0%   { transform: scale(1.4) translate(0, 0) rotate(0deg); }
+  20%  { transform: scale(1.4) translate(calc(-3 * var(--u)), calc(2 * var(--u))) rotate(-3deg); }
+  40%  { transform: scale(1.4) translate(calc(3 * var(--u)), calc(-2 * var(--u))) rotate(3deg); }
+  60%  { transform: scale(1.4) translate(calc(-2 * var(--u)), calc(-2 * var(--u))) rotate(-2deg); }
+  80%  { transform: scale(1.4) translate(calc(2 * var(--u)), calc(2 * var(--u))) rotate(2deg); }
+  100% { transform: scale(1.4) translate(0, 0) rotate(0deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .rpm-number { transition: none; }
-  .rpm-number.current.shake { animation: none; }
+  .rpm-number.current.shake,
+  .rpm-number.current.shake-hard { animation: none; }
+}
+
+/* Divider lines repeated above the red fill: same grid as the cells, borders only */
+.rpm-dividers {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.rpm-divider {
+  height: 100%;
+  border: 1px solid rgb(0, 0, 0);
+  border-top: none;
+}
+
+.rpm-divider:first-child,
+.rpm-divider:last-child {
+  grid-column: span 2;
 }
 
 /* Light bar colours: lighter at the top, darker at the bottom, with a highlight on the top edge */

@@ -33,16 +33,18 @@ function updateRPM(rpm, maxRPM) {
     updateCurrentNumber(rpm, percentage);
 }
 
-// The number under the moving line grows; in the red zone it also shakes
+// The number under the moving line grows. It shakes in the yellow zone, and harder in the red.
 function updateCurrentNumber(rpm, percentage) {
     const numbers = document.getElementById("rpm-numbers");
     if (!numbers) return;
     const index = Math.max(0, Math.min(numbers.children.length - 1, Math.round(rpm / 1000)));
     const inRed = percentage >= redStartPercentage;
+    const inYellow = !inRed && percentage >= yellowRPMPecentage;
     [...numbers.children].forEach((number, i) => {
         const current = i === index && number.textContent !== "";
         number.classList.toggle("current", current);
-        number.classList.toggle("shake", current && inRed);
+        number.classList.toggle("shake", current && inYellow);
+        number.classList.toggle("shake-hard", current && inRed);
     });
 }
 
@@ -110,11 +112,27 @@ function updateRedStart(gridContainer) {
     if (!firstRed || !width) return;
     redStartPercentage = (firstRed.getBoundingClientRect().left - gridContainer.getBoundingClientRect().left) / width * 100;
 
+    const container = document.getElementById("rpm-container");
+    const indicator = document.getElementById("rpm-indicator");
     if (!document.getElementById("rpm-red")) {
         const redFill = document.createElement("div");
         redFill.id = "rpm-red";
-        document.getElementById("rpm-container").insertBefore(redFill, document.getElementById("rpm-indicator"));
+        container.insertBefore(redFill, indicator);
     }
+
+    // Divider lines of the cells, again above the red fill so it does not hide them
+    let dividers = document.getElementById("rpm-dividers");
+    if (!dividers) {
+        dividers = document.createElement("div");
+        dividers.id = "rpm-dividers";
+        dividers.className = "grid-container rpm-dividers";
+        container.insertBefore(dividers, indicator);
+    }
+    dividers.replaceChildren(...[...gridContainer.children].map(() => {
+        const divider = document.createElement("div");
+        divider.className = "rpm-divider";
+        return divider;
+    }));
 }
 
 // The numbers are a second layer above the moving line, so the line passes under them.
