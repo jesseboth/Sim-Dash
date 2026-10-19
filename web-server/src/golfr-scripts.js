@@ -19,7 +19,13 @@ function updateRPM(rpm, maxRPM) {
         fillWhite.style.width = (percentage - greenWidth) + "%";
     }
 
-    // document.getElementById("rpm").style.width = (percentage) + "%";
+    // Bright red over the red cells, from where they start up to the current RPM
+    const redFill = document.getElementById("rpm-red");
+    if (redFill) {
+        redFill.style.left = redStartPercentage + "%";
+        redFill.style.width = Math.max(0, percentage - redStartPercentage) + "%";
+    }
+
     document.getElementById("rpm-indicator").style.left = (percentage - INDICATOR_HALF_WIDTH) + "%";
 }
 
@@ -71,6 +77,22 @@ function configureRPM(maxRPM) {
     document.getElementById("rpm-yellow").style.left = percentage + "%"
 
     updateRPMNumbers(gridContainer);
+    updateRedStart(gridContainer);
+}
+
+// Where the red cells start, in percent of the strip. The bright red fill covers them from there.
+let redStartPercentage = 100;
+function updateRedStart(gridContainer) {
+    const firstRed = gridContainer.querySelector(".rpmRed");
+    const width = gridContainer.getBoundingClientRect().width;
+    if (!firstRed || !width) return;
+    redStartPercentage = (firstRed.getBoundingClientRect().left - gridContainer.getBoundingClientRect().left) / width * 100;
+
+    if (!document.getElementById("rpm-red")) {
+        const redFill = document.createElement("div");
+        redFill.id = "rpm-red";
+        document.getElementById("rpm-container").insertBefore(redFill, document.getElementById("rpm-indicator"));
+    }
 }
 
 // The numbers are a second layer above the moving line, so the line passes under them.
