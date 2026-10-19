@@ -2,6 +2,18 @@ config = {};
 config["seperateTime"] = true;
 config["dash"] = "golfr";
 
+// Times with no leading zero: 41:70 under a minute, 1:23:42 from a minute up.
+// Replaces formatTime in dash-scripts.js on this dash only; showMinutes=false keeps the
+// first number only (the clock).
+window.formatTime = function (floatSeconds, showMinutes = true) {
+    const cs = Math.floor(Math.max(0, floatSeconds) * 100);
+    const minutes = Math.floor(cs / 6000);
+    const seconds = Math.floor(cs / 100) % 60;
+    const hundredths = String(cs % 100).padStart(2, "0");
+    if (showMinutes && minutes > 0) return `${minutes}:${String(seconds).padStart(2, "0")}:${hundredths}`;
+    return `${showMinutes ? seconds : Math.floor(cs / 100)}:${hundredths}`;
+};
+
 yellowRPMPecentage = 0;
 // Each number is centred on its RPM: the strip starts 1.5 cells before 0 RPM
 const RPM_OFFSET = 1500;

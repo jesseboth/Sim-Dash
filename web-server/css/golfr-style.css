@@ -129,12 +129,14 @@ body {
 }
 
 
+/* Lap time and split share a right edge */
 #container-time {
   height: 18;
   width: calc(200 * var(--u));
   left: 77.5%;
   top: 20%;
   display: none;
+  justify-content: flex-end;
 }
 
 #container-clock {
@@ -300,20 +302,21 @@ body {
   animation: rpm-shake-hard 70ms linear infinite;
 }
 
+/* Shake distances are percentages of the number's own box, which every browser supports */
 @keyframes rpm-shake {
   0%   { transform: scale(1.35) translate(0, 0); }
-  25%  { transform: scale(1.35) translate(calc(-1 * var(--u)), calc(0.5 * var(--u))); }
-  50%  { transform: scale(1.35) translate(calc(1 * var(--u)), calc(-0.5 * var(--u))); }
-  75%  { transform: scale(1.35) translate(calc(-0.5 * var(--u)), calc(-0.5 * var(--u))); }
+  25%  { transform: scale(1.35) translate(-1.2%, 1%); }
+  50%  { transform: scale(1.35) translate(1.2%, -1%); }
+  75%  { transform: scale(1.35) translate(-0.6%, -1%); }
   100% { transform: scale(1.35) translate(0, 0); }
 }
 
 @keyframes rpm-shake-hard {
   0%   { transform: scale(1.4) translate(0, 0) rotate(0deg); }
-  20%  { transform: scale(1.4) translate(calc(-3 * var(--u)), calc(2 * var(--u))) rotate(-3deg); }
-  40%  { transform: scale(1.4) translate(calc(3 * var(--u)), calc(-2 * var(--u))) rotate(3deg); }
-  60%  { transform: scale(1.4) translate(calc(-2 * var(--u)), calc(-2 * var(--u))) rotate(-2deg); }
-  80%  { transform: scale(1.4) translate(calc(2 * var(--u)), calc(2 * var(--u))) rotate(2deg); }
+  20%  { transform: scale(1.4) translate(-3.6%, 4%) rotate(-3deg); }
+  40%  { transform: scale(1.4) translate(3.6%, -4%) rotate(3deg); }
+  60%  { transform: scale(1.4) translate(-2.4%, -4%) rotate(-2deg); }
+  80%  { transform: scale(1.4) translate(2.4%, 4%) rotate(2deg); }
   100% { transform: scale(1.4) translate(0, 0) rotate(0deg); }
 }
 
@@ -490,14 +493,13 @@ body {
   display: none;
 }
 
-/* Pinned to the left edge of the lap time box and out of its flow, so the time stays centred */
+/* Caution icon just left of the lap time; the time stays on the right edge */
 .caution {
-  width: 15%;
-  padding-left: 3%;
-  padding-right: 3%;
+  width: calc(26 * var(--u));
+  padding-right: calc(8 * var(--u));
   top: calc(3 * var(--u));
-  left: calc(-10 * var(--u));
-  position: absolute;
+  position: relative;
+  flex: none;
 }
 
 #caution{
@@ -512,13 +514,14 @@ body {
   display: none;
 }
 
-/* Same box as #container-time, so the split is centred under the lap time */
+/* Same box as #container-time, right-aligned, so the split ends under the end of the lap time */
 #split-container {
   height: 18;
   width: calc(200 * var(--u));
   left: 77.5%;
   top: 26%;
   display: inline-flex;
+  justify-content: flex-end;
 }
 
 .split {
