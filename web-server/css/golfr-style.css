@@ -490,12 +490,14 @@ body {
   display: none;
 }
 
+/* Pinned to the left edge of the lap time box and out of its flow, so the time stays centred */
 .caution {
   width: 15%;
   padding-left: 3%;
   padding-right: 3%;
   top: calc(3 * var(--u));
-  position: relative;
+  left: calc(-10 * var(--u));
+  position: absolute;
 }
 
 #caution{
@@ -510,10 +512,11 @@ body {
   display: none;
 }
 
+/* Same box as #container-time, so the split is centred under the lap time */
 #split-container {
   height: 18;
   width: calc(200 * var(--u));
-  left: 81%;
+  left: 77.5%;
   top: 26%;
   display: inline-flex;
 }
