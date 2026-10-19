@@ -294,6 +294,15 @@ body {
   transform: scale(1.35);
 }
 
+/* The end cells are two wide with the number off-centre: grow it about the number itself */
+.rpm-number:first-child {
+  transform-origin: 75% 50%;
+}
+
+.rpm-number:last-child {
+  transform-origin: 25% 50%;
+}
+
 .rpm-number.current.shake {
   animation: rpm-shake 110ms linear infinite;
 }
