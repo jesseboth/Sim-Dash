@@ -19,7 +19,9 @@ function updateRPM(rpm, maxRPM) {
         fillWhite.style.width = (percentage - greenWidth) + "%";
     }
 
-    // Bright red over the red cells, from where they start up to the current RPM
+    // Bright red over the red cells, from where they start up to the current RPM.
+    // Measured again if the strip had no size when it was built (page still loading).
+    if (!document.getElementById("rpm-red")) updateRedStart(document.getElementsByClassName("grid-container")[0]);
     const redFill = document.getElementById("rpm-red");
     if (redFill) {
         redFill.style.left = redStartPercentage + "%";
@@ -27,9 +29,29 @@ function updateRPM(rpm, maxRPM) {
     }
 
     document.getElementById("rpm-indicator").style.left = (percentage - INDICATOR_HALF_WIDTH) + "%";
+
+    updateCurrentNumber(rpm, percentage);
 }
 
+// The number under the moving line grows; in the red zone it also shakes
+function updateCurrentNumber(rpm, percentage) {
+    const numbers = document.getElementById("rpm-numbers");
+    if (!numbers) return;
+    const index = Math.max(0, Math.min(numbers.children.length - 1, Math.round(rpm / 1000)));
+    const inRed = percentage >= redStartPercentage;
+    [...numbers.children].forEach((number, i) => {
+        const current = i === index && number.textContent !== "";
+        number.classList.toggle("current", current);
+        number.classList.toggle("shake", current && inRed);
+    });
+}
+
+// The cells and numbers are built again only when the maximum RPM changes,
+// so the number animations keep running between updates
+let configuredMaxRPM = null;
 function configureRPM(maxRPM) {
+    if (maxRPM === configuredMaxRPM) return;
+    configuredMaxRPM = maxRPM;
     const gridContainer = document.getElementsByClassName("grid-container")[0];
     const gridElements = document.getElementsByClassName("grid-item");
     for (let i = gridElements.length - 1; i >= 0; i--) {
