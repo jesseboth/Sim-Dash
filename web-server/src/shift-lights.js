@@ -44,11 +44,15 @@ const shiftLightConfigs = {
 
 const shiftLightCSS = `
 <style>
+    /* The height comes from the width, so each light is a circle on any screen */
     .light {
         background-color: aqua;
         width: 2%;
-        border-radius: 100%;
-        height: 30%;
+        height: auto;
+        aspect-ratio: 1 / 1;
+        flex: none;
+        box-sizing: border-box;
+        border-radius: 50%;
         border: #9d9d9d 2px solid;
     }
 
