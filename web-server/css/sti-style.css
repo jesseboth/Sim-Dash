@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@500;600;700&display=swap');
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: #000;
+  font-family: 'Saira Semi Condensed', 'Noto Sans', sans-serif;
+}
+
+.size {
+  /* As wide as the screen, or as wide as fits the screen height, centred */
+  width: min(100%, calc(100vh / 0.475));
+  margin: 0 auto;
+  aspect-ratio: 1600 / 760;
+  position: relative;
+  overflow: hidden;
+}
+
+/* --u is one pixel of the 1920 px wide reference screen, for sizes outside the SVG */
+#all {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  container-type: inline-size;
+  --u: calc(100cqw / 1920);
+  zoom: 100%;
+}
+
+#cluster {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Needles and LCDs on their own layer above the scales */
+#live {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  will-change: transform;
+}
+
+#load {
+  background-color: #000;
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  top: 0;
+  z-index: 10;
+}
+
+text {
+  dominant-baseline: central;
+}
+
+.number {
+  fill: #ff5a2c;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+.plain {
+  fill: #b9babe;
+  font-weight: 500;
+}
+
+.lamp {
+  font-weight: 700;
+  letter-spacing: 1px;
+}
