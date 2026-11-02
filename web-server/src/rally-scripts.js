@@ -3,7 +3,7 @@ config["seperateTime"] = true;
 config["dash"] = "rally";
 
 // Rally dash: an RPM swoosh from bottom left to top right with no scale, gear left, time top left,
-// RPM and speed right, and stage progress along the bottom.
+// RPM and speed right, and stage distance along the bottom.
 // The update functions replace the ones in dash-scripts.js.
 
 const colorStops = [
@@ -47,6 +47,7 @@ function interpolateColor(percentage) {
 const SVG_NS = "http://www.w3.org/2000/svg";
 const SWOOSH = { x0: 100, x1: 1500 };
 const RED = "#ff3b30";
+const BLUE = "#207dde";
 const FUEL_SEGMENTS = 10;
 
 const rally = { maxRpm: 0 };
@@ -126,13 +127,14 @@ function configureRPM(maxRPM) {
 
 function buildText(svg) {
     rally.gear = el("text", { x: 330, y: 400, class: "value", "font-size": 230, "text-anchor": "middle" }, svg, "N");
+    rally.gear.style.fill = BLUE;
 
     el("text", { x: 760, y: 150, class: "label", "font-size": 22, "text-anchor": "end" }, svg, "STAGE TIME");
     rally.time = el("text", { x: 760, y: 200, class: "value", "font-size": 66, "text-anchor": "end" }, svg, "-:--.--");
     rally.split = el("text", { x: 760, y: 252, class: "value", "font-size": 40, "text-anchor": "end" }, svg, "");
 
     // Shift light: a ring that fills red at the shift point
-    rally.shiftRing = el("circle", { cx: 1130, cy: 455, r: 30, fill: "#111114", stroke: "#3a3b40", "stroke-width": 4 }, svg);
+    rally.shiftRing = el("circle", { cx: 1130, cy: 455, r: 45, fill: "#111114", stroke: "#3a3b40", "stroke-width": 5 }, svg);
 
     el("text", { x: 1440, y: 418, class: "label", "font-size": 22, "text-anchor": "end" }, svg, "RPM");
     rally.rpm = el("text", { x: 1440, y: 465, class: "value", "font-size": 76, "text-anchor": "end" }, svg, "0");
@@ -144,7 +146,6 @@ function buildText(svg) {
     rally.stageLabel = el("text", { x: 820, y: 615, class: "label", "font-size": 22 }, svg, "DISTANCE");
     rally.stageValue = el("text", { x: 820, y: 655, class: "value", "font-size": 44 }, svg, "- mi");
     el("rect", { x: SWOOSH.x0, y: 706, width: SWOOSH.x1 - SWOOSH.x0, height: 8, rx: 4, fill: "#1c1d21" }, svg);
-    rally.stageBar = el("rect", { x: SWOOSH.x0, y: 706, width: 0, height: 8, rx: 4, fill: "#f2f2f2" }, svg);
 
     rally.clock = el("text", { x: SWOOSH.x0, y: 745, class: "value", "font-size": 42 }, svg, "");
     el("text", { x: 320, y: 745, class: "label", "font-size": 20 }, svg, "FUEL");
@@ -190,11 +191,9 @@ function updateStage(data) {
         const left = Math.max(0, length * (1 - Math.min(1, progress)));
         rally.stageLabel.textContent = "TO GO";
         rally.stageValue.textContent = `${metersToMiles(left, 1)} mi`;
-        rally.stageBar.setAttribute("width", (SWOOSH.x1 - SWOOSH.x0) * Math.max(0, Math.min(1, progress)));
     } else {
         rally.stageLabel.textContent = "DISTANCE";
         rally.stageValue.textContent = driven ? `${metersToMiles(driven, 2)} mi` : "- mi";
-        rally.stageBar.setAttribute("width", 0);
     }
 }
 
@@ -243,7 +242,7 @@ function updateGear(gear, gearMax = null, gearNeutral = null, gearReverse = null
     else if ((gearReverse != null && gear == gearReverse) || gear == 0) text = "R";
     else if (!(gear > 0 && gear < 11) && !(gearMax != null && gear <= gearMax)) text = "N";
     rally.gear.textContent = text;
-    rally.gear.style.fill = text === "R" ? RED : "";
+    rally.gear.style.fill = text === "R" ? RED : text === "N" ? BLUE : "";
 }
 
 function updateTime(id, time, minutes = true) {
