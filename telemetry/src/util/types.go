@@ -42,6 +42,7 @@ type AutocrossRun struct {
     RunID      string              `json:"runId"`
     CourseID   string              `json:"courseId"`
     Timestamp  string              `json:"timestamp"`
+    Game       string              `json:"game,omitempty"`
     LapTime    float32             `json:"lapTime"`
     CarID      string              `json:"carId"`
     TrackID    string              `json:"trackId"`
@@ -49,6 +50,7 @@ type AutocrossRun struct {
     Name       string              `json:"name,omitempty"`
     Driver     string              `json:"driver,omitempty"`
     Car        string              `json:"car,omitempty"`
+    CarClass   string              `json:"carClass,omitempty"`
     IsValid    bool                `json:"isValid"`
     Telemetry  AutocrossTelemetry  `json:"telemetry"`
     Statistics AutocrossStatistics `json:"statistics"`
@@ -117,6 +119,10 @@ type RecordingState struct {
     RunSavedAt  int64   `json:"runSavedAt"` // unix ms, increments each time a run is auto-saved
     Driver      string  `json:"driver"`     // given to each new run
     Car         string  `json:"car"`        // given to each new run; empty when the game sends a car ID
+    CarClass    string  `json:"carClass"`   // given to each new run when the game sends no class
+    Game        string  `json:"game"`       // game of this telemetry process
+    CanRecord   bool    `json:"canRecord"`  // false when the game sends no run timer
+    TrackID     int32   `json:"trackId"`    // track ID of the last packet, 0 when unknown
 }
 
 // Top10Entry represents a top 10 run entry

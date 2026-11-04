@@ -1020,7 +1020,7 @@ const AutocrossMap = (function() {
             colorBox.style.backgroundColor = runColor(run, index);
 
             const label = document.createElement('span');
-            const lapTime = formatLapTime(run.lapTime);
+            const lapTime = run.isValid === false ? 'DNF' : formatLapTime(run.lapTime);
             const runNumber = run.runNumber || (index + 1);
             label.textContent = `Run ${runNumber}: ${lapTime}`;
 

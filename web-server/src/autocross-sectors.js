@@ -320,7 +320,7 @@ const AutocrossSectors = (function () {
             const coneTag = cones > 0 ? ` <span class="sector-cone-badge" title="${cones} cone${cones !== 1 ? 's' : ''}">+${cones}</span>` : '';
             tbody += `<tr>`;
             tbody += `<td><span class="sector-run-dot" style="background:${color}"></span>${escapeHtml(label)}</td>`;
-            tbody += `<td>${formatTime(total)}${coneTag}</td>`;
+            tbody += `<td>${run.isValid === false ? 'DNF' : formatTime(total)}${coneTag}</td>`;
             sectorTimes.forEach((t, si) => {
                 const best = bestSectorTimes[si];
                 const isBest = t !== null && best !== null && Math.abs(t - best) < 0.001;

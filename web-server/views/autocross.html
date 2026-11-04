@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Autocross Telemetry Analyzer</title>
+    <title>Telemetry</title>
     <link rel="stylesheet" href="/css/autocross-style.css">
     <!-- Chart.js CSS not needed, it uses canvas -->
     <link rel="manifest" href="/data/manifest.json">
@@ -18,12 +18,12 @@
     <!-- Header Section -->
     <header class="header">
         <div class="header-left">
-            <h1>Autocross Telemetry</h1>
+            <h1>Telemetry</h1>
             <select id="courseSelector" class="course-selector">
                 <option value="">Select course...</option>
             </select>
             <button id="courseMenuBtn" class="btn btn-secondary" title="Rename, create or delete courses">⚙ Course</button>
-            <button id="nameIdentifiersBtn" class="btn btn-secondary driver-btn" title="Driver and car for new runs">👤 <span id="driverBtnText">Driver / Car</span></button>
+            <button id="nameIdentifiersBtn" class="btn btn-secondary driver-btn" title="Driver, class and car for new runs">👤 <span id="driverBtnText">Driver / Car</span></button>
         </div>
         <div class="header-right">
             <button id="liveToggleBtn" class="btn btn-secondary live-toggle" title="Live split screen">⏱ Live</button>
@@ -110,7 +110,7 @@
                     <button class="sort-btn" data-sort="scratch" title="Fastest without cone penalties">Scratch</button>
                     <button class="sort-btn" data-sort="recent">Recent</button>
                 </div>
-                <select id="carFilter" class="car-filter hidden" title="Show runs for one car"></select>
+                <select id="carFilter" class="car-filter hidden" title="Show runs of one class"></select>
             </div>
             <div class="runs-header-right">
                 <button id="exportBtn" class="btn btn-secondary" disabled>Export</button>
@@ -137,8 +137,22 @@
                     <input type="text" id="runName" name="runName" placeholder="e.g., Perfect Run, Morning Session">
                 </div>
                 <div class="form-group">
-                    <label for="runDriver">Driver:</label>
-                    <input type="text" id="runDriver" list="driverOptions" autocomplete="off">
+                    <label for="runDriverSelect">Driver:</label>
+                    <div class="select-row">
+                        <select id="runDriverSelect"></select>
+                        <div class="menu-wrap">
+                            <button type="button" id="runDriverMenuBtn" class="btn btn-secondary menu-btn" title="Driver options" aria-haspopup="true">⋮</button>
+                            <div id="runDriverMenu" class="popup-menu hidden" role="menu">
+                                <button type="button" id="runRenameDriverBtn" role="menuitem">Rename driver</button>
+                                <button type="button" id="runRemoveDriverBtn" role="menuitem" class="danger">Remove driver</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="runClassSelect">Class:</label>
+                    <select id="runClassSelect"></select>
+                    <input type="text" id="runClassOtherInput" class="hidden" autocomplete="off" placeholder="Class name, e.g., STR">
                 </div>
                 <div class="form-group">
                     <label for="runCar">Car:</label>
@@ -159,29 +173,47 @@
             </form>
         </div>
     </div>
-    <datalist id="driverOptions"></datalist>
     <datalist id="carOptions"></datalist>
 
     <!-- Modal: Driver, Car and Track -->
     <div id="nameIdentifiersModal" class="modal hidden">
         <div class="modal-content">
-            <h2>Driver & Car</h2>
-            <p class="modal-note">New runs get this driver and car. You can change them later in the run details (✏️).</p>
+            <h2>Driver, Class & Car</h2>
+            <p class="modal-note">New runs get this driver, class and car. You can change them later in the run details (✏️).</p>
             <form id="nameIdentifiersForm">
                 <div class="form-group">
-                    <label for="driverInput">Driver:</label>
-                    <input type="text" id="driverInput" list="driverOptions" autocomplete="off" placeholder="e.g., Jesse">
+                    <label for="driverSelect">Driver:</label>
+                    <div class="select-row">
+                        <select id="driverSelect"></select>
+                        <div class="menu-wrap">
+                            <button type="button" id="driverMenuBtn" class="btn btn-secondary menu-btn" title="Driver options" aria-haspopup="true">⋮</button>
+                            <div id="driverMenu" class="popup-menu hidden" role="menu">
+                                <button type="button" id="renameDriverBtn" role="menuitem">Rename driver</button>
+                                <button type="button" id="removeDriverBtn" role="menuitem" class="danger">Remove driver</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
+                    <label for="classSelect">Class:</label>
+                    <select id="classSelect"></select>
+                    <input type="text" id="classOtherInput" class="hidden" autocomplete="off" placeholder="Class name, e.g., STR">
+                    <div id="classNote" class="form-note"></div>
+                </div>
+                <div id="carNameGroup" class="form-group hidden">
                     <label for="carNameInput">Car:</label>
                     <input type="text" id="carNameInput" name="carName" list="carOptions" autocomplete="off" placeholder="e.g., Mk8 Golf R">
-                    <div id="carIdNote" class="form-note"></div>
+                    <div class="form-note">The game sends no car ID. New runs get this car name.</div>
                 </div>
                 <div id="trackNameGroup" class="form-group hidden">
                     <label for="trackNameInput">Track:</label>
                     <input type="text" id="trackNameInput" name="trackName" placeholder="e.g., Laguna Seca, Silverstone">
                     <div id="trackIdNote" class="form-note"></div>
                 </div>
+                <label id="applyRunsLabel" class="checkbox-label hidden">
+                    <input type="checkbox" id="applyRunsCheck" checked>
+                    <span id="applyRunsText"></span>
+                </label>
                 <div class="modal-actions">
                     <button type="button" id="cancelNameIdentifiers" class="btn btn-secondary">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save</button>
@@ -266,6 +298,23 @@
         </div>
     </div>
 
+    <!-- Modal: one text value (prompt) -->
+    <div id="promptModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 420px;">
+            <h2 id="promptTitle"></h2>
+            <form id="promptForm">
+                <div class="form-group">
+                    <label for="promptInput" id="promptLabel"></label>
+                    <input type="text" id="promptInput" autocomplete="off">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" id="promptCancel" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" id="promptOk" class="btn btn-primary">OK</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal: Course -->
     <div id="courseModal" class="modal hidden">
         <div class="modal-content course-modal-content">
@@ -317,7 +366,7 @@
     <!-- Modal: Choose course for recording -->
     <div id="courseChooserModal" class="modal hidden">
         <div class="modal-content" style="max-width: 460px;">
-            <h2>Which course?</h2>
+            <h2 id="courseChooserTitle">Which course?</h2>
             <p id="courseChooserText" class="modal-text"></p>
             <div id="courseChooserList" class="course-choice-list"></div>
             <div class="modal-actions">

@@ -272,8 +272,7 @@ function getRun(courseId, runId) {
             return null;
         }
 
-        const data = fs.readFileSync(runFile, 'utf8');
-        return JSON.parse(data);
+        return JSON.parse(fs.readFileSync(runFile, 'utf8'));
     } catch (err) {
         console.error('Error loading run:', err);
         return null;
@@ -393,10 +392,10 @@ function deleteRun(courseId, runId) {
     }
 }
 
-const RUN_DETAIL_FIELDS = ['name', 'driver', 'car', 'notes'];
+const RUN_DETAIL_FIELDS = ['name', 'driver', 'car', 'carClass', 'notes'];
 
 /**
- * Set the user details of a run: name, driver, car and notes.
+ * Set the user details of a run: name, driver, car, class and notes.
  * Only the given fields change. An empty value removes the field.
  */
 function updateRunDetails(courseId, runId, details) {

@@ -5,23 +5,71 @@
       "games": [
         {
           "name": "Forza Motorsport",
-          "id": "FM"
+          "id": "FM",
+          "classes": [
+            "E",
+            "D",
+            "C",
+            "B",
+            "A",
+            "S",
+            "R",
+            "P",
+            "X"
+          ]
         },
         {
           "name": "Forza Horizon 6",
-          "id": "FH6"
+          "id": "FH6",
+          "classes": [
+            "D",
+            "C",
+            "B",
+            "A",
+            "S1",
+            "S2",
+            "X"
+          ]
         },
         {
           "name": "Forza Horizon 5",
-          "id": "FH5"
+          "id": "FH5",
+          "classes": [
+            "D",
+            "C",
+            "B",
+            "A",
+            "S1",
+            "S2",
+            "X"
+          ]
         },
         {
           "name": "Forza Motorsport 7",
-          "id": "FM7"
+          "id": "FM7",
+          "classes": [
+            "D",
+            "C",
+            "B",
+            "A",
+            "S",
+            "R",
+            "P",
+            "X"
+          ]
         },
         {
           "name": "Forza Horizon 4",
-          "id": "FH4"
+          "id": "FH4",
+          "classes": [
+            "D",
+            "C",
+            "B",
+            "A",
+            "S1",
+            "S2",
+            "X"
+          ]
         }
       ]
     },
@@ -30,11 +78,48 @@
       "games": [
         {
           "name": "EA WRC",
-          "id": "WRC"
+          "id": "WRC",
+          "classes": [
+            "H1 FWD",
+            "H2 FWD",
+            "H2 RWD",
+            "H3 RWD",
+            "Kit Car",
+            "F2 Kit Car",
+            "Group A",
+            "Group B RWD",
+            "Group B 4WD",
+            "S1600",
+            "S2000",
+            "NR4/R4",
+            "Rally4",
+            "Rally2",
+            "Junior WRC",
+            "WRC2",
+            "WRC 1997-2011",
+            "WRC 2012-2016",
+            "WRC 2017-2021",
+            "WRC"
+          ]
         },
         {
           "name": "Dirt Rally 2.0",
-          "id": "DR2"
+          "id": "DR2",
+          "classes": [
+            "H1 (FWD)",
+            "H2 (FWD)",
+            "H2 (RWD)",
+            "H3 (RWD)",
+            "Group A",
+            "Group B (RWD)",
+            "Group B (4WD)",
+            "R2",
+            "F2 Kit Car",
+            "NR4/R4",
+            "2000cc",
+            "R5",
+            "Rally GT"
+          ]
         },
         {
           "name": "Dirt Rally",

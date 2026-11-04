@@ -79,8 +79,9 @@ var motorsport bool = false;
 
 func ForzaLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
     log.Println("Starting Telemetry:", ForzaGame(game))
+    recorder := NewRecorder(game, debug)
     for {
-        ForzaReadData(conn, telemArray, totalLength, debug)
+        ForzaReadData(conn, telemArray, totalLength, recorder, debug)
     }
 }
 
@@ -133,7 +134,7 @@ func ForzaSetSplit(split string) {
     }
 }
 
-func ForzaReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
+func ForzaReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, recorder *Recorder, debug bool) {
     buffer := make([]byte, 1500)
 
 
@@ -245,6 +246,20 @@ func ForzaReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength i
         f32map["Split"] = maxFloat;
         f32map["BestLap"] = 0;
         f32map["Odometer"] = 0;
+    }
+
+    // In menus and while paused the game sends IsRaceOn 0
+    if s32map["IsRaceOn"] == 1 {
+        recorder.Update(Frame{
+            Timer:    f32map["CurrentLap"],
+            LastLap:  f32map["LastLap"],
+            HasLastLap: true,
+            Progress: -1,
+            CarID:    int32(s32map["CarOrdinal"]),
+            TrackID:  int32(s32map["TrackOrdinal"]),
+            CarClass: forzaClass(s32map["CarClass"]),
+            Sample:   forzaSample(f32map, u8map, s8map),
+        })
     }
 
     if true {
@@ -616,4 +631,38 @@ func lastVal(arr []float32) float32 {
 
 func setMotorport(value bool) {
     motorsport = value
+}
+// forzaSample makes a run sample from the Forza packet. Inputs are bytes; accelerations are in m/s² in car axes.
+func forzaSample(f32map map[string]float32, u8map map[string]uint8, s8map map[string]int8) util.TelemetrySample {
+    throttle, ok := u8map["Accel"]
+    if !ok {
+        throttle = u8map["Throttle"]
+    }
+    gear := int32(u8map["Gear"])
+    if gear == 0 {
+        gear = -1 // Forza sends reverse as 0
+    }
+    sample := util.TelemetrySample{
+        Brake:  roundTo(float32(u8map["Brake"])/255, 3),
+        Accel:  roundTo(float32(throttle)/255, 3),
+        AccelX: roundTo(f32map["AccelerationX"]/gravity, 2),
+        AccelY: roundTo(f32map["AccelerationZ"]/gravity, 2),
+        Speed:  roundTo(mph(f32map["Speed"]), 2),
+        PosX:   f32map["PositionX"],
+        PosY:   f32map["PositionZ"],
+        PosZ:   f32map["PositionY"],
+        Steer:  roundTo(float32(s8map["Steer"])/127, 2),
+        Clutch: roundTo(float32(u8map["Clutch"])/255, 3),
+        Rpm:    float32(math.Round(float64(f32map["CurrentEngineRpm"]))),
+        Gear:   gear,
+    }
+    return sample
+}
+
+// forzaClass is the class name of a CarClass value, from the class list of the game
+func forzaClass(class uint32) string {
+    if int(class) < len(GameClasses) {
+        return GameClasses[class]
+    }
+    return fmt.Sprintf("Class %d", class)
 }

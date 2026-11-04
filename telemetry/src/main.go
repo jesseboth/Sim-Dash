@@ -19,14 +19,19 @@ func main() {
     var gameSTR string
     var splitTypeSTR string
     var portSTR string
+    var classesSTR string
 
     flag.StringVar(&gameSTR, "game", "FM", "Specify an abbreviated game ie: FM, FH5")
     flag.StringVar(&splitTypeSTR, "split", "car", "car(overall)/class(overall)/session based splits")
     flag.StringVar(&portSTR, "port", "9999", "UDP port number to listen on")
+    flag.StringVar(&classesSTR, "classes", "", "Class names of the game separated by |, in the order of the class number in the packet")
     debugModePTR := flag.Bool("d", false, "Enables extra debug information if set")
     flag.Parse()
 
     service := hostname + ":" + portSTR // Combined hostname+port
+    if classesSTR != "" {
+        game.GameClasses = strings.Split(classesSTR, "|")
+    }
 
     if game.Forza(gameSTR) {
         game.ForzaSetSplit(splitTypeSTR)
@@ -116,6 +121,15 @@ func main() {
         log.Printf("Logging entire telemArray: \n%v", telemArray)
         log.Printf("Processed %d util.Telemetry types OK!", len(telemArray))
     }
+
+    // Runs need a run timer from the game
+    canRecord := false
+    for _, T := range telemArray {
+        if T.Name == "CurrentLap" {
+            canRecord = true
+        }
+    }
+    util.SetRecorderGame(gameSTR, canRecord)
 
     go util.ServeJson()
 

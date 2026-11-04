@@ -12,7 +12,9 @@ let runsLoadToken = 0; // Increments per visualization load so stale loads are i
 let lastLoadedSignature = ''; // Runs, order and cones last sent to the visualizations
 let shownRuns = []; // Run objects currently in the visualizations
 let runSortMode = 'fastest'; // 'fastest' (with cone penalties), 'scratch' (without) or 'recent'
-let carFilter = 'all'; // 'all' or a car name
+let classFilter = 'all'; // 'all', a class, or NO_CLASS (runs without a class)
+let sessionClass = ''; // class of new runs; always in the filter
+const NO_CLASS = '__no_class__';
 let carNames = {}; // carId -> friendly name
 let runNumbers = new Map(); // runId -> run number in driving order
 let newRunIds = new Map(); // runId -> time the NEW highlight ends
@@ -58,13 +60,28 @@ async function apiRequest(action, data = {}) {
     }
 }
 
+// A run that did not finish (DNF) has isValid false. It has no time and sorts last.
+function isDnf(run) {
+    return run.isValid === false;
+}
+
+// Driven time without cone penalties
+function getScratchTime(run) {
+    return isDnf(run) ? Infinity : run.lapTime;
+}
+
 // Lap time including cone penalties
 function getAdjustedTime(run) {
-    return run.lapTime + ((run.cones || 0) * CONE_PENALTY);
+    return getScratchTime(run) + ((run.cones || 0) * CONE_PENALTY);
+}
+
+// Compare two times; DNF runs (Infinity) are equal to each other
+function compareTimes(a, b) {
+    return a === b ? 0 : a - b;
 }
 
 function sortByAdjustedTime(runs) {
-    return [...runs].sort((a, b) => getAdjustedTime(a) - getAdjustedTime(b));
+    return [...runs].sort((a, b) => compareTimes(getAdjustedTime(a), getAdjustedTime(b)));
 }
 
 function findMostRecentRun(runs) {
@@ -177,10 +194,7 @@ function setupEventListeners() {
     const cancelRename = document.getElementById('cancelRename');
 
     if (cancelRename && renameModal) {
-        cancelRename.addEventListener('click', () => {
-            renameModal.classList.add('hidden');
-            renameRunForm.reset();
-        });
+        cancelRename.addEventListener('click', closeRunDetails);
     }
 
     if (renameRunForm) {
@@ -262,8 +276,8 @@ function setupEventListeners() {
 
     // Car filter
     document.getElementById('carFilter')?.addEventListener('change', (e) => {
-        carFilter = e.target.value;
-        if (currentCourse) localStorage.setItem(`carFilter_${currentCourse}`, carFilter);
+        classFilter = e.target.value;
+        if (currentCourse) localStorage.setItem(`classFilter_${currentCourse}`, classFilter);
         renderRunsList();
         syncSelectionUI();
     });
@@ -282,6 +296,13 @@ function setupEventListeners() {
     document.getElementById('confirmOk')?.addEventListener('click', () => closeConfirmDialog(true));
     document.getElementById('confirmModal')?.addEventListener('click', (e) => {
         if (e.target.id === 'confirmModal') closeConfirmDialog(false);
+    });
+
+    // Prompt dialog
+    document.getElementById('promptCancel')?.addEventListener('click', () => closePromptDialog(null));
+    document.getElementById('promptForm')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        closePromptDialog(document.getElementById('promptInput').value.trim() || null);
     });
 
     if (window.AutocrossAlign) {
@@ -311,6 +332,30 @@ function confirmDialog({ title, message, confirmLabel = 'OK', danger = false }) 
     return new Promise(resolve => { confirmResolve = resolve; });
 }
 
+// Text dialog. Resolves to the typed text, or null on Cancel or empty text.
+let promptResolve = null;
+function promptDialog({ title, label = '', value = '', placeholder = '', confirmLabel = 'OK' }) {
+    if (promptResolve) closePromptDialog(null);
+    document.getElementById('promptTitle').textContent = title;
+    document.getElementById('promptLabel').textContent = label;
+    const input = document.getElementById('promptInput');
+    input.value = value;
+    input.placeholder = placeholder;
+    document.getElementById('promptOk').textContent = confirmLabel;
+    document.getElementById('promptModal').classList.remove('hidden');
+    setTimeout(() => { input.focus(); input.select(); }, 50);
+    return new Promise(resolve => { promptResolve = resolve; });
+}
+
+function closePromptDialog(result) {
+    document.getElementById('promptModal')?.classList.add('hidden');
+    if (promptResolve) {
+        const resolve = promptResolve;
+        promptResolve = null;
+        resolve(result);
+    }
+}
+
 function closeConfirmDialog(result) {
     document.getElementById('confirmModal')?.classList.add('hidden');
     if (confirmResolve) {
@@ -330,7 +375,7 @@ function updateHint() {
     const sectorCount = window.AutocrossSectors ? AutocrossSectors.getSectors().length : 0;
 
     if (!currentCourse) {
-        hint = { id: 'start', text: 'Press Start, then drive in Assetto Corsa. A course is created for your track, and each run saves when you cross the finish.' };
+        hint = { id: 'start', text: 'Press Start, then drive in the game. Each run saves when you cross the finish.' };
     } else if (allRuns.length === 0) {
         hint = { id: 'firstRun', text: 'Press Start and drive a run. It saves when you cross the finish line.' };
     } else if (selectedRuns.length < 2) {
@@ -431,10 +476,10 @@ function handleKeyboardShortcuts(e) {
     }
 }
 
-// Close any open dialog the same way its Cancel button does
+// Close the top open dialog the same way its Cancel button does
 function closeOpenModals() {
-    document.querySelectorAll('.modal:not(.hidden)').forEach(modal => {
-        const cancelBtn = modal.querySelector('#cancelRename, #cancelArchive, #cancelNameIdentifiers, #cancelDeleteSector, #closeSectorsModal, #confirmCancel, #closeCourseModal, #cancelCourseChooser, #channelsCancelBtn');
+    [...document.querySelectorAll('.modal:not(.hidden)')].slice(-1).forEach(modal => {
+        const cancelBtn = modal.querySelector('#cancelRename, #cancelArchive, #cancelNameIdentifiers, #cancelDeleteSector, #closeSectorsModal, #confirmCancel, #promptCancel, #closeCourseModal, #cancelCourseChooser, #channelsCancelBtn');
         if (cancelBtn) {
             cancelBtn.click();
         } else {
@@ -555,7 +600,7 @@ async function handleCourseChange() {
         if (courseId !== currentCourse) loadedRuns = {};
         currentCourse = courseId;
         selectedRuns = readStoredSelection(courseId);
-        carFilter = localStorage.getItem(`carFilter_${courseId}`) || 'all';
+        classFilter = localStorage.getItem(`classFilter_${courseId}`) || 'all';
         lastLoadedSignature = '';
         runsLoadToken++;
         clearVisualization();
@@ -662,33 +707,50 @@ function getRunCarName(run) {
     return run.carId ? getCarName(run.carId) : '';
 }
 
-// Runs shown in the list: filtered by car
+// Runs shown in the list: filtered by class
 function getVisibleRuns() {
-    return carFilter === 'all' ? allRuns : allRuns.filter(r => getRunCarName(r) === carFilter);
+    if (classFilter === 'all') return allRuns;
+    return allRuns.filter(r => (r.carClass || NO_CLASS) === classFilter);
 }
 
-// Show the car filter only when the course has runs from more than one car
+// Class filter: all runs of the course, one class, or "Any" (runs without a class).
+// It shows when the course has a class, or when new runs get a class.
 function updateCarFilter() {
     const select = document.getElementById('carFilter');
     if (!select) return;
 
-    const cars = [...new Set(allRuns.map(getRunCarName).filter(Boolean))].sort();
-    if (carFilter !== 'all' && !cars.includes(carFilter)) {
-        carFilter = 'all';
+    const classes = [...new Set([...allRuns.map(r => r.carClass), sessionClass].filter(Boolean))].sort();
+    if (classFilter !== 'all' && classFilter !== NO_CLASS && !classes.includes(classFilter)) {
+        classFilter = 'all';
     }
 
-    select.innerHTML = '<option value="all">All cars</option>' + cars
-        .map(car => `<option value="${escapeHtml(car)}">${escapeHtml(car)}</option>`)
-        .join('');
-    select.value = carFilter;
-    select.classList.toggle('hidden', cars.length < 2);
+    select.innerHTML = '<option value="all">All runs</option>'
+        + classes.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')
+        + `<option value="${NO_CLASS}">Any</option>`;
+    select.value = classFilter;
+    select.classList.toggle('hidden', classes.length === 0);
+}
+
+// Class that new runs get. With show, the list shows the runs of that class.
+function setSessionClass(carClass, show = true) {
+    sessionClass = carClass || '';
+    if (!show) {
+        updateCarFilter();
+        return;
+    }
+    classFilter = sessionClass || 'all';
+    if (currentCourse) {
+        try { localStorage.setItem(`classFilter_${currentCourse}`, classFilter); } catch (e) { /* convenience only */ }
+    }
+    updateCarFilter();
+    renderRunsList();
 }
 
 // Render Runs List
 function renderRunsList() {
     const runs = getVisibleRuns();
 
-    const countText = carFilter === 'all'
+    const countText = classFilter === 'all'
         ? `${allRuns.length} run${allRuns.length !== 1 ? 's' : ''}`
         : `${runs.length} of ${allRuns.length} runs`;
     if (runCount) {
@@ -702,14 +764,14 @@ function renderRunsList() {
     if (runs.length === 0) {
         runsList.innerHTML = allRuns.length === 0
             ? '<div class="empty-state">No runs recorded yet. Press Start, then drive. Each run saves when you cross the finish.</div>'
-            : '<div class="empty-state">No runs with this car.</div>';
+            : '<div class="empty-state">No runs of this class.</div>';
         return;
     }
 
     // Scratch: the driven time without cone penalties
     const scratch = runSortMode === 'scratch';
-    const shownTime = scratch ? (run => run.lapTime) : getAdjustedTime;
-    const byTime = [...runs].sort((a, b) => shownTime(a) - shownTime(b));
+    const shownTime = scratch ? getScratchTime : getAdjustedTime;
+    const byTime = [...runs].sort((a, b) => compareTimes(shownTime(a), shownTime(b)));
     const rankById = new Map(byTime.map((r, i) => [r.runId, i + 1]));
     const fastestTime = shownTime(byTime[0]);
     const bestSectors = computeBestSectorTimes(runs);
@@ -735,7 +797,7 @@ function renderRunsList() {
 
         const cones = Math.max(0, Math.floor(Number(run.cones) || 0));
         const adjustedTime = shownTime(run);
-        const isFastest = adjustedTime === fastestTime;
+        const isFastest = Number.isFinite(adjustedTime) && adjustedTime === fastestTime;
         const rank = rankById.get(run.runId);
 
         card.innerHTML = `
@@ -744,7 +806,7 @@ function renderRunsList() {
                 <div class="run-card-main">
                     <span class="run-number">Run ${runNumbers.get(run.runId)}</span>
                     <span class="run-time ${isFastest ? 'fastest' : ''}">${formatLapTime(adjustedTime)}</span>
-                    <span class="run-rank" title="${scratch ? 'Position by scratch time' : 'Position by time'}">P${rank}</span>
+                    ${isDnf(run) ? '' : `<span class="run-rank" title="${scratch ? 'Position by scratch time' : 'Position by time'}">P${rank}</span>`}
                     ${isNew ? '<span class="run-new-badge">NEW</span>' : ''}
                     ${run.name ? `<span class="run-name">📝 ${escapeHtml(run.name)}</span>` : ''}
                 </div>
@@ -752,8 +814,9 @@ function renderRunsList() {
                     <span>${dateStr} ${timeStr}</span>
                     ${run.driver ? `<span class="run-driver">👤 ${escapeHtml(run.driver)}</span>` : ''}
                     ${showCar && getRunCarName(run) ? `<span class="run-car">🚗 ${escapeHtml(getRunCarName(run))}</span>` : ''}
+                    ${run.carClass ? `<span class="run-class">🏷 ${escapeHtml(run.carClass)}</span>` : ''}
                     ${cones > 0 ? `<span style="color: var(--accent-warning)">🚧 ${cones} cone${cones !== 1 ? 's' : ''} (+${cones * CONE_PENALTY}s)</span>` : ''}
-                    ${run.isValid ? '' : '<span style="color: var(--accent-secondary)">❌ Invalid</span>'}
+                    ${isDnf(run) ? `<span style="color: var(--accent-secondary)">Stopped at ${formatLapTime(run.lapTime)}</span>` : ''}
                 </div>
                 ${run.notes ? `<div class="run-notes" title="${escapeHtml(run.notes)}">🗒 ${escapeHtml(run.notes)}</div>` : ''}
                 ${renderSectorTimesRow(run, bestSectors)}
@@ -1295,16 +1358,18 @@ async function handleArchiveSubmit(e) {
     }
 }
 
-// Run details dialog: name, driver, car and notes
+// Run details dialog: name, driver, class, car and notes
 let detailsRun = null;
-function showRunDetails(run) {
+let detailPickers = null;
+async function showRunDetails(run) {
     detailsRun = run;
+    detailPickers?.detach();
+    detailPickers = await window.AutocrossRecorder.attachRunDetailPickers(run);
     const runCarName = getRunCarName(run);
     const mapped = run.carId ? carNames[run.carId] : '';
 
     document.getElementById('runDetailsTitle').textContent = `Run ${runNumbers.get(run.runId)} Details`;
     document.getElementById('runName').value = run.name || '';
-    document.getElementById('runDriver').value = run.driver || '';
     document.getElementById('runCar').value = run.car || mapped || '';
     document.getElementById('runNotes').value = run.notes || '';
 
@@ -1321,19 +1386,27 @@ function showRunDetails(run) {
     document.getElementById('renameModal').classList.remove('hidden');
 }
 
+function closeRunDetails() {
+    detailPickers?.detach();
+    detailPickers = null;
+    document.getElementById('renameModal').classList.add('hidden');
+    document.getElementById('renameRunForm').reset();
+}
+
 async function handleRenameSubmit(e) {
     e.preventDefault();
     const run = detailsRun;
     if (!run || !currentCourse) return;
 
     const car = document.getElementById('runCar').value.trim();
-    const driver = document.getElementById('runDriver').value.trim();
+    const driver = detailPickers ? detailPickers.driver() : run.driver || '';
     const mapCar = !!run.carId && document.getElementById('runCarMap').checked;
     const details = {
         name: document.getElementById('runName').value.trim(),
         driver,
         notes: document.getElementById('runNotes').value.trim(),
-        car
+        car,
+        carClass: detailPickers ? detailPickers.carClass() : run.carClass || ''
     };
 
     try {
@@ -1344,14 +1417,12 @@ async function handleRenameSubmit(e) {
             ...details,
             carId: mapCar ? run.carId : undefined
         });
-        rememberDriver(driver);
 
-        document.getElementById('renameModal').classList.add('hidden');
-        document.getElementById('renameRunForm').reset();
+        closeRunDetails();
 
         const loaded = loadedRuns[run.runId];
         if (loaded) {
-            ['name', 'driver', 'notes'].forEach(k => { loaded[k] = details[k] || undefined; });
+            ['name', 'driver', 'notes', 'carClass'].forEach(k => { loaded[k] = details[k] || undefined; });
             loaded.car = mapCar ? undefined : (car || undefined);
         }
 
@@ -1364,25 +1435,7 @@ async function handleRenameSubmit(e) {
     }
 }
 
-// Drivers entered on this device, for the driver lists
-const KNOWN_DRIVERS_KEY = 'autocross_knownDrivers';
-function knownDrivers() {
-    try {
-        return JSON.parse(localStorage.getItem(KNOWN_DRIVERS_KEY)) || [];
-    } catch (e) {
-        return [];
-    }
-}
-
-function rememberDriver(driver) {
-    if (!driver) return;
-    const drivers = [driver, ...knownDrivers().filter(d => d !== driver)].slice(0, 20);
-    try {
-        localStorage.setItem(KNOWN_DRIVERS_KEY, JSON.stringify(drivers));
-    } catch (e) { /* the list is only a convenience */ }
-}
-
-// Choices for the driver and car fields. carMappings: all game car ID names, when known.
+// Choices for the car fields. carMappings: all game car ID names, when known.
 function fillDetailOptions(carMappings = {}) {
     const fill = (id, values) => {
         const list = document.getElementById(id);
@@ -1390,7 +1443,6 @@ function fillDetailOptions(carMappings = {}) {
         list.innerHTML = [...new Set(values.filter(Boolean))].sort()
             .map(v => `<option value="${escapeHtml(v)}"></option>`).join('');
     };
-    fill('driverOptions', [...knownDrivers(), ...allRuns.map(r => r.driver)]);
     fill('carOptions', [...Object.values(carMappings), ...Object.values(carNames), ...allRuns.map(r => r.car)]);
 }
 
@@ -1459,6 +1511,7 @@ function clearVisualization() {
 
 // Format Lap Time
 function formatLapTime(seconds) {
+    if (!Number.isFinite(seconds)) return 'DNF';
     // Round to whole milliseconds first so 59.9996 shows as 1:00.000
     const totalMs = Math.round(seconds * 1000);
     const mins = Math.floor(totalMs / 60000);
@@ -1500,11 +1553,13 @@ window.AutocrossApp = {
     getCarName,
     getRunCarName,
     fillDetailOptions,
-    rememberDriver,
+    setSessionClass,
+    getSessionClass: () => sessionClass,
     getRunNumber: (runId) => runNumbers.get(runId),
     refreshRuns,
     updateHint,
     confirmDialog,
+    promptDialog,
     // Full run data with telemetry (loaded once, then cached)
     getRunData: async (runId) => {
         if (!loadedRuns[runId]) {

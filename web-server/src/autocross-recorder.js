@@ -1,5 +1,5 @@
 // Autocross Telemetry Recorder
-// Communicates with Go backend for server-side recording
+// Communicates with Go backend for server-side recording, for the game that the dash runs
 
 const AutocrossRecorder = (function() {
     // States
@@ -40,8 +40,15 @@ const AutocrossRecorder = (function() {
         // Check server for persisted armed state and resume if active
         fetch(`http://${window.location.hostname}:8888/autocross/recording/status`)
             .then(r => r.json())
-            .then(status => {
-                setCurrentDriver(status.driver, status.car);
+            .then(async status => {
+                // Details saved while the recorder was not reachable go to it now
+                const pending = readPendingDetails();
+                if (pending && await pushPendingDetails()) {
+                    detailsSetBeforeStart = true;
+                    status = { ...status, ...pending };
+                }
+                setCurrentDriver(status.driver, status.car, status.carClass);
+                window.AutocrossApp?.setSessionClass?.(status.carClass, false);
                 if (status.isRecording && status.courseId) {
                     currentCourseId = status.courseId;
                     localStorage.setItem('recorder_courseId', currentCourseId);
@@ -65,6 +72,8 @@ const AutocrossRecorder = (function() {
                 // Server not reachable, fall back to localStorage
                 const savedCourseId = localStorage.getItem('recorder_courseId');
                 if (savedCourseId) currentCourseId = savedCourseId;
+                const pending = readPendingDetails();
+                if (pending) setCurrentDriver(pending.driver, pending.car, pending.carClass);
                 updateUI();
             });
 
@@ -109,52 +118,80 @@ const AutocrossRecorder = (function() {
         }
     }
 
-    // Ensure AC telemetry is running (start or restart via Node server)
-    async function ensureACTelemetry() {
-        try {
-            // Check what game is currently running
-            const checkRes = await fetch('/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ game: 'get' })
-            });
-            const checkResult = await checkRes.json();
-            const currentGame = checkResult.game && checkResult.game.return;
+    async function postConfig(body) {
+        const res = await fetch('/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        return res.json();
+    }
 
-            if (currentGame && currentGame.toLowerCase() === 'ac') {
-                // AC already running, nothing to do
-                return true;
-            }
+    // The game that the dash runs. When no game runs, the user selects one and it starts.
+    // Returns the game ID, or null.
+    async function ensureTelemetry() {
+        const check = await postConfig({ game: 'get' });
+        const running = check.game && check.game.return;
+        if (running) return running.toUpperCase();
 
-            // Stop whatever is running, then start AC
-            if (currentGame) {
-                await fetch('/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ game: 'stop' })
-                });
-                // Brief pause for process to die
-                await new Promise(r => setTimeout(r, 300));
-            }
+        const games = await fetch('/games').then(r => r.json()).catch(() => ({ categories: [] }));
+        const gameId = window.AutocrossCourses
+            ? await AutocrossCourses.chooseGame(games.categories || [])
+            : null;
+        if (!gameId) return null;
 
-            const startRes = await fetch('/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ game: 'ac' })
-            });
-            const startResult = await startRes.json();
-            if (!startResult.game || !startResult.game.success) {
-                console.error('Failed to start AC telemetry:', startResult);
-                return false;
-            }
-            console.log('AC telemetry started');
-            // Wait briefly for the Go server to come up
-            await new Promise(r => setTimeout(r, 500));
-            return true;
-        } catch (error) {
-            console.error('Error ensuring AC telemetry:', error);
-            return false;
+        const start = await postConfig({ game: gameId });
+        if (!start.game || !start.game.success) {
+            showToast('Could not start telemetry for ' + gameId, 'error');
+            return null;
         }
+        // Give the telemetry process time to start
+        await new Promise(r => setTimeout(r, 800));
+        return gameId.toUpperCase();
+    }
+
+    // Entry of a game ID in the dash game list (name, classes), or null
+    async function gameInfo(gameId) {
+        try {
+            const games = await fetch('/games').then(r => r.json());
+            for (const category of games.categories || []) {
+                const game = (category.games || []).find(g => g.id.toUpperCase() === gameId);
+                if (game) return game;
+            }
+        } catch (e) { /* not in the list */ }
+        return null;
+    }
+
+    // Game of the recorder, else the game that the dash runs, else the game of the newest run
+    // in the open course, else the last game on this device
+    const LAST_GAME_KEY = 'recorder_lastGame';
+    async function currentGame(status) {
+        let game = status && status.game;
+        if (!game) {
+            const check = await postConfig({ game: 'get' }).catch(() => ({}));
+            game = check.game && check.game.return ? String(check.game.return).toUpperCase() : '';
+        }
+        if (game) {
+            localStorage.setItem(LAST_GAME_KEY, game);
+            return game;
+        }
+        return courseGame() || localStorage.getItem(LAST_GAME_KEY) || '';
+    }
+
+    function courseGame() {
+        const newest = (window.AutocrossApp?.getAllRuns() || [])
+            .filter(r => r.game)
+            .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))[0];
+        return newest ? String(newest.game).toUpperCase() : '';
+    }
+
+    async function gameName(gameId) {
+        return (await gameInfo(gameId))?.name || gameId;
+    }
+
+    async function getRecorderStatus() {
+        const res = await fetch(`http://${window.location.hostname}:8888/autocross/recording/status`);
+        return res.json();
     }
 
     // Fetch live telemetry from Go backend
@@ -168,14 +205,20 @@ const AutocrossRecorder = (function() {
         }
     }
 
-    // Poll telemetry until TrackID is populated (up to maxWaitMs)
+    let lastTelemetry = null;
+
+    // Poll telemetry until the track ID is populated (up to maxWaitMs).
+    // Returns null when no ID came, and undefined at once for a game that sends no track ID.
     async function waitForTrackId(maxWaitMs = 5000) {
         const interval = 500;
         const attempts = maxWaitMs / interval;
         for (let i = 0; i < attempts; i++) {
             const telem = await getLiveTelemetry();
-            if (telem && telem.TrackId) {
-                return String(telem.TrackId);
+            lastTelemetry = telem;
+            if (telem && Object.keys(telem).length) {
+                const id = telem.TrackId ?? telem.TrackOrdinal;
+                if (id === undefined) return undefined;
+                if (id) return String(id);
             }
             await new Promise(r => setTimeout(r, interval));
         }
@@ -188,13 +231,20 @@ const AutocrossRecorder = (function() {
         if (statusElement) statusElement.textContent = 'Connecting...';
 
         try {
-            // Ensure AC telemetry process is running
-            await ensureACTelemetry();
+            const gameId = await ensureTelemetry();
+            if (!gameId) return;
 
-            // Poll for track ID (AC may need a moment to send packets)
+            const status = await getRecorderStatus();
+            if (await pushPendingDetails()) detailsSetBeforeStart = true;
+            if (!status.canRecord) {
+                showToast(`${await gameName(gameId)} sends no run timer, so runs cannot be recorded.`, 'warning');
+                return;
+            }
+
+            // Poll for track ID (the game may need a moment to send packets)
             const trackId = await waitForTrackId(5000);
 
-            const courseId = await resolveCourseForTrack(trackId);
+            const courseId = await resolveCourseForTrack(trackId, await gameName(gameId));
             if (!courseId) return;
             currentCourseId = courseId;
             localStorage.setItem('recorder_courseId', currentCourseId);
@@ -207,6 +257,7 @@ const AutocrossRecorder = (function() {
 
             const result = await response.json();
             if (result.success) {
+                await clearDetailsForStart();
                 state = STATE.RECORDING;
                 startStatusPolling();
                 console.log('Recording started on course:', currentCourseId);
@@ -228,7 +279,7 @@ const AutocrossRecorder = (function() {
     // Choose the course to record into.
     // Keeps the selected course when it fits the current track, otherwise uses or creates
     // the active course for this track. Returns null when no course can be chosen.
-    async function resolveCourseForTrack(trackId) {
+    async function resolveCourseForTrack(trackId, game) {
         const courses = await getCourses();
         const current = courses.find(c => c.courseId === currentCourseId);
 
@@ -238,13 +289,23 @@ const AutocrossRecorder = (function() {
             return current.courseId;
         }
 
-        if (!trackId) {
-            showToast('No track detected yet. Start driving in Assetto Corsa, then press Start again.', 'warning');
+        if (trackId === null) {
+            showToast(`No track detected yet. Start driving in ${game}, then press Start again.`, 'warning');
             return null;
         }
 
+        // The game sends no track ID
+        if (!trackId) {
+            const course = await createCourse(game, null);
+            notifyCourseSelected(course.courseId, `Created course "${game}". Rename it for your track or stage.`);
+            return course.courseId;
+        }
+
+        // Rally stage IDs are the stage length in metres
         const trackMappings = await getTrackMappings();
-        const trackName = trackMappings[trackId] || `Track ${trackId}`;
+        const isStage = lastTelemetry && lastTelemetry.StageLength !== undefined;
+        const trackName = trackMappings[trackId]
+            || (isStage ? `Stage ${(Number(trackId) / 1000).toFixed(2)} km` : `Track ${trackId}`);
 
         // One course for this track: use it. More than one: ask which.
         const matches = courses.filter(c => !c.isArchived && c.trackId === trackId);
@@ -329,82 +390,373 @@ const AutocrossRecorder = (function() {
     }
 
     // Driver and car that the recorder gives to new runs
-    let currentDriver = { driver: '', car: '' };
+    let currentDriver = { driver: '', car: '', carClass: '' };
+    // True when the user set the driver details while not armed: then Start keeps the class and the car
+    let detailsSetBeforeStart = false;
+    const SESSION_START_KEY = 'recorder_sessionStart';
 
-    function setCurrentDriver(driver, car) {
-        currentDriver = { driver: driver || '', car: car || '' };
+    function setCurrentDriver(driver, car, carClass) {
+        currentDriver = { driver: driver || '', car: car || '', carClass: carClass || '' };
         const text = document.getElementById('driverBtnText');
-        if (text) text.textContent = currentDriver.driver || 'Driver / Car';
+        if (text) {
+            const parts = [currentDriver.driver, currentDriver.carClass || currentDriver.car].filter(Boolean);
+            text.textContent = parts.join(' · ') || 'Driver / Car';
+        }
     }
 
-    async function saveCurrentDriver(driver, car) {
+    // Custom classes for each game (not in the game class list), newest first
+    const RECENT_CLASSES_KEY = 'recentClasses';
+    const MAX_RECENT_CLASSES = 8;
+
+    function recentClasses(game) {
+        let saved = [];
+        try {
+            saved = JSON.parse(localStorage.getItem(`${RECENT_CLASSES_KEY}_${game}`) || '[]');
+        } catch (e) { /* the list is only a convenience */ }
+        const fromRuns = (window.AutocrossApp?.getAllRuns() || [])
+            .filter(r => r.game === game && r.carClass)
+            .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))
+            .map(r => r.carClass);
+        return [...new Set([...saved, ...fromRuns])].slice(0, MAX_RECENT_CLASSES);
+    }
+
+    function rememberClass(game, carClass) {
+        if (!game || !carClass) return;
+        const classes = [carClass, ...recentClasses(game).filter(c => c !== carClass)].slice(0, MAX_RECENT_CLASSES);
+        try {
+            localStorage.setItem(`${RECENT_CLASSES_KEY}_${game}`, JSON.stringify(classes));
+        } catch (e) { /* the list is only a convenience */ }
+    }
+
+    async function sendDetails(details) {
         const response = await fetch(`http://${window.location.hostname}:8888/autocross/recording/driver`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ driver, car })
+            body: JSON.stringify(details)
         });
         const result = await response.json();
         if (!result.success) throw new Error(result.error || 'not saved');
-        setCurrentDriver(driver, car);
     }
 
-    // Driver and car dialog. With a live game car ID, the car name is saved for that ID.
-    // Without one, the recorder gives the car name to new runs.
+    // Details for new runs, kept on this device while the recorder is not reachable
+    const PENDING_DETAILS_KEY = 'recorder_pendingDetails';
+
+    function readPendingDetails() {
+        try {
+            return JSON.parse(localStorage.getItem(PENDING_DETAILS_KEY));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Sends the kept details to the recorder. Returns true when it sent them.
+    async function pushPendingDetails() {
+        const pending = readPendingDetails();
+        if (!pending) return false;
+        try {
+            await sendDetails(pending);
+            localStorage.removeItem(PENDING_DETAILS_KEY);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Gives the details to the recorder. When it is not reachable (no game running), this device
+    // keeps them and sends them at the next Start. Returns false in that case.
+    async function saveCurrentDriver(driver, car, carClass) {
+        const details = { driver, car, carClass };
+        setCurrentDriver(driver, car, carClass);
+        try {
+            await sendDetails(details);
+            localStorage.removeItem(PENDING_DETAILS_KEY);
+            return true;
+        } catch (e) {
+            localStorage.setItem(PENDING_DETAILS_KEY, JSON.stringify(details));
+            return false;
+        }
+    }
+
+    // Start gives new runs no class and no car, unless the user set them before Start
+    async function clearDetailsForStart() {
+        localStorage.setItem(SESSION_START_KEY, String(Date.now()));
+        if (!detailsSetBeforeStart && (currentDriver.carClass || currentDriver.car)) {
+            await saveCurrentDriver(currentDriver.driver, '', '');
+            window.AutocrossApp?.setSessionClass('', true);
+        }
+        detailsSetBeforeStart = false;
+    }
+
+    // Runs since the last Start without a driver or a class
+    function sessionRunsMissingDetails() {
+        const since = Number(localStorage.getItem(SESSION_START_KEY)) || 0;
+        if (!since) return [];
+        return (window.AutocrossApp?.getAllRuns() || []).filter(r =>
+            new Date(r.timestamp).getTime() >= since && (!r.driver || !r.carClass));
+    }
+
+    const NEW_DRIVER = '__new_driver__';
+    const OTHER_CLASS = '__other_class__';
+
+    function fillSelect(select, options, value) {
+        select.innerHTML = options
+            .map(o => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`)
+            .join('');
+        select.value = value;
+    }
+
+    // Driver list with "+ New driver…" and a ⋮ menu to rename or remove the driver.
+    // el: { select, menuBtn, menu, renameBtn, removeBtn }. Returns { value(), detach() }.
+    function attachDriverPicker(el, drivers, selected) {
+        let current = selected || '';
+
+        const fill = (list, value) => {
+            const names = [...new Set([...list, value].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+            fillSelect(el.select, [
+                { value: '', label: 'No driver' },
+                ...names.map(d => ({ value: d, label: d })),
+                { value: NEW_DRIVER, label: '+ New driver…' }
+            ], value || '');
+            current = value || '';
+            el.renameBtn.disabled = !current;
+            el.removeBtn.disabled = !current;
+        };
+
+        // "+ New driver…" asks for the name; Cancel selects the previous driver again
+        const onChange = async () => {
+            if (el.select.value !== NEW_DRIVER) {
+                current = el.select.value;
+                el.renameBtn.disabled = !current;
+                el.removeBtn.disabled = !current;
+                return;
+            }
+            const name = await window.AutocrossApp.promptDialog({
+                title: 'New driver', label: 'Name:', placeholder: 'e.g., Jesse', confirmLabel: 'Add'
+            });
+            if (!name) {
+                el.select.value = current;
+                return;
+            }
+            try {
+                fill(await apiRequest('addDriver', { name }), name);
+            } catch (err) {
+                el.select.value = current;
+                showToast('Could not add the driver.', 'error');
+            }
+        };
+        const toggleMenu = (e) => {
+            e.stopPropagation();
+            el.menu.classList.toggle('hidden');
+        };
+        const closeMenu = (e) => {
+            if (!el.menu.contains(e.target)) el.menu.classList.add('hidden');
+        };
+        const rename = async () => {
+            el.menu.classList.add('hidden');
+            const from = current;
+            if (!from) return;
+            const to = await window.AutocrossApp.promptDialog({
+                title: 'Rename driver', label: 'Name:', value: from, confirmLabel: 'Rename'
+            });
+            if (!to || to === from) return;
+            try {
+                const result = await apiRequest('renameDriver', { from, to });
+                fill(result.drivers, to);
+                if (currentDriver.driver === from) setCurrentDriver(to, currentDriver.car, currentDriver.carClass);
+                if (result.runs) await window.AutocrossApp?.refreshRuns();
+            } catch (err) {
+                showToast('Could not rename the driver.', 'error');
+            }
+        };
+        const remove = async () => {
+            el.menu.classList.add('hidden');
+            const name = current;
+            if (!name) return;
+            const ok = await window.AutocrossApp?.confirmDialog({
+                title: 'Remove driver',
+                message: `${name} is removed from the driver list. Runs keep their driver.`,
+                confirmLabel: 'Remove',
+                danger: true
+            });
+            if (!ok) return;
+            try {
+                fill(await apiRequest('removeDriver', { name }), '');
+            } catch (err) {
+                showToast('Could not remove the driver.', 'error');
+            }
+        };
+
+        fill(drivers, current);
+        el.menu.classList.add('hidden');
+        el.select.addEventListener('change', onChange);
+        el.menuBtn.addEventListener('click', toggleMenu);
+        document.addEventListener('click', closeMenu);
+        el.renameBtn.addEventListener('click', rename);
+        el.removeBtn.addEventListener('click', remove);
+
+        return {
+            value: () => current,
+            detach: () => {
+                el.select.removeEventListener('change', onChange);
+                el.menuBtn.removeEventListener('click', toggleMenu);
+                document.removeEventListener('click', closeMenu);
+                el.renameBtn.removeEventListener('click', rename);
+                el.removeBtn.removeEventListener('click', remove);
+            }
+        };
+    }
+
+    // Class list: "Any", the game classes, recent classes and "Other…" (typed).
+    // Returns { value(), detach() }; value() is the class to save.
+    async function attachClassPicker(select, otherInput, game, selected) {
+        const gameClasses = game ? ((await gameInfo(game))?.classes || []) : [];
+        const classes = [...new Set([...gameClasses, ...recentClasses(game), selected].filter(Boolean))];
+        fillSelect(select, [
+            { value: '', label: 'Any (no class)' },
+            ...classes.map(c => ({ value: c, label: c })),
+            { value: OTHER_CLASS, label: 'Other…' }
+        ], selected || '');
+        otherInput.classList.add('hidden');
+        otherInput.value = '';
+
+        const onChange = () => {
+            const other = select.value === OTHER_CLASS;
+            otherInput.classList.toggle('hidden', !other);
+            if (other) otherInput.focus();
+        };
+        select.addEventListener('change', onChange);
+
+        return {
+            value: () => {
+                const carClass = select.value === OTHER_CLASS ? otherInput.value.trim() : select.value;
+                if (carClass && !gameClasses.includes(carClass)) rememberClass(game, carClass);
+                return carClass;
+            },
+            detach: () => select.removeEventListener('change', onChange)
+        };
+    }
+
+    // Driver picker elements; the run details dialog uses the same IDs with a "run" prefix
+    function driverPickerElements(prefix = '') {
+        const id = (name) => document.getElementById(prefix ? prefix + name[0].toUpperCase() + name.slice(1) : name);
+        return {
+            select: id('driverSelect'),
+            menuBtn: id('driverMenuBtn'),
+            menu: id('driverMenu'),
+            renameBtn: id('renameDriverBtn'),
+            removeBtn: id('removeDriverBtn')
+        };
+    }
+
+    // Driver, class and car dialog. Driver and class come from lists. The car name is typed,
+    // and only for a game without car IDs. A class from the game replaces the class set here.
     async function openNamingModal() {
         const modal = document.getElementById('nameIdentifiersModal');
         const form = document.getElementById('nameIdentifiersForm');
-        const driverInput = document.getElementById('driverInput');
+        const classSelect = document.getElementById('classSelect');
         const carNameInput = document.getElementById('carNameInput');
         const trackNameInput = document.getElementById('trackNameInput');
+        const applyCheck = document.getElementById('applyRunsCheck');
         const cancelBtn = document.getElementById('cancelNameIdentifiers');
 
-        const [telem, carMappings, trackMappings] = await Promise.all([
+        const [telem, trackMappings, status, drivers] = await Promise.all([
             getLiveTelemetry(),
-            apiRequest('getCarMappings').catch(() => ({})),
-            getTrackMappings().catch(() => ({}))
+            getTrackMappings().catch(() => ({})),
+            getRecorderStatus().catch(() => ({})),
+            apiRequest('getDrivers').catch(() => [])
         ]);
-        const carId = telem && telem.CarId ? String(telem.CarId) : '';
-        const trackId = telem && telem.TrackId ? String(telem.TrackId) : '';
+        const game = await currentGame(status);
+        const gameClasses = game ? ((await gameInfo(game))?.classes || []) : [];
+        const carId = telem && telem.CarId ? String(telem.CarId) : (telem && telem.CarOrdinal ? String(telem.CarOrdinal) : '');
+        const trackId = status.trackId ? String(status.trackId) : '';
+        const liveClass = telem && telem.CarClass !== undefined
+            ? (gameClasses[telem.CarClass] || `Class ${telem.CarClass}`)
+            : '';
 
-        window.AutocrossApp?.fillDetailOptions(carMappings);
-        driverInput.value = currentDriver.driver;
-        carNameInput.value = carId ? (carMappings[carId] || '') : currentDriver.car;
-        document.getElementById('carIdNote').textContent = carId
-            ? `Game car ID ${carId}. All runs with this ID get this car name.`
-            : 'No car ID from the game. New runs get this car name.';
+        window.AutocrossApp?.fillDetailOptions();
+
+        const driverPicker = attachDriverPicker(driverPickerElements(), drivers, currentDriver.driver);
+        const classPicker = await attachClassPicker(classSelect, document.getElementById('classOtherInput'),
+            game, liveClass || currentDriver.carClass);
+        classSelect.disabled = !!liveClass;
+        document.getElementById('classNote').textContent = liveClass
+            ? `The game sends the class (${liveClass}). New runs get it.`
+            : '';
+
+        // Car name only when the game sends no car ID
+        document.getElementById('carNameGroup').classList.toggle('hidden', !!carId);
+        carNameInput.value = carId ? '' : currentDriver.car;
+
+        // Track name for a game track ID
         document.getElementById('trackNameGroup').classList.toggle('hidden', !trackId);
         trackNameInput.value = trackMappings[trackId] || '';
         document.getElementById('trackIdNote').textContent = trackId ? `Game track ID ${trackId}` : '';
 
+        // Runs since Start without the details
+        const missing = sessionRunsMissingDetails();
+        document.getElementById('applyRunsLabel').classList.toggle('hidden', missing.length === 0);
+        applyCheck.checked = true;
+        document.getElementById('applyRunsText').textContent =
+            `Also set the ${missing.length} run${missing.length !== 1 ? 's' : ''} since Start that have no driver or class`;
+
         modal.classList.remove('hidden');
-        setTimeout(() => driverInput.focus(), 100);
 
         const close = () => {
             modal.classList.add('hidden');
             form.removeEventListener('submit', handleSubmit);
             cancelBtn.removeEventListener('click', close);
+            driverPicker.detach();
+            classPicker.detach();
         };
 
         const handleSubmit = async (e) => {
             e.preventDefault();
-            const driver = driverInput.value.trim();
-            const carName = carNameInput.value.trim();
+            const driver = driverPicker.value();
+            const carClass = liveClass ? currentDriver.carClass : classPicker.value();
+            const car = carId ? '' : carNameInput.value.trim();
             const trackName = trackNameInput.value.trim();
+            const classChanged = carClass !== currentDriver.carClass;
             try {
-                if (carId && carName) await apiRequest('setCarName', { carId, name: carName });
                 if (trackId && trackName) await apiRequest('setTrackName', { trackId, name: trackName });
-                await saveCurrentDriver(driver, carId ? '' : carName);
-                window.AutocrossApp?.rememberDriver(driver);
+                const sent = await saveCurrentDriver(driver, car, carClass);
+                if (state === STATE.IDLE) detailsSetBeforeStart = true;
+                if (!sent) showToast('Saved. The recorder gets these details when you press Start.', 'info');
+
+                if (applyCheck.checked && missing.length) {
+                    const courseId = window.AutocrossApp?.getCurrentCourse();
+                    await Promise.all(missing.map(run => apiRequest('updateRun', {
+                        courseId,
+                        runId: run.runId,
+                        driver: run.driver ? undefined : (driver || undefined),
+                        carClass: run.carClass ? undefined : (carClass || undefined),
+                        car: run.car || run.carId ? undefined : (car || undefined)
+                    })));
+                }
+
                 close();
+                if (classChanged) window.AutocrossApp?.setSessionClass(carClass, true);
                 await window.AutocrossApp?.refreshRuns();
             } catch (err) {
-                console.error('Could not save driver and car:', err);
-                showToast('Could not save the driver on the telemetry recorder (port 8888).', 'error');
+                console.error('Could not save driver, class and car:', err);
+                showToast('Could not save the details: ' + err.message, 'error');
             }
         };
 
         form.addEventListener('submit', handleSubmit);
         cancelBtn.addEventListener('click', close);
+    }
+
+    // Driver and class lists for the run details dialog. Returns { driver(), carClass(), detach() }.
+    async function attachRunDetailPickers(run) {
+        const drivers = await apiRequest('getDrivers').catch(() => []);
+        const driverPicker = attachDriverPicker(driverPickerElements('run'), drivers, run.driver);
+        const classPicker = await attachClassPicker(document.getElementById('runClassSelect'),
+            document.getElementById('runClassOtherInput'), run.game ? String(run.game).toUpperCase() : '', run.carClass);
+        return {
+            driver: driverPicker.value,
+            carClass: classPicker.value,
+            detach: () => { driverPicker.detach(); classPicker.detach(); }
+        };
     }
 
     // Poll recording status for UI updates
@@ -429,6 +781,7 @@ const AutocrossRecorder = (function() {
 
                 if (status.isRecording) {
                     state = STATE.RECORDING;
+                    followTrack(status);
                     // Show run-active state in UI
                     if (status.runActive) {
                         updateUI(status.elapsed);
@@ -463,6 +816,33 @@ const AutocrossRecorder = (function() {
                 statusRequestPending = false;
             }
         }, 200);
+    }
+
+    // While armed, a new track ID from the game (another stage or track) moves recording
+    // to the course of that track. Courses without a track ID stay as the user selected.
+    let followingTrack = false;
+    let followedTrackId = '';
+    async function followTrack(status) {
+        const trackId = status.trackId ? String(status.trackId) : '';
+        if (!trackId || trackId === followedTrackId || followingTrack || status.runActive) return;
+        followingTrack = true;
+        followedTrackId = trackId;
+        try {
+            const courses = await getCourses();
+            const current = courses.find(c => c.courseId === currentCourseId);
+            if (!current || !current.trackId || current.trackId === 'manual' || current.trackId === trackId) return;
+
+            lastTelemetry = await getLiveTelemetry();
+            const courseId = await resolveCourseForTrack(trackId, await gameName(status.game));
+            if (!courseId || courseId === currentCourseId) return;
+            currentCourseId = courseId;
+            localStorage.setItem('recorder_courseId', courseId);
+            await rearm(courseId);
+        } catch (e) {
+            console.error('Recorder: could not follow the track change', e);
+        } finally {
+            followingTrack = false;
+        }
     }
 
     function stopStatusPolling() {
@@ -505,7 +885,8 @@ const AutocrossRecorder = (function() {
         init,
         setCourse,
         getState: () => state,
-        isRecording: () => state === STATE.RECORDING
+        isRecording: () => state === STATE.RECORDING,
+        attachRunDetailPickers
     };
 })();
 

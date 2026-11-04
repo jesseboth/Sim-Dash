@@ -66,6 +66,18 @@ async function handleRequest(data) {
             case 'setTrackName':
                 return handleSetTrackName(data);
 
+            case 'getDrivers':
+                return handleGetDrivers();
+
+            case 'addDriver':
+                return handleAddDriver(data);
+
+            case 'removeDriver':
+                return handleRemoveDriver(data);
+
+            case 'renameDriver':
+                return handleRenameDriver(data);
+
             case 'renameCourse':
                 return handleRenameCourse(data);
 
@@ -362,11 +374,11 @@ function handleGetTop10(data) {
 }
 
 /**
- * Set the name, driver, car and notes of a run.
+ * Set the name, driver, car, class and notes of a run.
  * With carId, the car name is also used for all runs with that game car ID.
  */
 function handleUpdateRun(data) {
-    const { courseId, runId, name, driver, car, notes, carId } = data;
+    const { courseId, runId, name, driver, car, carClass, notes, carId } = data;
 
     if (!courseId || !runId) {
         return { success: false, error: 'courseId and runId are required' };
@@ -376,7 +388,13 @@ function handleUpdateRun(data) {
         return { success: false, error: 'Failed to save car name' };
     }
 
-    const details = { name, driver, notes, car: carId ? '' : car };
+    const details = { name, driver, notes, carClass, car: carId ? '' : car };
+
+    // A new driver name joins the driver list
+    const driverName = String(driver || '').trim();
+    if (driverName && !driverList().includes(driverName)) {
+        mappings.saveDrivers([...driverList(), driverName]);
+    }
     if (!storage.updateRunDetails(courseId, runId, details)) {
         return { success: false, error: 'Failed to update run or run not found' };
     }
@@ -563,6 +581,55 @@ function handleGetTrackMappings() {
         success: true,
         data: trackMappings
     };
+}
+
+/**
+ * The driver list. The first time, it is made from the drivers of all runs.
+ */
+function driverList() {
+    const drivers = mappings.loadDrivers();
+    if (drivers) return drivers;
+    const fromRuns = storage.loadCourses()
+        .flatMap(course => storage.loadRuns(course.courseId).map(run => run.driver));
+    return mappings.saveDrivers(fromRuns) || [];
+}
+
+function handleGetDrivers() {
+    return { success: true, data: driverList() };
+}
+
+function handleAddDriver(data) {
+    const name = String(data.name || '').trim();
+    if (!name) return { success: false, error: 'name is required' };
+    const list = mappings.saveDrivers([...driverList(), name]);
+    return list ? { success: true, data: list } : { success: false, error: 'Failed to save drivers' };
+}
+
+/**
+ * Remove a driver from the list. Runs keep their driver.
+ */
+function handleRemoveDriver(data) {
+    const name = String(data.name || '').trim();
+    const list = mappings.saveDrivers(driverList().filter(d => d !== name));
+    return list ? { success: true, data: list } : { success: false, error: 'Failed to save drivers' };
+}
+
+/**
+ * Rename a driver in the list and in all runs
+ */
+function handleRenameDriver(data) {
+    const from = String(data.from || '').trim();
+    const to = String(data.to || '').trim();
+    if (!from || !to) return { success: false, error: 'from and to are required' };
+
+    let runs = 0;
+    for (const course of storage.loadCourses()) {
+        for (const run of storage.loadRuns(course.courseId)) {
+            if (run.driver === from && storage.updateRunDetails(course.courseId, run.runId, { driver: to })) runs++;
+        }
+    }
+    const list = mappings.saveDrivers([...driverList().filter(d => d !== from), to]);
+    return list ? { success: true, data: { drivers: list, runs } } : { success: false, error: 'Failed to save drivers' };
 }
 
 /**

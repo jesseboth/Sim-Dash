@@ -67,6 +67,17 @@ li {
     /* Optional spacing above the row */
 }
 
+/* Rows with many buttons wrap to the next line instead of squeezing the buttons */
+.button-row.wrap {
+    flex-wrap: wrap;
+    gap: 0;
+}
+
+.button-row.wrap .modalButton {
+    flex: none;
+    width: 160px;
+}
+
 .redirect {
     position: fixed;
     bottom: 20px;

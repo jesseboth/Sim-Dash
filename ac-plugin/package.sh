@@ -16,7 +16,7 @@ fi
 
 # Create zip
 cd "$(dirname "$0")"
-zip -r "$OUTPUT_FILE" "$PLUGIN_DIR/" -x "*.pyc" -x "__pycache__/*" -x "*.DS_Store"
+zip -r "$OUTPUT_FILE" "$PLUGIN_DIR/" -x "*.pyc" -x "*__pycache__/*" -x "*.DS_Store" -x "$PLUGIN_DIR/cones/*"
 
 if [ $? -eq 0 ]; then
     echo "✓ Successfully created $OUTPUT_FILE"

@@ -27,10 +27,10 @@ const serveFile = async (filePath, contentType, response) => {
         );
         const data = contentType === 'application/json'
             ? JSON.parse(rawData) : rawData;
-        response.writeHead(
-            filePath.includes('404.html') ? 404 : 200,
-            { 'Content-Type': contentType }
-        );
+        // Pages, scripts and styles are fetched again on each load, so a new version shows at once
+        const headers = { 'Content-Type': contentType };
+        if (!contentType.includes('image') && !contentType.includes('font')) headers['Cache-Control'] = 'no-cache';
+        response.writeHead(filePath.includes('404.html') ? 404 : 200, headers);
         response.end(
             contentType === 'application/json' ? JSON.stringify(data) : data
         );
@@ -263,6 +263,16 @@ const options = {
     cwd: '../telemetry/', // Set the working directory
 };
 
+// Class names of a game from the dash game list
+function gameClasses(gameId) {
+    const games = getJsonData('data/games.json');
+    for (const category of (games && games.categories) || []) {
+        const game = (category.games || []).find(g => String(g.id).toUpperCase() === gameId);
+        if (game) return game.classes || [];
+    }
+    return [];
+}
+
 function reqGame(game) {
     retVal = JSON.parse(JSON.stringify(postReturn));
     game = game.toLowerCase();
@@ -294,11 +304,11 @@ function reqGame(game) {
             const gameUpper = game.toUpperCase();
             const port = (config.useCustomPort && config.customPort) ? config.customPort.toString() : "9999";
 
-            if (debug) {
-                telemetry = spawn('../telemetry/fdt', ['-game', gameUpper, '-split', config.split, "-d", '-port', port], options);
-            } else {
-                telemetry = spawn('../telemetry/fdt', ['-game', gameUpper, '-split', config.split, '-port', port], options);
-            }
+            const args = ['-game', gameUpper, '-split', config.split, '-port', port];
+            const classes = gameClasses(gameUpper);
+            if (classes.length) args.push('-classes', classes.join('|'));
+            if (debug) args.push('-d');
+            telemetry = spawn('../telemetry/fdt', args, options);
 
 
             telemetry.stdout.on('data', (data) => {

@@ -4,6 +4,7 @@ import (
     "encoding/binary"
     "encoding/json"
     "log"
+    "math"
     "net"
 
     "jesseboth/fdt/src/util"
@@ -11,8 +12,9 @@ import (
 
 func DirtLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
     log.Println("Starting Telemetry:", DirtGame(game))
+    recorder := NewRecorder(game, debug)
     for {
-        DirtReadData(conn, telemArray, totalLength, debug)
+        DirtReadData(conn, telemArray, totalLength, recorder, debug)
     }
 }
 
@@ -48,7 +50,7 @@ func DirtGame(game string) string {
     return gameSTR;
 }
 
-func DirtReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
+func DirtReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, recorder *Recorder, debug bool) {
     buffer := make([]byte, 1500)
 
     n, addr, err := conn.ReadFromUDP(buffer)
@@ -147,6 +149,21 @@ func DirtReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength in
     // Add the IsRaceOn field
     combinedMap["IsRaceOn"] = true
 
+    progress := float32(-1)
+    if f32map["StageLength"] > 0 {
+        progress = f32map["StageProgress"]
+    }
+    trackID := stageID(float64(f32map["StageLength"]))
+    combinedMap["TrackId"] = trackID
+    recorder.Update(Frame{
+        Timer:    f32map["CurrentLap"],
+        LastLap:  f32map["LastLap"],
+        HasLastLap: true,
+        Progress: progress,
+        TrackID:  trackID,
+        Sample:   dirtSample(f32map),
+    })
+
     // RPM values are sent divided by 10. Fields missing from the packet format are skipped.
     for _, name := range []string{"CurrentEngineRpm", "EngineMaxRpm", "EngineIdleRpm"} {
         if v, ok := combinedMap[name].(float32); ok {
@@ -177,3 +194,25 @@ func DirtReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength in
 }
 
 
+
+// dirtSample makes a run sample from the DiRT Rally packet. The game gives G forces directly.
+func dirtSample(f32map map[string]float32) util.TelemetrySample {
+    sample := util.TelemetrySample{
+        Brake:  roundTo(f32map["Brake"], 3),
+        Accel:  roundTo(f32map["Accel"], 3),
+        AccelX: roundTo(f32map["GForceLat"], 2),
+        AccelY: roundTo(f32map["GForceLon"], 2),
+        Speed:  roundTo(mph(f32map["Speed"]), 2),
+        PosX:   f32map["PositionX"],
+        PosY:   f32map["PositionZ"],
+        PosZ:   f32map["PositionY"],
+        Steer:  roundTo(f32map["Steer"], 2),
+        Clutch: roundTo(f32map["Clutch"], 3),
+        Rpm:    float32(math.Round(float64(f32map["CurrentEngineRpm"] * 10))),
+        Gear:   int32(f32map["Gear"]),
+    }
+    for i, wheel := range [4]string{"FL", "FR", "RL", "RR"} {
+        sample.WheelSpeed[i] = roundTo(absFloat32(mph(f32map["WheelSpeed"+wheel])), 1)
+    }
+    return sample
+}

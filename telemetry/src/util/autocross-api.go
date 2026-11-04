@@ -19,6 +19,8 @@ type armedState struct {
 	CourseID string `json:"courseId"`
 	Driver   string `json:"driver"`
 	Car      string `json:"car"`
+	CarClass string `json:"carClass"`
+	Game     string `json:"game"`
 }
 
 // Course IDs are used as directory names, so only plain names are allowed
@@ -29,7 +31,16 @@ var (
 	recordingState = RecordingState{}
 )
 
-// loadArmedState restores armed state from disk on startup
+// SetRecorderGame sets the game of this telemetry process. Call it before ServeJson.
+func SetRecorderGame(game string, canRecord bool) {
+	recordingMutex.Lock()
+	defer recordingMutex.Unlock()
+	recordingState.Game = game
+	recordingState.CanRecord = canRecord
+}
+
+// loadArmedState restores armed state from disk on startup.
+// The recorder stays armed only for the same game: after a game change the user must press Start again.
 func loadArmedState() {
 	data, err := os.ReadFile(armedStateFile)
 	if err != nil {
@@ -41,7 +52,16 @@ func loadArmedState() {
 	}
 	recordingState.Driver = s.Driver
 	recordingState.Car = s.Car
-	if s.IsArmed && validCourseID.MatchString(s.CourseID) {
+	recordingState.CarClass = s.CarClass
+	// The car and the class belong to the game
+	if s.Game != recordingState.Game {
+		log.Printf("Game changed from %s to %s, recorder disarmed", s.Game, recordingState.Game)
+		recordingState.Car = ""
+		recordingState.CarClass = ""
+		saveArmedState()
+		return
+	}
+	if s.IsArmed && recordingState.CanRecord && validCourseID.MatchString(s.CourseID) {
 		recordingState.IsRecording = true
 		recordingState.CourseID = s.CourseID
 		log.Printf("Restored armed state for course: %s", s.CourseID)
@@ -60,6 +80,8 @@ func saveArmedState() {
 		CourseID: courseID,
 		Driver:   recordingState.Driver,
 		Car:      recordingState.Car,
+		CarClass: recordingState.CarClass,
+		Game:     recordingState.Game,
 	})
 	os.WriteFile(armedStateFile, data, 0644)
 }
@@ -112,6 +134,14 @@ func handleStartRecording(w http.ResponseWriter, r *http.Request) {
 	recordingMutex.Lock()
 	defer recordingMutex.Unlock()
 
+	if !recordingState.CanRecord {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "This game sends no run timer, so the recorder cannot find runs",
+		})
+		return
+	}
+
 	// Allow re-arming (e.g. different course) — just update state
 	recordingState.IsRecording = true
 	recordingState.CourseID = req.CourseID
@@ -157,7 +187,7 @@ func handleStopRecording(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleSetDriver sets the driver and the car that the recorder gives to new runs
+// handleSetDriver sets the driver, the car and the class that the recorder gives to new runs
 func handleSetDriver(w http.ResponseWriter, r *http.Request) {
 	enableCors(&w)
 
@@ -172,8 +202,9 @@ func handleSetDriver(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Driver string `json:"driver"`
-		Car    string `json:"car"`
+		Driver   string `json:"driver"`
+		Car      string `json:"car"`
+		CarClass string `json:"carClass"`
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -187,6 +218,7 @@ func handleSetDriver(w http.ResponseWriter, r *http.Request) {
 	recordingMutex.Lock()
 	recordingState.Driver = req.Driver
 	recordingState.Car = req.Car
+	recordingState.CarClass = req.CarClass
 	saveArmedState()
 	recordingMutex.Unlock()
 
@@ -232,6 +264,21 @@ func NotifyRunSaved() {
 	recordingMutex.Lock()
 	defer recordingMutex.Unlock()
 	recordingState.RunSavedAt = time.Now().UnixMilli()
+	recordingState.RunActive = false
+	recordingState.Elapsed = 0
+}
+
+// UpdateTrackID sets the live track ID, so the page can move recording to the course of a new track
+func UpdateTrackID(id int32) {
+	recordingMutex.Lock()
+	defer recordingMutex.Unlock()
+	recordingState.TrackID = id
+}
+
+// NotifyRunDiscarded signals that the run in progress was not saved
+func NotifyRunDiscarded() {
+	recordingMutex.Lock()
+	defer recordingMutex.Unlock()
 	recordingState.RunActive = false
 	recordingState.Elapsed = 0
 }

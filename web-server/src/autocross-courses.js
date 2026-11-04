@@ -134,6 +134,7 @@ const AutocrossCourses = (function () {
     function chooseCourse(courses, trackName) {
         const modal = document.getElementById('courseChooserModal');
         const list = document.getElementById('courseChooserList');
+        document.getElementById('courseChooserTitle').textContent = 'Which course?';
         document.getElementById('courseChooserText').textContent =
             `${trackName} has more than one course. Which one are you driving?`;
 
@@ -157,6 +158,28 @@ const AutocrossCourses = (function () {
         return new Promise(resolve => { chooserResolve = resolve; });
     }
 
+    // Game chooser for the recorder, with the games of the dash. Resolves to a game ID, or null.
+    function chooseGame(categories) {
+        const modal = document.getElementById('courseChooserModal');
+        const list = document.getElementById('courseChooserList');
+        document.getElementById('courseChooserTitle').textContent = 'Which game?';
+        document.getElementById('courseChooserText').textContent = 'No game is running. Select the game to record.';
+
+        list.innerHTML = '';
+        categories.forEach(category => {
+            (category.games || []).forEach(game => {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-secondary course-choice';
+                btn.textContent = game.name;
+                btn.addEventListener('click', () => closeChooser(game.id));
+                list.appendChild(btn);
+            });
+        });
+
+        modal.classList.remove('hidden');
+        return new Promise(resolve => { chooserResolve = resolve; });
+    }
+
     function closeChooser(result) {
         document.getElementById('courseChooserModal')?.classList.add('hidden');
         if (chooserResolve) {
@@ -168,7 +191,8 @@ const AutocrossCourses = (function () {
 
     return {
         init,
-        chooseCourse
+        chooseCourse,
+        chooseGame
     };
 })();
 

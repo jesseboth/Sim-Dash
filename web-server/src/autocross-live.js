@@ -110,7 +110,7 @@ const AutocrossLive = (function () {
         preparedFor = signature;
 
         refOptions = buildReferenceOptions(runs);
-        const savedKey = localStorage.getItem('liveRefMode') || 'car';
+        const savedKey = localStorage.getItem('liveRefMode') || 'class';
         const option = refOptions.find(o => o.key === savedKey) || refOptions[0] || null;
         await setReference(option);
     }
@@ -123,8 +123,10 @@ const AutocrossLive = (function () {
             seen.add(run.runId);
             options.push({ key, label, run });
         };
-        const best = list => sortByAdjustedTime(list)[0];
+        const best = list => sortByAdjustedTime(list.filter(r => r.isValid !== false))[0];
 
+        const sessionClass = AutocrossApp.getSessionClass();
+        if (sessionClass) add('class', `Best · ${sessionClass}`, best(runs.filter(r => r.carClass === sessionClass)));
         add('car', 'Best · this car', best(runs.filter(r => r.carId === liveCarId)));
         add('overall', 'Best · overall', best(runs));
         [...new Set(runs.map(r => r.carId))]
@@ -259,7 +261,7 @@ const AutocrossLive = (function () {
 
     function update(telem) {
         const elapsed = Number(telem.CurrentLap) || 0;
-        const speed = Number(telem.Speed) || 0;
+        const speed = (Number(telem.Speed) || 0) * 2.23694; // m/s to mph
 
         setText('liveElapsed', formatLapTime(elapsed));
         setText('liveSpeed', `${Math.round(speed)}`);
@@ -332,14 +334,18 @@ const AutocrossLive = (function () {
         const newest = findMostRecentRun(runs);
         if (!newest) { hide(); return; }
 
-        const lines = [`Run ${AutocrossApp.getRunNumber(newest.runId)}  ${formatLapTime(newest.lapTime)}`];
+        const dnf = newest.isValid === false;
+        const lines = [`Run ${AutocrossApp.getRunNumber(newest.runId)}  ${dnf ? 'DNF' : formatLapTime(newest.lapTime)}`];
         let delta = null;
-        if (reference && reference.runId !== newest.runId) {
+        if (!dnf && reference && reference.runId !== newest.runId) {
             delta = newest.lapTime - reference.lapTime;
             lines.push(`${formatDelta(delta)} vs Run ${AutocrossApp.getRunNumber(reference.runId)}`);
         }
 
-        const sameCarRuns = runs.filter(r => r.isValid && r.carId === newest.carId);
+        // Same class when the run has one, else same game car ID
+        const sameCarRuns = runs.filter(r => r.isValid && (newest.carClass
+            ? r.carClass === newest.carClass
+            : r.carId === newest.carId));
         const best = sortByAdjustedTime(sameCarRuns)[0];
         if (best && best.runId === newest.runId && sameCarRuns.length > 1) {
             lines.push('NEW BEST');

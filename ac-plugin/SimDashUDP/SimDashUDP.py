@@ -21,13 +21,17 @@ os.environ['PATH'] = os.environ['PATH'] + ";."
 
 import ctypes
 from ctypes import wintypes
+import threading
+
+sys.path.insert(0, os.path.dirname(__file__))
+import cones
 
 # ── Config file ──────────────────────────────────────────────────────────────
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.ini')
 
 def load_config():
-    cfg = {'ip': '127.0.0.1', 'port': 20778, 'update_rate_hz': 40}
+    cfg = {'ip': '127.0.0.1', 'port': 20778, 'update_rate_hz': 40, 'show_cones': 0, 'heading_sign': 0}
     try:
         with open(CONFIG_PATH, 'r') as f:
             for line in f:
@@ -40,8 +44,8 @@ def load_config():
                         cfg['ip'] = val
                     elif key == 'port':
                         cfg['port'] = int(val)
-                    elif key == 'update_rate_hz':
-                        cfg['update_rate_hz'] = int(val)
+                    elif key in ('update_rate_hz', 'show_cones', 'heading_sign'):
+                        cfg[key] = int(val)
     except Exception as e:
         ac.log("SimDash UDP: Could not read config.ini: {}".format(e))
     return cfg
@@ -53,6 +57,9 @@ def save_config(ip, port, rate):
             f.write('ip = {}\n'.format(ip))
             f.write('port = {}\n'.format(port))
             f.write('update_rate_hz = {}\n'.format(rate))
+            f.write('\n[Cones]\n')
+            f.write('show_cones = {}\n'.format(1 if show_cones else 0))
+            f.write('heading_sign = {}\n'.format(heading.sign))
     except Exception as e:
         ac.log("SimDash UDP: Could not write config.ini: {}".format(e))
 
@@ -106,6 +113,20 @@ app_id = None
 lbl_status = None
 input_ip = None
 input_port = None
+lbl_cone_status = None
+
+# Cone counter
+counter = cones.ConeCounter()
+heading = cones.HeadingEstimator()
+show_cones = False
+cone_app = None
+lbl_cone_count = None
+lbl_cone_last = None
+cone_scan = {'message': 'Cones: waiting for track', 'result': None}
+cone_flash = 0.0      # seconds the count stays red after a hit
+run_clock = cones.RunClock()
+tick_count = 0        # count when the lap timer last moved
+tyre_data_logged = False
 
 def inet_addr(ip):
     parts = [int(x) for x in ip.split('.')]
@@ -140,6 +161,161 @@ def on_save_clicked(dummy_x, dummy_y):
         ac.setText(lbl_status, "Error: {}".format(str(e)))
 
 
+def on_show_cones(name, state):
+    global show_cones
+    show_cones = bool(state)
+    if cone_app is not None:
+        ac.setVisible(cone_app, 1 if show_cones else 0)
+    save_config(UDP_IP, UDP_PORT, UPDATE_RATE_HZ)
+
+
+def scan_cones(track, layout, car):
+    """Background thread: loads the cone list and the car size. No AC calls here."""
+    def progress(text):
+        cone_scan['message'] = 'Cones: ' + text
+
+    # Short GIL turns while scanning, so the game thread does not wait for the scan
+    switch = sys.getswitchinterval()
+    sys.setswitchinterval(0.001)
+    try:
+        found, message, errors = cones.load_track_cones(track, layout, progress)
+        car_shape = cones.load_car(car)
+        cone_scan['result'] = (found, car_shape, errors)
+        cone_scan['message'] = 'Cones: ' + message
+    except Exception as e:
+        cone_scan['result'] = ([], cones.CarShape(), [str(e)])
+        cone_scan['message'] = 'Cones: scan failed'
+    finally:
+        sys.setswitchinterval(switch)
+
+
+def read_tyres(x, z):
+    """Tyre ground contact points from the game: ([(x, y, z, heading, radius)] for FL, FR, RL, RR,
+    car heading), or (None, None) when the game does not give them."""
+    global tyre_data_logged
+    try:
+        radius = ac.getCarState(0, acsys.CS.TyreRadius)
+        points = [ac.getCarState(0, acsys.CS.TyreContactPoint, w) for w in range(4)]
+        points = [(float(p[0]), float(p[1]), float(p[2])) for p in points]
+    except Exception:
+        points = None
+    if points is None or any(math.hypot(p[0] - x, p[2] - z) > 4.0 for p in points):
+        if not tyre_data_logged:
+            tyre_data_logged = True
+            ac.log("SimDash UDP: no tyre contact points, cone hits use the car body only")
+        return None, None
+
+    # Car forward direction: from the middle of the rear axle to the middle of the front axle
+    fx = (points[0][0] + points[1][0] - points[2][0] - points[3][0]) / 2
+    fz = (points[0][2] + points[1][2] - points[2][2] - points[3][2]) / 2
+    if math.hypot(fx, fz) < 1.0:
+        return None, None
+    car_heading = math.atan2(fx, fz)
+
+    tyres = []
+    for w in range(4):
+        tyre_heading = car_heading
+        try:
+            v = ac.getCarState(0, acsys.CS.TyreHeadingVector, w)
+            h = math.atan2(float(v[0]), float(v[2]))
+            if abs(cones._wrap(h - car_heading)) < 1.2:   # steered wheel, not a reversed vector
+                tyre_heading = h
+        except Exception:
+            pass
+        tyres.append(points[w] + (tyre_heading, float(radius[w])))
+    return tyres, car_heading
+
+
+def build_cone_window():
+    global cone_app, lbl_cone_count, lbl_cone_last
+    cone_app = ac.newApp("SimDash Cones")
+    ac.setTitle(cone_app, "")
+    ac.setSize(cone_app, 150, 100)
+    ac.drawBorder(cone_app, 0)
+    ac.setIconPosition(cone_app, 0, -10000)
+    ac.setBackgroundOpacity(cone_app, 0.4)
+
+    lbl_title = ac.addLabel(cone_app, "CONES")
+    ac.setPosition(lbl_title, 0, 4)
+    ac.setSize(lbl_title, 150, 18)
+    ac.setFontAlignment(lbl_title, "center")
+    ac.setFontSize(lbl_title, 14)
+
+    lbl_cone_count = ac.addLabel(cone_app, "0")
+    ac.setPosition(lbl_cone_count, 0, 20)
+    ac.setSize(lbl_cone_count, 150, 50)
+    ac.setFontAlignment(lbl_cone_count, "center")
+    ac.setFontSize(lbl_cone_count, 44)
+
+    lbl_cone_last = ac.addLabel(cone_app, "")
+    ac.setPosition(lbl_cone_last, 0, 76)
+    ac.setSize(lbl_cone_last, 150, 18)
+    ac.setFontAlignment(lbl_cone_last, "center")
+    ac.setFontSize(lbl_cone_last, 13)
+
+    ac.setVisible(cone_app, 1 if show_cones else 0)
+
+
+def update_cones(deltaT):
+    """Counts cone hits each frame and shows the count."""
+    global cone_flash, tick_count
+
+    result = cone_scan['result']
+    if result is not None:
+        cone_scan['result'] = None
+        counter.set_cones(result[0])
+        counter.set_car(result[1])
+        for error in result[2]:
+            ac.log("SimDash UDP: cone scan: {}".format(error))
+        ac.log("SimDash UDP: {}".format(cone_scan['message']))
+    if lbl_cone_status is not None:
+        ac.setText(lbl_cone_status, cone_scan['message'])
+
+    # The count stops at the finish and stays until FINISH_HOLD or the next start
+    in_run = run_clock.running or run_clock.finished
+    event = run_clock.update(ac.getCarState(0, acsys.CS.LapTime),
+                             ac.getCarState(0, acsys.CS.LapCount), deltaT)
+    if event == 'finish' and run_clock.still_finish:
+        # The timer stopped when it last moved: remove the hits after that
+        counter.trim(tick_count)
+    if event == 'clear' or (event == 'start' and in_run):
+        counter.last_count = counter.count
+    if event in ('start', 'clear'):
+        counter.reset()
+    if not run_clock.counting():
+        counter.prev = None
+
+    pos = ac.getCarState(0, acsys.CS.WorldPosition)
+    x, y, z = float(pos[0]), float(pos[1]), float(pos[2])
+    tyres, car_heading = read_tyres(x, z)
+    if car_heading is None:
+        # No tyre data from the game: heading from the direction of travel and the slip angle
+        loc_vel = ac.getCarState(0, acsys.CS.LocalVelocity)
+        ang_vel = ac.getCarState(0, acsys.CS.LocalAngularVelocity)
+        slip = 0.0
+        if math.hypot(loc_vel[0], loc_vel[2]) > 1.0:
+            slip = math.atan2(float(loc_vel[0]), float(loc_vel[2]))
+        sign = heading.sign
+        car_heading = heading.update(x, z, slip, float(ang_vel[1]), deltaT)
+        if heading.sign != sign:
+            save_config(UDP_IP, UDP_PORT, UPDATE_RATE_HZ)
+    if run_clock.counting() and counter.update(x, y, z, car_heading, tyres):
+        cone_flash = 1.0
+    if run_clock.moved:
+        tick_count = counter.count
+
+    if cone_app is not None and show_cones:
+        cone_flash = max(0.0, cone_flash - deltaT)
+        ac.setBackgroundOpacity(cone_app, 0.4)
+        ac.setText(lbl_cone_count, str(counter.count))
+        if cone_flash > 0:
+            ac.setFontColor(lbl_cone_count, 1.0, 0.25, 0.2, 1.0)
+        else:
+            ac.setFontColor(lbl_cone_count, 1.0, 1.0, 1.0, 1.0)
+        last = counter.last_count
+        ac.setText(lbl_cone_last, "" if last is None else "last run {}".format(last))
+
+
 def stable_id(name):
     """Same id for the same name in every session (FNV-1a, 31 bits)."""
     if name not in id_cache:
@@ -151,11 +327,13 @@ def stable_id(name):
 
 
 def acMain(ac_version):
-    global sock, app_id, lbl_status, input_ip, input_port
+    global sock, app_id, lbl_status, input_ip, input_port, lbl_cone_status, show_cones
 
     # Load config
     cfg = load_config()
     apply_config(cfg['ip'], cfg['port'], cfg['update_rate_hz'])
+    show_cones = bool(cfg['show_cones'])
+    heading.sign = cfg['heading_sign'] if cfg['heading_sign'] in (1, -1) else 0
 
     # Init Winsock
     try:
@@ -180,7 +358,7 @@ def acMain(ac_version):
     # Build settings app window
     app_id = ac.newApp("SimDash UDP")
     ac.setTitle(app_id, "SimDash UDP")
-    ac.setSize(app_id, 300, 160)
+    ac.setSize(app_id, 300, 220)
 
     lbl_ip = ac.addLabel(app_id, "IP Address:")
     ac.setPosition(lbl_ip, 10, 30)
@@ -206,11 +384,33 @@ def acMain(ac_version):
     lbl_status = ac.addLabel(app_id, "Sending to {}:{}".format(UDP_IP, UDP_PORT))
     ac.setPosition(lbl_status, 10, 135)
 
+    chk_cones = ac.addCheckBox(app_id, "Show cone count")
+    ac.setPosition(chk_cones, 10, 165)
+    ac.setSize(chk_cones, 14, 14)
+    ac.setValue(chk_cones, 1 if show_cones else 0)
+    ac.addOnCheckBoxChanged(chk_cones, on_show_cones)
+
+    lbl_cone_status = ac.addLabel(app_id, cone_scan['message'])
+    ac.setPosition(lbl_cone_status, 10, 190)
+
+    build_cone_window()
+
+    # Find the cones of this track layout without stalling the game
+    thread = threading.Thread(target=scan_cones,
+                              args=(ac.getTrackName(0), ac.getTrackConfiguration(0), ac.getCarName(0)))
+    thread.daemon = True
+    thread.start()
+
     return "SimDash UDP"
 
 def acUpdate(deltaT):
     # Send at UPDATE_RATE_HZ by elapsed time, whatever the frame rate is
     global send_timer
+    try:
+        update_cones(deltaT)
+    except Exception as e:
+        ac.log("SimDash UDP Error in update_cones: {}".format(str(e)))
+
     interval = 1.0 / UPDATE_RATE_HZ
     send_timer += deltaT
     if send_timer >= interval:
@@ -300,7 +500,7 @@ def send_telemetry():
             peak_rpm = float(rpm)
 
         packet = struct.pack(
-            '<B i 3f B 3f 4i 5f i f 28f 2f 3f 2i i 2f',
+            '<B i 3f B 3f 4i 5f i f 28f 2f 3f 2i i 2f i',
             97, 0,
             float(speed_kmh), float(speed_mph), float(speed_ms),
             is_in_pit,
@@ -320,7 +520,8 @@ def send_telemetry():
             float(pos[0]), float(pos[1]), float(pos[2]),
             car_id, track_id,
             1,  # IsRaceOn: always 1 while plugin is sending
-            yaw_rate, body_slip
+            yaw_rate, body_slip,
+            counter.count
         )
 
         # Fix size field

@@ -56,3 +56,4 @@ s32 TrackId; Hash of track name
 s32 IsRaceOn; 1 when simulation is active, 0 when paused or frozen
 f32 YawRate; Yaw rate in degrees per second (from local angular velocity)
 f32 BodySlipAngle; Angle between car heading and direction of travel, in degrees
+s32 Cones; Cones hit in the current run (from the plugin cone counter)

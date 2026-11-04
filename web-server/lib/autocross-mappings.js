@@ -5,6 +5,7 @@ const path = require('path');
 const MAPPINGS_DIR = path.join(__dirname, '../../telemetry/data/autocross');
 const CAR_MAPPINGS_FILE = path.join(MAPPINGS_DIR, 'car-names.json');
 const TRACK_MAPPINGS_FILE = path.join(MAPPINGS_DIR, 'track-names.json');
+const DRIVERS_FILE = path.join(MAPPINGS_DIR, 'drivers.json');
 
 // Ensure mappings directory exists
 if (!fs.existsSync(MAPPINGS_DIR)) {
@@ -117,7 +118,38 @@ function getAllTrackMappings() {
     return loadTrackMappings();
 }
 
+/**
+ * Load the driver list. Returns null when the list was never saved.
+ */
+function loadDrivers() {
+    try {
+        if (!fs.existsSync(DRIVERS_FILE)) return null;
+        const drivers = JSON.parse(fs.readFileSync(DRIVERS_FILE, 'utf8'));
+        return Array.isArray(drivers) ? drivers : [];
+    } catch (err) {
+        console.error('Error loading drivers:', err);
+        return [];
+    }
+}
+
+/**
+ * Save the driver list, sorted and without duplicates
+ */
+function saveDrivers(drivers) {
+    try {
+        const list = [...new Set(drivers.filter(Boolean).map(d => String(d).trim()).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b));
+        fs.writeFileSync(DRIVERS_FILE, JSON.stringify(list, null, 2));
+        return list;
+    } catch (err) {
+        console.error('Error saving drivers:', err);
+        return null;
+    }
+}
+
 module.exports = {
+    loadDrivers,
+    saveDrivers,
     getCarName,
     getTrackName,
     setCarName,

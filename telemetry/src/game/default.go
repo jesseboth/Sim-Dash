@@ -4,6 +4,7 @@ import (
     "encoding/binary"
     "encoding/json"
     "log"
+    "math"
     "net"
 
     "jesseboth/fdt/src/util"
@@ -11,8 +12,9 @@ import (
 
 func DefaultLoop(game string, conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
     log.Println("Starting Telemetry:", DefaultGame(game))
+    recorder := NewRecorder(game, debug)
     for {
-        default_readData(conn, telemArray, totalLength, debug)
+        default_readData(conn, telemArray, totalLength, recorder, debug)
     }
 }
 
@@ -31,7 +33,7 @@ func DefaultGame(game string) string {
     }
 }
 
-func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, debug bool) {
+func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength int, recorder *Recorder, debug bool) {
     buffer := make([]byte, 1500)
 
     n, addr, err := conn.ReadFromUDP(buffer)
@@ -130,6 +132,25 @@ func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLengt
     // Add the IsRaceOn field
     combinedMap["IsRaceOn"] = true
 
+    // Games without a run timer cannot record runs
+    if timer, ok := f32map["CurrentLap"]; ok {
+        progress := float32(-1)
+        var trackID int32
+        if length, ok := f64map["StageLength"]; ok {
+            if length > 0 {
+                progress = float32(f64map["Odometer"] / length)
+            }
+            trackID = stageID(length)
+            combinedMap["TrackId"] = trackID
+        }
+        recorder.Update(Frame{
+            Timer:    timer,
+            Progress: progress,
+            TrackID:  trackID,
+            Sample:   defaultSample(f32map, u8map),
+        })
+    }
+
     finalJSON, err := json.Marshal(combinedMap)
     if err != nil {
         log.Printf("Error marshalling combined JSON: %v", err)
@@ -143,3 +164,37 @@ func default_readData(conn *net.UDPConn, telemArray []util.Telemetry, totalLengt
 }
 
 
+
+// defaultSample makes a run sample from a generic packet, such as EA WRC.
+// EA WRC gives the acceleration in world axes; the car direction vectors turn it into G forces.
+func defaultSample(f32map map[string]float32, u8map map[string]uint8) util.TelemetrySample {
+    ax, ay, az := f32map["AccelerationX"], f32map["AccelerationY"], f32map["AccelerationZ"]
+    left := ax*f32map["LeftDirectionX"] + ay*f32map["LeftDirectionY"] + az*f32map["LeftDirectionZ"]
+    forward := ax*f32map["ForwardDirectionX"] + ay*f32map["ForwardDirectionY"] + az*f32map["ForwardDirectionZ"]
+
+    gear := int32(u8map["Gear"])
+    if gear == int32(u8map["GearReverse"]) {
+        gear = -1
+    } else if gear == int32(u8map["GearNeutral"]) {
+        gear = 0
+    }
+
+    sample := util.TelemetrySample{
+        Brake:  roundTo(f32map["Brake"], 3),
+        Accel:  roundTo(f32map["Accel"], 3),
+        AccelX: roundTo(-left/gravity, 2),
+        AccelY: roundTo(forward/gravity, 2),
+        Speed:  roundTo(mph(f32map["Speed"]), 2),
+        PosX:   f32map["PositionX"],
+        PosY:   f32map["PositionZ"],
+        PosZ:   f32map["PositionY"],
+        Steer:  roundTo(f32map["Steer"], 2),
+        Clutch: roundTo(f32map["Clutch"], 3),
+        Rpm:    float32(math.Round(float64(f32map["CurrentEngineRpm"]))),
+        Gear:   gear,
+    }
+    for i, wheel := range [4]string{"FL", "FR", "BL", "BR"} {
+        sample.WheelSpeed[i] = roundTo(absFloat32(mph(f32map["CPForwardSpeed"+wheel])), 1)
+    }
+    return sample
+}

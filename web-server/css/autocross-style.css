@@ -880,6 +880,7 @@ body.runs-collapsed {
 }
 
 .form-group input,
+.form-group select,
 .form-group textarea {
     width: 100%;
     padding: 0.5rem;
@@ -896,6 +897,7 @@ body.runs-collapsed {
 }
 
 .form-group input:focus,
+.form-group select:focus,
 .form-group textarea:focus {
     outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
@@ -925,6 +927,77 @@ body.runs-collapsed {
 
 .modal-note {
     margin: -0.75rem 0 1.25rem;
+}
+
+/* Driver, Class & Car dialog */
+.select-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.select-row select,
+.select-row input {
+    flex: 1;
+    min-width: 0;
+}
+
+#classOtherInput,
+#runClassOtherInput {
+    margin-top: 0.5rem;
+}
+
+.menu-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.menu-btn {
+    font-size: 1.2rem;
+    line-height: 1;
+    padding: 0.45rem 0.8rem;
+}
+
+.popup-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    min-width: 11rem;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+}
+
+.popup-menu.hidden {
+    display: none;
+}
+
+.popup-menu button {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    text-align: left;
+    padding: 0.7rem 1rem;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.popup-menu button:hover:not(:disabled) {
+    background-color: var(--bg-secondary);
+}
+
+.popup-menu button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.popup-menu button.danger {
+    color: var(--accent-secondary);
 }
 
 .driver-btn {
