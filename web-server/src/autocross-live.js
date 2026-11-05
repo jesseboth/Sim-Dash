@@ -322,6 +322,12 @@ const AutocrossLive = (function () {
             lines.push('NEW BEST');
         }
 
+        // The last sector ends at the finish, which has no sector line: its split comes from the final times
+        if (delta !== null && gateProgress.length > 0 && sectorSplits.length === gateProgress.length) {
+            sectorSplits.push(delta - deltaAtLastGate);
+        }
+        renderSectorPills();
+
         overlay?.classList.add('live-result');
         setText('liveResult', lines.join('\n'));
         setDelta(delta);
