@@ -40,6 +40,7 @@ const (
 	minRunTime       = 5.0                    // s; a shorter run is a restart, not a run
 	lastLapWait      = time.Second            // time for LastLap to change after a timer reset
 	armedTimeout     = time.Hour              // armed with no game data for this time: disarm
+	stagedHold       = time.Second            // staged stays on for this time after the last frame at the start
 	maxTimer         = 6 * 60 * 60            // s; a larger timer is not a run time (a game sends junk at pause or restart)
 )
 
@@ -69,6 +70,9 @@ type Recorder struct {
 
 	launchBuffer []util.TelemetrySample // samples from the launch, before the timer starts
 	launchTimes  []time.Time
+
+	stagedUntil time.Time // the car stood at the start with the timer at 0 until this time
+	staged      bool
 
 	pending *endedRun // run after a timer reset, until LastLap shows a finish or lastLapWait ends
 }
@@ -146,6 +150,10 @@ func (r *Recorder) Update(f Frame) {
 	}
 
 	if !r.runActive {
+		if timer == 0 && f.Sample.Speed < launchSpeed {
+			r.stagedUntil = now.Add(stagedHold)
+		}
+		r.syncStaged(now)
 		r.bufferLaunch(f.Sample, now)
 		return
 	}
@@ -212,6 +220,7 @@ func (r *Recorder) syncArmed() bool {
 
 func (r *Recorder) startRun(timer float32, now time.Time) {
 	r.runActive = true
+	r.syncStaged(now)
 	r.runStarted = now.Add(-time.Duration(float64(timer) * float64(time.Second)))
 	r.buffer = r.buffer[:0]
 	for i, sample := range r.launchBuffer {
@@ -354,6 +363,7 @@ func (r *Recorder) watch() {
 	for range time.Tick(500 * time.Millisecond) {
 		r.mu.Lock()
 		r.checkArmedTimeout()
+		r.syncStaged(time.Now())
 		if r.enabled {
 			r.checkPending(0, time.Now())
 		}
@@ -366,6 +376,15 @@ func (r *Recorder) watch() {
 			r.endRun(0, timer, "packets stopped")
 		}
 		r.mu.Unlock()
+	}
+}
+
+// syncStaged tells the page when the car stands at the start, so the live screen opens before the timer starts
+func (r *Recorder) syncStaged(now time.Time) {
+	staged := r.enabled && !r.runActive && now.Before(r.stagedUntil)
+	if staged != r.staged {
+		r.staged = staged
+		util.SetStaged(staged)
 	}
 }
 

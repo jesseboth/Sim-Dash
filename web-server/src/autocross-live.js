@@ -3,7 +3,8 @@
 
 const AutocrossLive = (function () {
     const POLL_MS = 50;
-    const RESULT_SHOW_MS = 6000;
+    const RESULT_SHOW_MS = 30000;
+    const STAGED_HOLD_MS = 5000;    // the ready screen stays this long after the car leaves the start
     const SAVE_WAIT_MS = 4000;      // how long to wait for the saved run after the run ends
     const PILL_RANGE = 2.0;         // seconds at the end of the main pill
     const SECTOR_PILL_RANGE = 1.0;  // seconds at the end of a sector pill
@@ -19,6 +20,8 @@ const AutocrossLive = (function () {
     let pollPending = false;
     let endTimer = null;
     let resultTimer = null;
+    let staged = false;             // the ready screen shows: the car stands at the start
+    let stagedTimer = null;
 
     // Reference state
     let reference = null;           // full run object
@@ -26,12 +29,16 @@ const AutocrossLive = (function () {
     let gateProgress = [];          // reference progress at each sector line
     let tracker = null;
     let preparedFor = '';           // signature of the inputs the reference was chosen from
+    let refSectors = [];            // reference run time of each sector
+    let bestSectors = [];           // best time of each sector, from all runs the reference is chosen from
+    let startProgress = 0;          // reference progress at time 0
 
     // Sector splits during the run
     let nextGate = 0;
     let deltaAtLastGate = 0;
     let sectorSplits = [];          // split of each finished sector
     let livePath = [];              // [x, y, elapsed] driven so far this run
+    let lastProgress = 0;
 
     function init() {
         overlay = document.getElementById('liveOverlay');
@@ -40,7 +47,7 @@ const AutocrossLive = (function () {
 
         document.getElementById('liveToggleBtn')?.addEventListener('click', () => {
             // During a run, a closed or switched-off live screen opens again
-            if (runActive && overlay?.classList.contains('hidden')) {
+            if ((runActive || staged) && overlay?.classList.contains('hidden')) {
                 enabled = true;
                 localStorage.setItem('liveOverlayEnabled', 'true');
                 hiddenForThisRun = false;
@@ -58,7 +65,7 @@ const AutocrossLive = (function () {
                 : 'Live split screen on. It opens when a run starts. Press Start to record.', 'info');
         });
         document.getElementById('liveCloseBtn')?.addEventListener('click', () => {
-            hiddenForThisRun = true;
+            hiddenForThisRun = runActive || staged;
             hide();
         });
 
@@ -90,7 +97,47 @@ const AutocrossLive = (function () {
             startRun();
         } else if (!status.runActive && runActive) {
             endRun();
+        } else if (!runActive) {
+            setStaged(!!status.isRecording && !!status.staged);
         }
+    }
+
+    // Ready screen while the car stands at the start, before the timer starts (for example in the countdown)
+    function setStaged(on) {
+        if (on) {
+            clearTimeout(stagedTimer);
+            stagedTimer = null;
+            if (staged || endTimer || overlay?.classList.contains('live-result')) return;
+            staged = true;
+            hiddenForThisRun = false;
+            clearTimeout(resultTimer);
+            resetDisplay();
+            setText('liveSector', 'Ready');
+            show();
+        } else if (staged && !stagedTimer) {
+            stagedTimer = setTimeout(() => {
+                stagedTimer = null;
+                staged = false;
+                hiddenForThisRun = false;
+                hide();
+            }, STAGED_HOLD_MS);
+        }
+    }
+
+    function clearStaged() {
+        clearTimeout(stagedTimer);
+        stagedTimer = null;
+        staged = false;
+    }
+
+    function resetDisplay() {
+        overlay?.classList.remove('live-result');
+        setText('liveResult', '');
+        setText('liveSector', '');
+        setText('liveElapsed', formatLapTime(0));
+        sectorSplits = [];
+        setDelta(null);
+        renderSectorPills();
     }
 
     // Called after the app has loaded a newly saved run
@@ -112,7 +159,15 @@ const AutocrossLive = (function () {
         }
     }
 
-    // The reference is the best run of the class of new runs (all runs when no class is set).
+    // Runs the reference is chosen from: the class of new runs (all runs when no class is set)
+    function referencePool() {
+        const runs = AutocrossApp.getAllRuns().filter(r => r.isValid !== false);
+        const sessionClass = AutocrossApp.getSessionClass();
+        const inClass = sessionClass ? runs.filter(r => r.carClass === sessionClass) : [];
+        return inClass.length ? inClass : runs;
+    }
+
+    // The reference is the best run of the reference pool.
     // With "Live vs selected", it is the best of the selected runs.
     function chooseReference() {
         const runs = AutocrossApp.getAllRuns().filter(r => r.isValid !== false);
@@ -134,6 +189,7 @@ const AutocrossLive = (function () {
         if (!courseId) return;
 
         const run = chooseReference();
+        bestSectors = computeBestSectorTimes(referencePool());
         const sectors = window.AutocrossSectors ? AutocrossSectors.getSectors() : [];
         const signature = `${courseId}|${run ? run.runId + ':' + (run.cones || 0) : ''}|${sectors.map(x => x.sectorId).join(',')}`;
         if (signature === preparedFor) return;
@@ -144,13 +200,17 @@ const AutocrossLive = (function () {
     async function setReference(run) {
         reference = null;
         gateProgress = [];
+        refSectors = [];
         if (run) {
             try {
                 const data = await AutocrossApp.getRunData(run.runId);
+                const ts = data.telemetry.timestamps;
                 referenceDist = AutocrossTrack.cumulativeDistance(data.telemetry.posX, data.telemetry.posY);
+                startProgress = AutocrossTrack.interpolate(ts, referenceDist, 0);
                 const sectors = window.AutocrossSectors ? AutocrossSectors.getSectors() : [];
-                gateProgress = AutocrossTrack.gateTimes(data.telemetry, sectors)
-                    .map(t => t === null ? null : AutocrossTrack.interpolate(data.telemetry.timestamps, referenceDist, t));
+                const gates = AutocrossTrack.gateTimes(data.telemetry, sectors);
+                gateProgress = gates.map(t => t === null ? null : AutocrossTrack.interpolate(ts, referenceDist, t));
+                refSectors = AutocrossTrack.sectorTimes(data.telemetry, sectors);
                 reference = data;
             } catch (e) {
                 console.error('Live: failed to load reference run', e);
@@ -163,17 +223,16 @@ const AutocrossLive = (function () {
 
     // --- Run lifecycle ---
     function startRun() {
+        // A screen closed while staged stays closed for the run
+        if (!staged) hiddenForThisRun = false;
+        clearStaged();
         runActive = true;
-        hiddenForThisRun = false;
         clearTimeout(endTimer);
         clearTimeout(resultTimer);
         endTimer = null;
         livePath = [];
+        resetDisplay();
         resetTracking();
-
-        overlay?.classList.remove('live-result');
-        setText('liveResult', '');
-        setText('liveSector', '');
         show();
 
         clearInterval(pollTimer);
@@ -188,6 +247,7 @@ const AutocrossLive = (function () {
             : null;
         nextGate = 0;
         deltaAtLastGate = 0;
+        lastProgress = startProgress;
         sectorSplits = [];
         setDelta(null);
         if (!tracker) return;
@@ -201,6 +261,7 @@ const AutocrossLive = (function () {
 
     // Time difference at a point on the track; records the split of each sector line passed
     function advance(elapsed, progress) {
+        lastProgress = progress;
         const delta = elapsed - AutocrossTrack.interpolate(referenceDist, reference.telemetry.timestamps, progress);
         while (nextGate < gateProgress.length && gateProgress[nextGate] !== null && progress >= gateProgress[nextGate]) {
             sectorSplits.push(delta - deltaAtLastGate);
@@ -220,6 +281,7 @@ const AutocrossLive = (function () {
         clearTimeout(endTimer);
         endTimer = setTimeout(() => {
             endTimer = null;
+            hiddenForThisRun = false;
             hide();
         }, SAVE_WAIT_MS);
     }
@@ -264,22 +326,56 @@ const AutocrossLive = (function () {
         setPillFill(pill, delta, PILL_RANGE);
     }
 
-    // A pill fills from the centre line: left and green when ahead, right and red when behind
-    function setPillFill(pill, delta, range) {
-        const fill = pill.querySelector('.live-pill-fill');
-        if (!fill) return;
-        const half = delta === null ? 0 : Math.min(1, Math.abs(delta) / range) * 50;
-        fill.style.width = `${half}%`;
-        fill.style.left = delta !== null && delta <= 0 ? `${50 - half}%` : '50%';
-        fill.className = `live-pill-fill ${delta !== null && delta <= 0 ? 'ahead' : 'behind'}`;
+    // Gap of the reference to the best time of each sector (null when a time is unknown)
+    function sectorGaps() {
+        const count = gateProgress.length + 1;
+        if (count < 2 || refSectors.length !== count || bestSectors.length !== count) return null;
+        const gaps = refSectors.map((t, i) => t === null || bestSectors[i] == null ? null : t - bestSectors[i]);
+        return gaps.includes(null) ? null : gaps;
     }
 
-    // One small pill for each sector: finished sectors keep their split, the current sector
-    // shows its split so far. Shown only when the course has sector lines.
+    // Part of the current sector that is driven (0..1), from the reference distance
+    function currentSectorPart() {
+        const done = sectorSplits.length;
+        const from = done === 0 ? startProgress : gateProgress[done - 1];
+        const to = done < gateProgress.length ? gateProgress[done] : referenceDist[referenceDist.length - 1];
+        return to > from ? Math.min(1, Math.max(0, (lastProgress - from) / (to - from))) : 0;
+    }
+
+    // A pill fills from the centre line: left and green when ahead, right and red when behind
+    // Against the best sectors the colours are purple when ahead and yellow when behind
+    function setPillFill(pill, delta, range, bestColours = false) {
+        const fill = pill.querySelector('.live-pill-fill');
+        if (!fill) return;
+        const ahead = delta !== null && delta <= 0;
+        const half = delta === null ? 0 : Math.min(1, Math.abs(delta) / range) * 50;
+        fill.style.width = `${half}%`;
+        fill.style.left = ahead ? `${50 - half}%` : '50%';
+        fill.className = `live-pill-fill ${bestColours ? (ahead ? 'purple' : 'slower') : (ahead ? 'ahead' : 'behind')}`;
+    }
+
+    // Two rows of small pills, one pill for each sector. The first row is the split against the
+    // reference run, the second row is the sector time against the best time of that sector
+    // (purple when faster, yellow when slower). Finished sectors keep their value; the current
+    // sector shows its value so far. Shown only when the course has sector lines.
     function renderSectorPills(currentSplit = null) {
-        const row = document.getElementById('liveSectorPills');
-        if (!row) return;
         const count = reference ? gateProgress.length + 1 : 0;
+        const done = sectorSplits.length;
+        const current = runActive && done < count ? done : -1;
+        const valueAt = (i, finished, now) => i < done ? finished(i) : (i === current && currentSplit !== null ? now(i) : null);
+
+        fillSectorRow('liveSectorPills', count, current,
+            i => valueAt(i, j => sectorSplits[j], () => currentSplit), false);
+
+        // The reference gap to the best sector is added by the part of the sector driven
+        const gaps = sectorGaps();
+        fillSectorRow('liveBestPills', gaps ? count : 0, current,
+            i => valueAt(i, j => sectorSplits[j] + gaps[j], j => currentSplit + gaps[j] * currentSectorPart()), true);
+    }
+
+    function fillSectorRow(id, count, current, valueOf, bestColours) {
+        const row = document.getElementById(id);
+        if (!row) return;
         row.classList.toggle('hidden', count < 2);
         if (count < 2) return;
 
@@ -288,15 +384,16 @@ const AutocrossLive = (function () {
                 `<div class="live-sector-item"><div class="live-sector-pill"><div class="live-pill-fill"></div><div class="live-pill-center"></div></div><span class="live-sector-label">S${i + 1}</span></div>`
             ).join('');
         }
+        const [ahead, behind] = bestColours ? ['purple', 'slower'] : ['ahead', 'behind'];
         [...row.children].forEach((item, i) => {
-            const split = i < sectorSplits.length ? sectorSplits[i]
-                : (i === sectorSplits.length && runActive ? currentSplit : null);
-            item.classList.toggle('current', i === sectorSplits.length && runActive);
-            item.classList.toggle('pending', split === null);
-            setPillFill(item.querySelector('.live-sector-pill'), split, SECTOR_PILL_RANGE);
+            const value = valueOf(i);
+            item.classList.toggle('current', i === current);
+            item.classList.toggle('pending', value === null);
+            setPillFill(item.querySelector('.live-sector-pill'), value, SECTOR_PILL_RANGE, bestColours);
             const label = item.querySelector('.live-sector-label');
-            label.textContent = split === null ? `S${i + 1}` : `S${i + 1} ${formatDelta(split)}`;
-            label.className = `live-sector-label ${split === null ? '' : split <= 0 ? 'ahead' : 'behind'}`;
+            const name = bestColours ? `Best S${i + 1}` : `S${i + 1}`;
+            label.textContent = value === null ? name : `${name} ${formatDelta(value)}`;
+            label.className = `live-sector-label ${value === null ? '' : value <= 0 ? ahead : behind}`;
         });
     }
 
@@ -334,7 +431,10 @@ const AutocrossLive = (function () {
         setText('liveSector', '');
 
         clearTimeout(resultTimer);
-        resultTimer = setTimeout(hide, RESULT_SHOW_MS);
+        resultTimer = setTimeout(() => {
+            hiddenForThisRun = false;
+            hide();
+        }, RESULT_SHOW_MS);
     }
 
     function show() {
@@ -345,6 +445,8 @@ const AutocrossLive = (function () {
     function hide() {
         overlay?.classList.add('hidden');
         overlay?.classList.remove('live-result');
+        clearTimeout(resultTimer);
+        resultTimer = null;
     }
 
     function setText(id, text) {

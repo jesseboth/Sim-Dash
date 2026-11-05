@@ -176,6 +176,7 @@ func handleStopRecording(w http.ResponseWriter, r *http.Request) {
 	// Always disarm, even if already stopped (handles out-of-sync state)
 	recordingState.IsRecording = false
 	recordingState.RunActive = false
+	recordingState.Staged = false
 	recordingState.Elapsed = 0
 	saveArmedState()
 
@@ -273,6 +274,13 @@ func UpdateTrackID(id int32) {
 	recordingMutex.Lock()
 	defer recordingMutex.Unlock()
 	recordingState.TrackID = id
+}
+
+// SetStaged sets whether the car stands at the start, ready for a run
+func SetStaged(staged bool) {
+	recordingMutex.Lock()
+	defer recordingMutex.Unlock()
+	recordingState.Staged = staged
 }
 
 // NotifyRunDiscarded signals that the run in progress was not saved

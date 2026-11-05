@@ -114,6 +114,7 @@ type AutocrossStatistics struct {
 type RecordingState struct {
     IsRecording bool    `json:"isRecording"`
     RunActive   bool    `json:"runActive"`
+    Staged      bool    `json:"staged"`     // the car stands at the start with the timer at 0
     CourseID    string  `json:"courseId"`
     Elapsed     float64 `json:"elapsed"`
     RunSavedAt  int64   `json:"runSavedAt"` // unix ms, increments each time a run is auto-saved
