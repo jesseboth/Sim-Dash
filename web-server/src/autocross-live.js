@@ -3,9 +3,11 @@
 
 const AutocrossLive = (function () {
     const POLL_MS = 50;
-    const SECTOR_FLASH_MS = 3000;
     const RESULT_SHOW_MS = 6000;
     const SAVE_WAIT_MS = 4000;      // how long to wait for the saved run after the run ends
+    const PILL_RANGE = 2.0;         // seconds at the end of the main pill
+    const SECTOR_PILL_RANGE = 1.0;  // seconds at the end of a sector pill
+    const SELECTED_KEY = 'liveRefSelected';
 
     let enabled = true;
     let overlay = null;
@@ -15,22 +17,20 @@ const AutocrossLive = (function () {
     let hiddenForThisRun = false;
     let pollTimer = null;
     let pollPending = false;
-    let liveCarId = null;
     let endTimer = null;
     let resultTimer = null;
 
     // Reference state
     let reference = null;           // full run object
     let referenceDist = null;
-    let gateProgress = [];          // reference progress at each sector gate
+    let gateProgress = [];          // reference progress at each sector line
     let tracker = null;
-    let refOptions = [];            // [{key, label, run}]
-    let refKey = null;
-    let preparedFor = '';           // course|car|runs signature the reference was chosen for
+    let preparedFor = '';           // signature of the inputs the reference was chosen from
 
     // Sector splits during the run
     let nextGate = 0;
     let deltaAtLastGate = 0;
+    let sectorSplits = [];          // split of each finished sector
     let livePath = [];              // [x, y, elapsed] driven so far this run
 
     function init() {
@@ -61,7 +61,16 @@ const AutocrossLive = (function () {
             hiddenForThisRun = true;
             hide();
         });
-        document.getElementById('liveRefBtn')?.addEventListener('click', cycleReference);
+
+        const selectedToggle = document.getElementById('liveRefSelectedToggle');
+        if (selectedToggle) {
+            selectedToggle.checked = localStorage.getItem(SELECTED_KEY) === 'true';
+            selectedToggle.addEventListener('change', () => {
+                localStorage.setItem(SELECTED_KEY, String(selectedToggle.checked));
+                preparedFor = '';
+                prepareReference();
+            });
+        }
     }
 
     function updateToggleButton() {
@@ -103,96 +112,53 @@ const AutocrossLive = (function () {
         }
     }
 
-    // Choose the reference: best run with the same car by default
+    // The reference is the best run of the class of new runs (all runs when no class is set).
+    // With "Live vs selected", it is the best of the selected runs.
+    function chooseReference() {
+        const runs = AutocrossApp.getAllRuns().filter(r => r.isValid !== false);
+        const best = list => sortByAdjustedTime(list)[0] || null;
+
+        if (localStorage.getItem(SELECTED_KEY) === 'true') {
+            const selected = new Set(AutocrossApp.getSelectedRunIds());
+            const fromSelected = best(runs.filter(r => selected.has(r.runId)));
+            if (fromSelected) return fromSelected;
+        }
+        const sessionClass = AutocrossApp.getSessionClass();
+        const inClass = sessionClass ? runs.filter(r => r.carClass === sessionClass) : [];
+        return best(inClass.length ? inClass : runs);
+    }
+
     async function prepareReference() {
         if (!window.AutocrossApp) return;
         const courseId = AutocrossApp.getCurrentCourse();
         if (!courseId) return;
 
-        if (!liveCarId) {
-            const telem = await getLiveTelemetry();
-            if (telem && telem.CarId) liveCarId = String(telem.CarId);
-        }
-
-        const runs = AutocrossApp.getAllRuns().filter(r => r.isValid);
+        const run = chooseReference();
         const sectors = window.AutocrossSectors ? AutocrossSectors.getSectors() : [];
-        const signature = `${courseId}|${liveCarId}|${runs.map(r => r.runId + ':' + (r.cones || 0)).join(',')}|${sectors.map(x => x.sectorId).join(',')}`;
+        const signature = `${courseId}|${run ? run.runId + ':' + (run.cones || 0) : ''}|${sectors.map(x => x.sectorId).join(',')}`;
         if (signature === preparedFor) return;
         preparedFor = signature;
-
-        refOptions = buildReferenceOptions(runs);
-        const savedKey = localStorage.getItem('liveRefMode') || 'class';
-        const option = refOptions.find(o => o.key === savedKey) || refOptions[0] || null;
-        await setReference(option);
+        await setReference(run);
     }
 
-    function buildReferenceOptions(runs) {
-        const options = [];
-        const seen = new Set();
-        const add = (key, label, run) => {
-            if (!run || seen.has(run.runId)) return;
-            seen.add(run.runId);
-            options.push({ key, label, run });
-        };
-        const best = list => sortByAdjustedTime(list.filter(r => r.isValid !== false))[0];
-
-        const sessionClass = AutocrossApp.getSessionClass();
-        if (sessionClass) add('class', `Best · ${sessionClass}`, best(runs.filter(r => r.carClass === sessionClass)));
-        add('car', 'Best · this car', best(runs.filter(r => r.carId === liveCarId)));
-        add('overall', 'Best · overall', best(runs));
-        [...new Set(runs.map(r => r.carId))]
-            .filter(id => id && id !== liveCarId)
-            .forEach(id => add(`car:${id}`, `Best · ${AutocrossApp.getCarName(id)}`, best(runs.filter(r => r.carId === id))));
-        return options;
-    }
-
-    async function setReference(option) {
-        refKey = option ? option.key : null;
+    async function setReference(run) {
         reference = null;
-        if (!option) {
-            renderReferenceLabel();
-            return;
-        }
-
-        try {
-            const run = await AutocrossApp.getRunData(option.run.runId);
-            reference = run;
-            referenceDist = AutocrossTrack.cumulativeDistance(run.telemetry.posX, run.telemetry.posY);
-
-            const sectors = window.AutocrossSectors ? AutocrossSectors.getSectors() : [];
-            gateProgress = AutocrossTrack.gateTimes(run.telemetry, sectors)
-                .map(t => t === null ? null : AutocrossTrack.interpolate(run.telemetry.timestamps, referenceDist, t));
-        } catch (e) {
-            console.error('Live: failed to load reference run', e);
+        gateProgress = [];
+        if (run) {
+            try {
+                const data = await AutocrossApp.getRunData(run.runId);
+                referenceDist = AutocrossTrack.cumulativeDistance(data.telemetry.posX, data.telemetry.posY);
+                const sectors = window.AutocrossSectors ? AutocrossSectors.getSectors() : [];
+                gateProgress = AutocrossTrack.gateTimes(data.telemetry, sectors)
+                    .map(t => t === null ? null : AutocrossTrack.interpolate(data.telemetry.timestamps, referenceDist, t));
+                reference = data;
+            } catch (e) {
+                console.error('Live: failed to load reference run', e);
+            }
         }
         // A run in progress is measured against the new reference from here on
         if (runActive) resetTracking();
-        renderReferenceLabel();
-    }
-
-    // Tap the reference label to compare against the next option
-    async function cycleReference() {
-        if (refOptions.length < 2) return;
-        const index = refOptions.findIndex(o => o.key === refKey);
-        const next = refOptions[(index + 1) % refOptions.length];
-        localStorage.setItem('liveRefMode', next.key);
-        await setReference(next);
-        resetTracking();
-    }
-
-    function renderReferenceLabel() {
-        const btn = document.getElementById('liveRefBtn');
-        if (!btn) return;
-        const option = refOptions.find(o => o.key === refKey);
-        if (!reference || !option) {
-            btn.textContent = 'No reference yet. This run will be the first.';
-            btn.disabled = true;
-            return;
-        }
-        const runNumber = AutocrossApp.getRunNumber(reference.runId);
-        btn.textContent = `vs Run ${runNumber} · ${formatLapTime(reference.lapTime)} · ${option.label}` +
-            (refOptions.length > 1 ? '  ▸' : '');
-        btn.disabled = refOptions.length < 2;
+        renderSectorPills();
     }
 
     // --- Run lifecycle ---
@@ -207,6 +173,7 @@ const AutocrossLive = (function () {
 
         overlay?.classList.remove('live-result');
         setText('liveResult', '');
+        setText('liveSector', '');
         show();
 
         clearInterval(pollTimer);
@@ -214,27 +181,33 @@ const AutocrossLive = (function () {
     }
 
     // Start tracking against the current reference. The path driven so far is replayed,
-    // so changing the reference during a run keeps the correct position.
+    // so changing the reference during a run keeps the correct position and sector splits.
     function resetTracking() {
         tracker = reference
             ? AutocrossTrack.createProgressTracker(reference.telemetry.posX, reference.telemetry.posY, referenceDist)
             : null;
         nextGate = 0;
         deltaAtLastGate = 0;
-        setText('liveSector', '');
+        sectorSplits = [];
+        setDelta(null);
         if (!tracker) return;
 
         // The live run starts at the S1 line, after the reference run's launch
         const { timestamps, posX, posY } = reference.telemetry;
-        let progress = tracker(AutocrossTrack.interpolate(timestamps, posX, 0), AutocrossTrack.interpolate(timestamps, posY, 0));
-        livePath.forEach(([x, y]) => { progress = tracker(x, y); });
+        tracker(AutocrossTrack.interpolate(timestamps, posX, 0), AutocrossTrack.interpolate(timestamps, posY, 0));
+        livePath.forEach(([x, y, elapsed]) => advance(elapsed, tracker(x, y)));
+        renderSectorPills();
+    }
+
+    // Time difference at a point on the track; records the split of each sector line passed
+    function advance(elapsed, progress) {
+        const delta = elapsed - AutocrossTrack.interpolate(referenceDist, reference.telemetry.timestamps, progress);
         while (nextGate < gateProgress.length && gateProgress[nextGate] !== null && progress >= gateProgress[nextGate]) {
+            sectorSplits.push(delta - deltaAtLastGate);
+            deltaAtLastGate = delta;
             nextGate++;
         }
-        if (livePath.length > 0) {
-            const elapsed = livePath[livePath.length - 1][2];
-            deltaAtLastGate = elapsed - AutocrossTrack.interpolate(referenceDist, reference.telemetry.timestamps, progress);
-        }
+        return delta;
     }
 
     function endRun() {
@@ -256,15 +229,7 @@ const AutocrossLive = (function () {
         pollPending = true;
         try {
             const telem = await getLiveTelemetry();
-            if (telem && runActive) {
-                // A different car than expected: choose the reference again
-                if (telem.CarId && String(telem.CarId) !== liveCarId) {
-                    liveCarId = String(telem.CarId);
-                    await prepareReference();
-                    resetTracking();
-                }
-                update(telem);
-            }
+            if (telem && runActive) update(telem);
         } finally {
             pollPending = false;
         }
@@ -272,54 +237,67 @@ const AutocrossLive = (function () {
 
     function update(telem) {
         const elapsed = Number(telem.CurrentLap) || 0;
-
         setText('liveElapsed', formatLapTime(elapsed));
 
         const x = Number(telem.PositionX);
         const y = Number(telem.PositionZ);
         livePath.push([x, y, elapsed]);
+        if (!reference || !tracker) return;
 
-        if (!reference || !tracker) {
-            setDelta(null);
-            return;
-        }
-
-        const progress = tracker(x, y);
-        const refTime = AutocrossTrack.interpolate(referenceDist, reference.telemetry.timestamps, progress);
-        const delta = elapsed - refTime;
-
+        const delta = advance(elapsed, tracker(x, y));
         setDelta(delta);
-
-        // Sector split when passing a gate
-        while (nextGate < gateProgress.length && gateProgress[nextGate] !== null && progress >= gateProgress[nextGate]) {
-            const split = delta - deltaAtLastGate;
-            deltaAtLastGate = delta;
-            nextGate++;
-            flashSector(`S${nextGate}  ${formatDelta(split)}`, split);
-        }
+        renderSectorPills(delta - deltaAtLastGate);
     }
 
     // --- Display ---
-    // Time difference to the reference; hidden when there is no reference
+    // Time difference to the reference and the main pill; hidden when there is no reference
     function setDelta(delta) {
         const el = document.getElementById('liveDelta');
-        if (!el) return;
-        if (delta === null) {
-            el.textContent = '';
-            el.className = 'live-delta hidden';
-            return;
-        }
+        const pill = document.getElementById('livePill');
+        if (!el || !pill) return;
+        const none = delta === null;
+        el.classList.toggle('hidden', none);
+        pill.classList.toggle('hidden', none);
+        if (none) return;
         el.textContent = formatDelta(delta);
         el.className = `live-delta ${delta <= 0 ? 'ahead' : 'behind'}`;
+        setPillFill(pill, delta, PILL_RANGE);
     }
 
-    function flashSector(text, split) {
-        const el = document.getElementById('liveSector');
-        if (!el) return;
-        el.textContent = text;
-        el.className = `live-sector ${split <= 0 ? 'ahead' : 'behind'}`;
-        clearTimeout(el._timer);
-        el._timer = setTimeout(() => { el.textContent = ''; }, SECTOR_FLASH_MS);
+    // A pill fills from the centre line: left and green when ahead, right and red when behind
+    function setPillFill(pill, delta, range) {
+        const fill = pill.querySelector('.live-pill-fill');
+        if (!fill) return;
+        const half = delta === null ? 0 : Math.min(1, Math.abs(delta) / range) * 50;
+        fill.style.width = `${half}%`;
+        fill.style.left = delta !== null && delta <= 0 ? `${50 - half}%` : '50%';
+        fill.className = `live-pill-fill ${delta !== null && delta <= 0 ? 'ahead' : 'behind'}`;
+    }
+
+    // One small pill for each sector: finished sectors keep their split, the current sector
+    // shows its split so far. Shown only when the course has sector lines.
+    function renderSectorPills(currentSplit = null) {
+        const row = document.getElementById('liveSectorPills');
+        if (!row) return;
+        const count = reference ? gateProgress.length + 1 : 0;
+        row.classList.toggle('hidden', count < 2);
+        if (count < 2) return;
+
+        if (row.children.length !== count) {
+            row.innerHTML = Array.from({ length: count }, (_, i) =>
+                `<div class="live-sector-item"><div class="live-sector-pill"><div class="live-pill-fill"></div><div class="live-pill-center"></div></div><span class="live-sector-label">S${i + 1}</span></div>`
+            ).join('');
+        }
+        [...row.children].forEach((item, i) => {
+            const split = i < sectorSplits.length ? sectorSplits[i]
+                : (i === sectorSplits.length && runActive ? currentSplit : null);
+            item.classList.toggle('current', i === sectorSplits.length && runActive);
+            item.classList.toggle('pending', split === null);
+            setPillFill(item.querySelector('.live-sector-pill'), split, SECTOR_PILL_RANGE);
+            const label = item.querySelector('.live-sector-label');
+            label.textContent = split === null ? `S${i + 1}` : `S${i + 1} ${formatDelta(split)}`;
+            label.className = `live-sector-label ${split === null ? '' : split <= 0 ? 'ahead' : 'behind'}`;
+        });
     }
 
     // Final time of the saved run against the reference
@@ -333,7 +311,6 @@ const AutocrossLive = (function () {
         let delta = null;
         if (!dnf && reference && reference.runId !== newest.runId) {
             delta = newest.lapTime - reference.lapTime;
-            lines.push(`${formatDelta(delta)} vs Run ${AutocrossApp.getRunNumber(reference.runId)}`);
         }
 
         // Same class when the run has one, else same game car ID
@@ -347,7 +324,7 @@ const AutocrossLive = (function () {
 
         overlay?.classList.add('live-result');
         setText('liveResult', lines.join('\n'));
-        if (delta !== null) setDelta(delta);
+        setDelta(delta);
         setText('liveSector', '');
 
         clearTimeout(resultTimer);
@@ -356,7 +333,6 @@ const AutocrossLive = (function () {
 
     function show() {
         if (!enabled || hiddenForThisRun || !overlay) return;
-        renderReferenceLabel();
         overlay.classList.remove('hidden');
     }
 

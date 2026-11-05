@@ -1550,6 +1550,7 @@ window.AutocrossApp = {
     getCurrentCourse: () => currentCourse,
     getCurrentCourseData: () => currentCourseData,
     getAllRuns: () => allRuns,
+    getSelectedRunIds: () => [...selectedRuns],
     getCarName,
     getRunCarName,
     fillDetailOptions,

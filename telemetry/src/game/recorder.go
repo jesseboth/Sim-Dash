@@ -39,6 +39,7 @@ const (
 	lapTimeMatch     = 0.25                   // s; LastLap is the run time when it is this near the last timer
 	minRunTime       = 5.0                    // s; a shorter run is a restart, not a run
 	lastLapWait      = time.Second            // time for LastLap to change after a timer reset
+	armedTimeout     = time.Hour              // armed with no game data for this time: disarm
 )
 
 // Recorder finds runs in the frames of any game and saves them for the armed course
@@ -56,6 +57,7 @@ type Recorder struct {
 	progress   float32
 	cones      int
 	lastPacket time.Time
+	armedAt    time.Time // when the watch first saw the recorder armed; zero while disarmed
 
 	freezeValue float32
 	freezeTime  time.Time
@@ -308,6 +310,25 @@ func (r *Recorder) stageUnfinished() bool {
 	return r.progress >= 0 && r.progress < finishedProgress
 }
 
+func (r *Recorder) checkArmedTimeout() {
+	if !util.GetRecordingState().IsRecording {
+		r.armedAt = time.Time{}
+		return
+	}
+	if r.armedAt.IsZero() {
+		r.armedAt = time.Now()
+	}
+	last := r.lastPacket
+	if r.armedAt.After(last) {
+		last = r.armedAt
+	}
+	if !r.runActive && time.Since(last) > armedTimeout {
+		util.StopRecording()
+		r.armedAt = time.Time{}
+		log.Printf("Recorder disarmed: no game data for %v", armedTimeout)
+	}
+}
+
 func (r *Recorder) reset() {
 	r.runActive = false
 	r.buffer = r.buffer[:0]
@@ -315,10 +336,12 @@ func (r *Recorder) reset() {
 	r.clearLaunch()
 }
 
-// watch ends a finished stage when the game stops sending packets at the finish
+// watch ends a finished stage when the game stops sending packets at the finish, and
+// disarms a recorder that gets no game data for armedTimeout (a forgotten session)
 func (r *Recorder) watch() {
 	for range time.Tick(500 * time.Millisecond) {
 		r.mu.Lock()
+		r.checkArmedTimeout()
 		if r.enabled {
 			r.checkPending(0, time.Now())
 		}

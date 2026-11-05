@@ -111,6 +111,10 @@
                     <button class="sort-btn" data-sort="recent">Recent</button>
                 </div>
                 <select id="carFilter" class="car-filter hidden" title="Show runs of one class"></select>
+                <label class="toggle-label live-ref-toggle" title="On: the live screen compares with the best selected run. Off: with the best run of the class.">
+                    <input type="checkbox" id="liveRefSelectedToggle">
+                    <span>Live vs selected</span>
+                </label>
             </div>
             <div class="runs-header-right">
                 <button id="exportBtn" class="btn btn-secondary" disabled>Export</button>
@@ -380,9 +384,10 @@
         <button id="liveCloseBtn" class="live-close" title="Hide for this run">×</button>
         <div class="live-elapsed" id="liveElapsed">0:00.000</div>
         <div id="liveDelta" class="live-delta hidden"></div>
+        <div id="livePill" class="live-pill hidden"><div class="live-pill-fill"></div><div class="live-pill-center"></div></div>
+        <div id="liveSectorPills" class="live-sector-pills hidden"></div>
         <div id="liveSector" class="live-sector"></div>
         <div id="liveResult" class="live-result-text"></div>
-        <button id="liveRefBtn" class="live-ref"></button>
     </div>
 
     <!-- Hidden file input for import -->

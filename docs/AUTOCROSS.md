@@ -92,6 +92,7 @@ Optional channels can be missing in old runs. The analyzer must accept a run wit
    - At 98 % or more, if the game stops sending packets for 2 s, the recorder ends the run.
 9. The recorder discards a run of less than 5 s. A run that reaches the 30-minute limit is a DNF.
 10. If the user disarms the recorder during a run, the recorder discards the run.
+    - Armed timeout: when the recorder is armed and gets no game packet for 1 hour (`armedTimeout`), it disarms. The time starts when the recorder is armed, or when the process starts armed. A run in progress is not stopped.
 11. A game change disarms the recorder and clears the car and the class. Each game starts a new telemetry process. The process restores the armed state only when `armed.json` has the same game. The user must press Start again.
 12. Forza: the recorder ignores packets with `IsRaceOn` 0 (menus and pause).
 13. The recorder encodes the run before it opens the file. A failed encode does not leave an empty file.
@@ -120,9 +121,12 @@ If the page cannot get the recorder status 10 times (2 s), it shows "Recorder of
 - The user can select a maximum of 6 runs. Each selected run gets a color from the palette `#4a9eff #ff4a4a #4aff4a #ffaa4a #ff4aff #4affff`.
 - The most recent run can be purple (`#7d5aff`) ("Keep latest run").
 - Sort "Fastest" includes cone penalties. Sort "Scratch" uses `lapTime` only. Sort "Recent" uses the run date. DNF runs have no position and are last.
-- The live screen shows the run time in large text. When there is a reference run, it also shows the time difference to the reference and the sector splits.
+- The live screen shows the run time in large text. When there is a reference run, it also shows:
+  - The time difference to the reference, and a pill with a centre line. The pill fills to the left in green when the driver is ahead, and to the right in red when the driver is behind. The pill is full at 2 s.
+  - When the course has sector lines: one small pill for each sector, with its split under it. The pill of the current sector shows the split so far. A sector pill is full at 1 s.
 - × closes the live screen for the current run. During the run, the "Live" button opens it again. At other times, the "Live" button sets the live screen on or off.
-- Live reference: "Best · <class>" (the class of new runs) is the default. DNF runs are not references.
+- Live reference: the best run of the class of new runs. When no class is set, or the class has no runs, the best run of the course. DNF runs are not references.
+  - "Live vs selected" (check box in the runs header): the reference is the best of the selected runs. When no valid run is selected, the default reference applies.
 - A cone tap changes the count immediately. The page saves 500 ms after the last tap.
 - A run tap changes the check box immediately and starts the download of the run. The map and charts update 150 ms after the last tap (`SELECTION_SETTLE_MS`), one time for a series of quick taps. Until then, the card of the run pulses.
 - `cumulativeDistance` and `progressAlongPath` in `autocross-track.js` keep their results for each run. Thus a new selection calculates only the new runs. Do not change the arrays that they return.

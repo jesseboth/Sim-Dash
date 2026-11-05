@@ -1887,14 +1887,6 @@ body.runs-collapsed {
     font-size: clamp(1.5rem, 4vw, 2.5rem);
 }
 
-.live-sector.ahead {
-    color: #3dff6a;
-}
-
-.live-sector.behind {
-    color: #ff4a4a;
-}
-
 .live-result-text {
     display: none;
     white-space: pre-line;
@@ -1913,20 +1905,103 @@ body.runs-collapsed {
     display: none;
 }
 
-.live-ref {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    border-radius: 24px;
-    padding: 0.75rem 1.5rem;
-    font-size: 1rem;
-    min-height: 48px;
-    cursor: pointer;
+.live-pill,
+.live-sector-pill {
+    position: relative;
+    overflow: hidden;
+    background: #222;
 }
 
-.live-ref:disabled {
-    cursor: default;
-    opacity: 0.8;
+.live-pill {
+    width: min(90vw, 900px);
+    height: 36px;
+    border-radius: 18px;
+}
+
+.live-pill.hidden,
+.live-sector-pills.hidden {
+    display: none;
+}
+
+.live-pill-center {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    margin-left: -1px;
+    background: #aaa;
+}
+
+.live-pill-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    transition: width 0.1s linear, left 0.1s linear;
+}
+
+.live-pill-fill.ahead {
+    background: #3dff6a;
+}
+
+.live-pill-fill.behind {
+    background: #ff4a4a;
+}
+
+.live-sector-pills {
+    display: flex;
+    gap: 0.75rem;
+    width: min(90vw, 900px);
+}
+
+.live-sector-item {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.live-sector-pill {
+    width: 100%;
+    height: 22px;
+    border-radius: 11px;
+}
+
+.live-sector-item.pending .live-sector-pill {
+    opacity: 0.4;
+}
+
+.live-sector-item.current .live-sector-pill {
+    outline: 2px solid #888;
+}
+
+.live-sector-label {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    font-size: clamp(0.8rem, 2vw, 1.1rem);
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.live-sector-label.ahead {
+    color: #3dff6a;
+}
+
+.live-sector-label.behind {
+    color: #ff4a4a;
+}
+
+.live-ref-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
 }
 
 .runs-header-left {
