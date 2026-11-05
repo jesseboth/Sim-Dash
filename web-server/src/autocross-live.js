@@ -343,39 +343,24 @@ const AutocrossLive = (function () {
     }
 
     // A pill fills from the centre line: left and green when ahead, right and red when behind
-    // Against the best sectors the colours are purple when ahead and yellow when behind
-    function setPillFill(pill, delta, range, bestColours = false) {
+    function setPillFill(pill, delta, range) {
         const fill = pill.querySelector('.live-pill-fill');
         if (!fill) return;
         const ahead = delta !== null && delta <= 0;
         const half = delta === null ? 0 : Math.min(1, Math.abs(delta) / range) * 50;
         fill.style.width = `${half}%`;
         fill.style.left = ahead ? `${50 - half}%` : '50%';
-        fill.className = `live-pill-fill ${bestColours ? (ahead ? 'purple' : 'slower') : (ahead ? 'ahead' : 'behind')}`;
+        fill.className = `live-pill-fill ${ahead ? 'ahead' : 'behind'}`;
     }
 
-    // Two rows of small pills, one pill for each sector. The first row is the split against the
-    // reference run, the second row is the sector time against the best time of that sector
-    // (purple when faster, yellow when slower). Finished sectors keep their value; the current
-    // sector shows its value so far. Shown only when the course has sector lines.
+    // One small pill for each sector with its split against the reference run. Finished sectors
+    // keep their split; the current sector shows its split so far. Green when faster than the
+    // reference, red when slower, purple when faster than the best time of that sector.
+    // Shown only when the course has sector lines.
     function renderSectorPills(currentSplit = null) {
-        const count = reference ? gateProgress.length + 1 : 0;
-        const done = sectorSplits.length;
-        const current = runActive && done < count ? done : -1;
-        const valueAt = (i, finished, now) => i < done ? finished(i) : (i === current && currentSplit !== null ? now(i) : null);
-
-        fillSectorRow('liveSectorPills', count, current,
-            i => valueAt(i, j => sectorSplits[j], () => currentSplit), false);
-
-        // The reference gap to the best sector is added by the part of the sector driven
-        const gaps = sectorGaps();
-        fillSectorRow('liveBestPills', gaps ? count : 0, current,
-            i => valueAt(i, j => sectorSplits[j] + gaps[j], j => currentSplit + gaps[j] * currentSectorPart()), true);
-    }
-
-    function fillSectorRow(id, count, current, valueOf, bestColours) {
-        const row = document.getElementById(id);
+        const row = document.getElementById('liveSectorPills');
         if (!row) return;
+        const count = reference ? gateProgress.length + 1 : 0;
         row.classList.toggle('hidden', count < 2);
         if (count < 2) return;
 
@@ -384,16 +369,23 @@ const AutocrossLive = (function () {
                 `<div class="live-sector-item"><div class="live-sector-pill"><div class="live-pill-fill"></div><div class="live-pill-center"></div></div><span class="live-sector-label">S${i + 1}</span></div>`
             ).join('');
         }
-        const [ahead, behind] = bestColours ? ['purple', 'slower'] : ['ahead', 'behind'];
+        const gaps = sectorGaps();
+        const done = sectorSplits.length;
+        const current = runActive && done < count ? done : -1;
         [...row.children].forEach((item, i) => {
-            const value = valueOf(i);
+            const split = i < done ? sectorSplits[i] : (i === current ? currentSplit : null);
+            // In the current sector, the reference gap to the best sector is added by the part driven
+            const vsBest = split === null || !gaps ? null
+                : split + gaps[i] * (i === current ? currentSectorPart() : 1);
+            const colour = split === null ? '' : vsBest !== null && vsBest < 0 ? 'purple' : split <= 0 ? 'ahead' : 'behind';
+
             item.classList.toggle('current', i === current);
-            item.classList.toggle('pending', value === null);
-            setPillFill(item.querySelector('.live-sector-pill'), value, SECTOR_PILL_RANGE, bestColours);
+            item.classList.toggle('pending', split === null);
+            setPillFill(item.querySelector('.live-sector-pill'), split, SECTOR_PILL_RANGE);
+            if (colour === 'purple') item.querySelector('.live-pill-fill').className = 'live-pill-fill purple';
             const label = item.querySelector('.live-sector-label');
-            const name = bestColours ? `Best S${i + 1}` : `S${i + 1}`;
-            label.textContent = value === null ? name : `${name} ${formatDelta(value)}`;
-            label.className = `live-sector-label ${value === null ? '' : value <= 0 ? ahead : behind}`;
+            label.textContent = split === null ? `S${i + 1}` : `S${i + 1} ${formatDelta(split)}`;
+            label.className = `live-sector-label ${colour}`;
         });
     }
 

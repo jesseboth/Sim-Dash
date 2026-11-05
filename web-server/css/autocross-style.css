@@ -1961,16 +1961,8 @@ body.runs-collapsed {
     background: #b45cff;
 }
 
-.live-pill-fill.slower {
-    background: #ffcc33;
-}
-
 .live-sector-label.purple {
     color: #b45cff;
-}
-
-.live-sector-label.slower {
-    color: #ffcc33;
 }
 
 .live-sector-pills {
