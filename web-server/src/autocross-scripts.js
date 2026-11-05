@@ -497,7 +497,7 @@ function showKeyboardHelp() {
 async function loadCourses() {
     try {
         const courses = await apiRequest('getCourses');
-        renderCourseOptions(courses);
+        await renderCourseOptions(courses);
 
         // If there's a saved course selection, restore it
         const savedCourseId = localStorage.getItem('selectedCourse');
@@ -510,48 +510,53 @@ async function loadCourses() {
     }
 }
 
-// Fill the course dropdown: active first (newest to oldest), then archived (newest to oldest)
-function renderCourseOptions(courses) {
+// Names of the dash games (id -> name), for the course groups
+let gameNames = null;
+async function loadGameNames() {
+    if (gameNames) return gameNames;
+    gameNames = {};
+    try {
+        const games = await fetch('/games').then(r => r.json());
+        (games.categories || []).forEach(c => (c.games || []).forEach(g => { gameNames[g.id.toUpperCase()] = g.name; }));
+    } catch (e) { /* the game IDs are used */ }
+    return gameNames;
+}
+
+// Fill the course dropdown. Active courses are grouped by the game of their newest run; the game
+// run most recently is first, and in a group the course run most recently is first. Courses
+// without a game are in "Other", and archived courses are last.
+async function renderCourseOptions(courses) {
     const selectedValue = courseSelector.value;
+    const names = await loadGameNames();
+    const recency = c => String(c.lastRunAt || c.archivedDate || c.dateCreated || c.createdAt || '');
+    const byRecency = (a, b) => recency(b).localeCompare(recency(a));
+    const label = c => {
+        const name = c.isArchived && c.archivedEventName ? `📦 ${c.archivedEventName} - ${c.archivedCarName}` : c.name;
+        return `${name} (${c.runCount} run${c.runCount !== 1 ? 's' : ''})`;
+    };
 
-    const sortedCourses = [...courses].sort((a, b) => {
-        const aArchived = a.isArchived || false;
-        const bArchived = b.isArchived || false;
-
-        if (aArchived !== bArchived) {
-            return aArchived ? 1 : -1;
-        }
-
-        const aDate = new Date(a.archivedDate || a.dateCreated);
-        const bDate = new Date(b.archivedDate || b.dateCreated);
-        return bDate - aDate;
+    const groups = new Map();
+    courses.filter(c => !c.isArchived).sort(byRecency).forEach(c => {
+        const key = c.game ? String(c.game).toUpperCase() : '';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(c);
     });
+    // Groups are in the order of their newest course; "Other" is after the games
+    const ordered = [...groups.entries()].sort(([a], [b]) => (a === '') - (b === ''));
+    const archived = courses.filter(c => c.isArchived).sort(byRecency);
+    if (archived.length) ordered.push(['__archived__', archived]);
 
     courseSelector.innerHTML = '<option value="">Select a course...</option>';
-
-    let archivedSeparatorAdded = false;
-
-    sortedCourses.forEach(course => {
-        // Add separator before first archived course
-        if (course.isArchived && !archivedSeparatorAdded) {
-            const separator = document.createElement('option');
-            separator.disabled = true;
-            separator.textContent = '─────── Archived ───────';
-            courseSelector.appendChild(separator);
-            archivedSeparatorAdded = true;
-        }
-
-        const option = document.createElement('option');
-        option.value = course.courseId;
-
-        let displayName = course.name;
-        if (course.isArchived && course.archivedEventName) {
-            displayName = `📦 ${course.archivedEventName} - ${course.archivedCarName}`;
-        }
-        displayName += ` (${course.runCount} run${course.runCount !== 1 ? 's' : ''})`;
-
-        option.textContent = displayName;
-        courseSelector.appendChild(option);
+    ordered.forEach(([key, list]) => {
+        const group = document.createElement('optgroup');
+        group.label = key === '__archived__' ? 'Archived' : key ? (names[key] || key) : 'Other';
+        list.forEach(course => {
+            const option = document.createElement('option');
+            option.value = course.courseId;
+            option.textContent = label(course);
+            group.appendChild(option);
+        });
+        courseSelector.appendChild(group);
     });
 
     if (selectedValue && courses.some(c => c.courseId === selectedValue)) {
@@ -638,7 +643,7 @@ async function refreshRuns({ deselectOldMostRecent = true } = {}) {
     }
     lastRefreshedCourse = courseId;
 
-    renderCourseOptions(courses);
+    await renderCourseOptions(courses);
     currentCourseData = courses.find(c => c.courseId === courseId) || null;
     allRuns = runs;
     carNames = names;
@@ -1331,7 +1336,7 @@ async function handleArchiveSubmit(e) {
         // Deselect the course so the next recording starts a new course for this track
         courseSelector.value = '';
         await handleCourseChange();
-        renderCourseOptions(await apiRequest('getCourses'));
+        await renderCourseOptions(await apiRequest('getCourses'));
 
         showToast('Course archived. The next recording starts a new course.', 'success');
     } catch (error) {
@@ -1515,7 +1520,7 @@ async function onRunSaved() {
 async function onCourseAutoSelected(courseId, message) {
     if (courseId !== currentCourse) {
         localStorage.setItem('selectedCourse', courseId);
-        renderCourseOptions(await apiRequest('getCourses'));
+        await renderCourseOptions(await apiRequest('getCourses'));
         courseSelector.value = courseId;
         await handleCourseChange();
     }

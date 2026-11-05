@@ -123,7 +123,7 @@ const AutocrossCourses = (function () {
             closeCourseModal();
             courseSelector.value = '';
             await handleCourseChange();
-            renderCourseOptions(await apiRequest('getCourses'));
+            await renderCourseOptions(await apiRequest('getCourses'));
             showToast('Course deleted', 'success');
         } catch (error) {
             console.error('Failed to delete course:', error);

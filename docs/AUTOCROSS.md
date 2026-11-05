@@ -17,7 +17,7 @@ The analyzer is modelled on SoloStorm. The user operates it on an Android tablet
 
 Data is in `telemetry/data/autocross/`:
 
-- `courses.json` - the course list.
+- `courses.json` - the course list. The server keeps `runCount`, `bestTime`, `lastRunAt` (time of the newest run) and `game` (game of the newest run) current from the run files.
 - `{courseId}/runs/{runId}.json` - one file for each run.
 - `{courseId}/sectors.json` - the sector gates of the course.
 - `{courseId}/top10.json` - written by the recorder. The analyzer does not show it.
@@ -133,6 +133,7 @@ If the page cannot get the recorder status 10 times (2 s), it shows "Recorder of
 - A run tap changes the check box immediately and starts the download of the run. The map and charts update 150 ms after the last tap (`SELECTION_SETTLE_MS`), one time for a series of quick taps. Until then, the card of the run pulses.
 - `cumulativeDistance` and `progressAlongPath` in `autocross-track.js` keep their results for each run. Thus a new selection calculates only the new runs. Do not change the arrays that they return.
 
+- Course list: the courses are in groups by game (`game` of the course), with the dash game names. The game with the newest run is first. In a group, the course with the newest run is first. Courses without a game are in "Other". Archived courses are in "Archived", at the end.
 - Run details (✏️ on the run card): name, driver, class, car and notes, in this order. The driver and class lists are the same as in the Driver, Class & Car dialog (with "+ New driver…", the ⋮ menu and "Other…"). The class list uses the game of the run. The tap-outside area does not close this dialog, so that typed notes stay.
 - "Delete" at the top right of the run details deletes that run, after a confirmation. It is away from "Save", so that the user does not touch it by mistake.
 - The car of a run is its `car` field. If the run has no `car` field, the car is the name of its game car ID (`car-names.json`), else "Car <ID>".
@@ -152,7 +153,7 @@ If the page cannot get the recorder status 10 times (2 s), it shows "Recorder of
 
 - A sector is a gate on the course: a position, and a direction when it is known. Gates are a maximum of 15 m either side of the centre.
 - Automatic sectors (`lib/autocross-auto-sectors.js`, `createSectors` in `lib/autocross-storage.js`):
-  - The server makes the first sectors of a course when the course has runs and no `sectors.json` file. It saves the file, so this occurs only one time. The server never replaces sectors that the user changed. An empty file (the user removed all lines) stays empty.
+  - The server makes the first sectors of a course when the course has finished runs and no `sectors.json` file. DNF runs are not used. A course with only DNF runs gets no sectors until a run finishes. It saves the file, so this occurs only one time. The server never replaces sectors that the user changed. An empty file (the user removed all lines) stays empty. It saves the file, so this occurs only one time. The server never replaces sectors that the user changed. An empty file (the user removed all lines) stays empty.
   - First, the server looks for an earlier course with the same track ID that has sectors. If the fastest run passes all of its lines, the new course gets a copy of these lines.
   - If there is no such course, the server makes lines from the 3 fastest runs:
     - Autocross and track: a line just before each large braking zone (a decrease of 8 mph or more for autocross, 10 mph or more for track). Thus a sector is a braking zone and the corners, sweeper or slalom after it, up to the next large braking zone. Each line is at a straight part of the path. The zones that most runs have, and that have the largest decrease in speed, are used first.

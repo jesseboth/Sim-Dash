@@ -451,16 +451,19 @@ function updateCones(courseId, runId, cones) {
 }
 
 /**
- * Compute run count and best adjusted time from the run files
+ * Compute run count, best adjusted time, time of the newest run and its game from the run files
  */
 function computeCourseStats(courseId) {
     const runs = loadRuns(courseId);
     const validRuns = runs.filter(r => r.isValid);
+    const newest = runs.reduce((a, r) => (!a || String(r.timestamp) > String(a.timestamp) ? r : a), null);
     return {
         runCount: runs.length,
         bestTime: validRuns.length > 0
             ? Math.min(...validRuns.map(r => getAdjustedTime(r)))
-            : null
+            : null,
+        lastRunAt: newest ? newest.timestamp : null,
+        game: newest && newest.game ? newest.game : null
     };
 }
 
@@ -486,7 +489,7 @@ function loadCoursesWithStats() {
 
     for (const course of courses) {
         const stats = computeCourseStats(course.courseId);
-        if (course.runCount !== stats.runCount || course.bestTime !== stats.bestTime) {
+        if (Object.keys(stats).some(k => course[k] !== stats[k])) {
             Object.assign(course, stats);
             changed = true;
         }
@@ -558,11 +561,12 @@ function loadSectors(courseId) {
     }
 }
 
-const AUTO_SECTOR_RUNS = 3; // fastest runs used to make the first sectors of a course
+const AUTO_SECTOR_RUNS = 3; // fastest finished runs used to make the first sectors of a course
 
 // First sectors of a course: the lines of an earlier course on the same track when the
 // fastest run passes all of them, else lines made from the runs. They are saved, so this
-// happens only once; the user's changes are never replaced.
+// happens only once; the user's changes are never replaced. DNF runs are not used: a course
+// with only DNF runs gets no sectors until a run finishes.
 function createSectors(courseId) {
     const runs = loadFastestRuns(courseId, AUTO_SECTOR_RUNS);
     if (runs.length === 0) return [];
@@ -581,7 +585,7 @@ function loadFastestRuns(courseId, count) {
         if (!file.endsWith('.json')) continue;
         try {
             const run = JSON.parse(fs.readFileSync(path.join(runsDir, file), 'utf8'));
-            if (run.lapTime > 0 && run.telemetry && run.telemetry.timestamps && run.telemetry.timestamps.length > 1) {
+            if (run.isValid !== false && run.lapTime > 0 && run.telemetry && run.telemetry.timestamps && run.telemetry.timestamps.length > 1) {
                 run.telemetry = reduceSampleRate(run.telemetry, DISPLAY_SAMPLE_RATE);
                 runs.push(run);
             }
