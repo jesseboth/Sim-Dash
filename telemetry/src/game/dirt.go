@@ -146,6 +146,11 @@ func DirtReadData(conn *net.UDPConn, telemArray []util.Telemetry, totalLength in
         combinedMap[k] = v
     }
 
+    // A packet with a junk timer (DiRT Rally 2.0 at "Return to service area") is not shown or recorded
+    if timer, ok := f32map["CurrentLap"]; ok && !validTimer(timer) {
+        return
+    }
+
     // Add the IsRaceOn field
     combinedMap["IsRaceOn"] = true
 

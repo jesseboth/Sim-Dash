@@ -82,6 +82,7 @@ Optional channels can be missing in old runs. The analyzer must accept a run wit
    - While the speed is less than 1 mph, it keeps only the last 0.5 s.
    - It keeps a maximum of 30 s.
 4. The run starts when the timer changes from 0 to more than 0. Time 0 is `now - timer`. The launch buffer goes into the run with negative times. After the recorder is armed, it waits for the timer to go to 0, so a run in progress is not recorded.
+   - Junk timer: a timer that is not a number, is less than 0, or is more than 6 hours (`maxTimer`) is not a run time. DiRT Rally 2.0 sends such a timer at "Return to service area". The DiRT and EA WRC readers drop the packet, so the dash does not show it. The recorder also ignores such a frame from any game.
 5. The run ends when the timer goes back to less than 1 s (finish line, next lap or restart). When the timer starts again at once (laps), the next run starts at once.
    - AC, Forza and DiRT set `LastLap` at the finish. If `LastLap` agrees with the last timer value (0.25 s), the run finished. Else the recorder waits 1 s for `LastLap`. If `LastLap` does not change, the run is a restart, and the recorder saves it as a DNF.
 6. If the timer goes back by a larger step (rewind), or stops (pause), the sample times follow the game timer again. The recorder removes the samples after the timer value.

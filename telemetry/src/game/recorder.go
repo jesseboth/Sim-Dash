@@ -40,6 +40,7 @@ const (
 	minRunTime       = 5.0                    // s; a shorter run is a restart, not a run
 	lastLapWait      = time.Second            // time for LastLap to change after a timer reset
 	armedTimeout     = time.Hour              // armed with no game data for this time: disarm
+	maxTimer         = 6 * 60 * 60            // s; a larger timer is not a run time (a game sends junk at pause or restart)
 )
 
 // Recorder finds runs in the frames of any game and saves them for the armed course
@@ -109,6 +110,12 @@ func (r *Recorder) Update(f Frame) {
 	}
 	if f.CarClass != "" {
 		r.lastClass = f.CarClass
+	}
+	if !validTimer(f.Timer) {
+		if r.debug {
+			log.Printf("Frame ignored: timer %v is not a run time", f.Timer)
+		}
+		return
 	}
 	if !r.syncArmed() {
 		return
@@ -258,6 +265,11 @@ func (r *Recorder) checkPending(lastLap float32, now time.Time) {
 		r.pending = nil
 		r.save(p.samples, p.finalTimer, p.cones, false, "restart")
 	}
+}
+
+func validTimer(t float32) bool {
+	v := float64(t)
+	return !math.IsNaN(v) && v >= 0 && v <= maxTimer
 }
 
 func lapTimeAgrees(lastLap, timer float32) bool {
