@@ -1162,8 +1162,13 @@ body.runs-collapsed {
         justify-content: space-between;
     }
 
-    .course-selector {
+    .course-picker {
         flex: 1;
+        margin-left: 0;
+    }
+
+    .course-selector {
+        width: 100%;
         margin-left: 0;
     }
 
@@ -2197,4 +2202,104 @@ body.runs-collapsed {
 
 .modal-content .modal-title-row h2 {
     margin: 0;
+}
+
+/* Course picker: games collapse to one row each */
+.course-picker {
+    position: relative;
+    margin-left: 1rem;
+}
+
+.course-picker .course-selector {
+    margin-left: 0;
+}
+
+.course-picker-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    max-width: 360px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.course-picker-btn::after {
+    content: '▾';
+    color: var(--text-secondary);
+}
+
+.course-picker-panel {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 1500;
+    min-width: 100%;
+    width: max-content;
+    max-width: min(92vw, 460px);
+    max-height: 70vh;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    padding: 0.25rem 0;
+}
+
+.course-picker-panel.hidden {
+    display: none;
+}
+
+.course-picker-game {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.7rem 0.9rem;
+    min-height: 44px;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.course-picker-game .chevron {
+    width: 1em;
+    color: var(--text-secondary);
+}
+
+.course-picker-game .count {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-weight: 400;
+    font-size: 0.85rem;
+}
+
+.course-picker-course {
+    display: block;
+    width: 100%;
+    padding: 0.6rem 0.9rem 0.6rem 2.4rem;
+    min-height: 44px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.course-picker-course:hover,
+.course-picker-game:hover {
+    background: var(--bg-tertiary);
+}
+
+.course-picker-course.selected {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    font-weight: 600;
 }

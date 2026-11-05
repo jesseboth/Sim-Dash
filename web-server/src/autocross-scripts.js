@@ -156,6 +156,7 @@ async function init() {
 function setupEventListeners() {
     // Course selector
     courseSelector.addEventListener('change', handleCourseChange);
+    initCoursePicker();
 
     // Delete run button
     deleteRunBtn.addEventListener('click', handleDeleteRun);
@@ -562,11 +563,85 @@ async function renderCourseOptions(courses) {
     if (selectedValue && courses.some(c => c.courseId === selectedValue)) {
         courseSelector.value = selectedValue;
     }
+    renderCoursePicker();
+}
+
+// --- Course picker ---
+// Shows the course list of the hidden select with one row for each game. Only the open games
+// show their courses, so the list stays short. When the picker opens, the game of the selected
+// course is open (the first game when no course is selected).
+const openCourseGroups = new Set();
+
+function renderCoursePicker() {
+    const btn = document.getElementById('coursePickerBtn');
+    const panel = document.getElementById('coursePickerPanel');
+    if (!btn || !panel) return;
+
+    const selected = courseSelector.selectedOptions[0];
+    btn.textContent = selected && selected.value ? selected.textContent : 'Select a course...';
+
+    panel.innerHTML = [...courseSelector.querySelectorAll('optgroup')].map(group => {
+        const open = openCourseGroups.has(group.label);
+        const courses = [...group.children];
+        const rows = open ? courses.map(o =>
+            `<button type="button" class="course-picker-course${o.value === courseSelector.value ? ' selected' : ''}" data-course="${escapeHtml(o.value)}" role="menuitem">${escapeHtml(o.textContent)}</button>`
+        ).join('') : '';
+        return `<button type="button" class="course-picker-game" data-group="${escapeHtml(group.label)}" aria-expanded="${open}">` +
+            `<span class="chevron">${open ? '▾' : '▸'}</span>${escapeHtml(group.label)}<span class="count">${courses.length}</span></button>${rows}`;
+    }).join('');
+}
+
+function openCoursePicker() {
+    const panel = document.getElementById('coursePickerPanel');
+    openCourseGroups.clear();
+    const selected = courseSelector.selectedOptions[0];
+    const group = (selected && selected.value && selected.parentElement.tagName === 'OPTGROUP')
+        ? selected.parentElement : courseSelector.querySelector('optgroup');
+    if (group) openCourseGroups.add(group.label);
+    renderCoursePicker();
+    panel.classList.remove('hidden');
+    document.getElementById('coursePickerBtn').setAttribute('aria-expanded', 'true');
+}
+
+function closeCoursePicker() {
+    document.getElementById('coursePickerPanel')?.classList.add('hidden');
+    document.getElementById('coursePickerBtn')?.setAttribute('aria-expanded', 'false');
+}
+
+function initCoursePicker() {
+    const btn = document.getElementById('coursePickerBtn');
+    const panel = document.getElementById('coursePickerPanel');
+    if (!btn || !panel) return;
+
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (panel.classList.contains('hidden')) openCoursePicker(); else closeCoursePicker();
+    });
+    panel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const game = e.target.closest('.course-picker-game');
+        if (game) {
+            const label = game.dataset.group;
+            if (openCourseGroups.has(label)) openCourseGroups.delete(label); else openCourseGroups.add(label);
+            renderCoursePicker();
+            return;
+        }
+        const course = e.target.closest('.course-picker-course');
+        if (course) {
+            closeCoursePicker();
+            if (course.dataset.course !== courseSelector.value) {
+                courseSelector.value = course.dataset.course;
+                courseSelector.dispatchEvent(new Event('change'));
+            }
+        }
+    });
+    document.addEventListener('click', closeCoursePicker);
 }
 
 // Handle Course Change
 async function handleCourseChange() {
     const courseId = courseSelector.value;
+    renderCoursePicker();
     const token = ++courseLoadToken;
 
     if (!courseId) {

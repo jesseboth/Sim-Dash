@@ -22,9 +22,14 @@
     <header class="header">
         <div class="header-left">
             <h1>Telemetry</h1>
-            <select id="courseSelector" class="course-selector">
+            <!-- The select holds the course list and the selection; the picker shows it with collapsible games -->
+            <select id="courseSelector" class="hidden" aria-hidden="true" tabindex="-1">
                 <option value="">Select course...</option>
             </select>
+            <div id="coursePicker" class="course-picker">
+                <button type="button" id="coursePickerBtn" class="course-selector course-picker-btn" aria-haspopup="true" aria-expanded="false">Select a course...</button>
+                <div id="coursePickerPanel" class="course-picker-panel hidden" role="menu"></div>
+            </div>
             <button id="courseMenuBtn" class="btn btn-secondary" title="Rename, create or delete courses">⚙ Course</button>
             <button id="nameIdentifiersBtn" class="btn btn-secondary driver-btn" title="Driver, class and car for new runs">👤 <span id="driverBtnText">Driver / Car</span></button>
         </div>
