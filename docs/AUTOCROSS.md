@@ -73,6 +73,7 @@ Optional channels can be missing in old runs. The analyzer must accept a run wit
 1. The user arms the recorder in the analyzer. The page uses the game that the dash runs. If no game runs, the user selects a game from the dash game list (`/games`), and the page starts it. The page sends the course ID to `/autocross/recording/start`.
    - A game without a `CurrentLap` field (for example ACC) cannot record. `/status` gives `canRecord: false`, and `/start` fails.
    - Track IDs: AC `TrackId`, Forza Motorsport `TrackOrdinal`. DiRT Rally and EA WRC: the stage length in whole metres (`StageLength`). A stage and its reverse can have the same length, and then they use the same course.
+   - When the game sends no live data (game menu, loading), Start shows "Waiting for track". The page polls the live data each 250 ms. When a track or a stage loads, the page selects the course and arms the recorder before the timer starts. Stop cancels the wait.
    - Start uses the selected course when its track ID agrees. Else it uses the course of the track, or makes one. A new stage course gets the name "Stage <length> km". The user can rename it in the "Driver / Car" dialog.
    - A game without a track ID (Forza Horizon) uses the selected course. If no course is selected, the page makes a course with the game name.
    - While armed, `/status` gives the live `trackId`. When it changes and the selected course has a different track ID, the page moves recording to the course of the new track. A course without a track ID (`manual`) stays.
@@ -119,6 +120,8 @@ If the page cannot get the recorder status 10 times (2 s), it shows "Recorder of
 - The user can select a maximum of 6 runs. Each selected run gets a color from the palette `#4a9eff #ff4a4a #4aff4a #ffaa4a #ff4aff #4affff`.
 - The most recent run can be purple (`#7d5aff`) ("Keep latest run").
 - Sort "Fastest" includes cone penalties. Sort "Scratch" uses `lapTime` only. Sort "Recent" uses the run date. DNF runs have no position and are last.
+- The live screen shows the run time in large text. When there is a reference run, it also shows the time difference to the reference and the sector splits.
+- × closes the live screen for the current run. During the run, the "Live" button opens it again. At other times, the "Live" button sets the live screen on or off.
 - Live reference: "Best · <class>" (the class of new runs) is the default. DNF runs are not references.
 - A cone tap changes the count immediately. The page saves 500 ms after the last tap.
 - A run tap changes the check box immediately and starts the download of the run. The map and charts update 150 ms after the last tap (`SELECTION_SETTLE_MS`), one time for a series of quick taps. Until then, the card of the run pulses.

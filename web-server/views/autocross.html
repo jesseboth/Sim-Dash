@@ -378,19 +378,9 @@
     <!-- Live split screen (shown while a run is being driven) -->
     <div id="liveOverlay" class="live-overlay hidden">
         <button id="liveCloseBtn" class="live-close" title="Hide for this run">×</button>
-        <div class="live-top">
-            <span class="live-elapsed" id="liveElapsed">0:00.000</span>
-            <span class="live-speed"><span id="liveSpeed">0</span> <small>mph</small> <span id="liveSpeedDelta" class="live-speed-delta"></span></span>
-            <span class="live-gear">G <span id="liveGear"></span></span>
-        </div>
-        <div id="liveDelta" class="live-delta">—</div>
-        <div class="live-bar">
-            <div class="live-bar-center"></div>
-            <div id="liveBarFill" class="live-bar-fill"></div>
-        </div>
-        <div class="live-bar-labels"><span>ahead</span><span>behind</span></div>
+        <div class="live-elapsed" id="liveElapsed">0:00.000</div>
+        <div id="liveDelta" class="live-delta hidden"></div>
         <div id="liveSector" class="live-sector"></div>
-        <div class="live-predicted">Predicted <span id="livePredicted">—</span></div>
         <div id="liveResult" class="live-result-text"></div>
         <button id="liveRefBtn" class="live-ref"></button>
     </div>

@@ -3,7 +3,6 @@
 
 const AutocrossLive = (function () {
     const POLL_MS = 50;
-    const BAR_RANGE = 1.0;          // seconds shown at the end of the gain/loss bar
     const SECTOR_FLASH_MS = 3000;
     const RESULT_SHOW_MS = 6000;
     const SAVE_WAIT_MS = 4000;      // how long to wait for the saved run after the run ends
@@ -40,11 +39,23 @@ const AutocrossLive = (function () {
         updateToggleButton();
 
         document.getElementById('liveToggleBtn')?.addEventListener('click', () => {
+            // During a run, a closed or switched-off live screen opens again
+            if (runActive && overlay?.classList.contains('hidden')) {
+                enabled = true;
+                localStorage.setItem('liveOverlayEnabled', 'true');
+                hiddenForThisRun = false;
+                updateToggleButton();
+                show();
+                return;
+            }
             enabled = !enabled;
             localStorage.setItem('liveOverlayEnabled', String(enabled));
             updateToggleButton();
             if (!enabled) hide();
-            showToast(enabled ? 'Live split screen on' : 'Live split screen off', 'info');
+            const armed = window.AutocrossRecorder?.getState() !== 'idle';
+            showToast(!enabled ? 'Live split screen off'
+                : armed ? 'Live split screen on. It opens when the next run starts.'
+                : 'Live split screen on. It opens when a run starts. Press Start to record.', 'info');
         });
         document.getElementById('liveCloseBtn')?.addEventListener('click', () => {
             hiddenForThisRun = true;
@@ -261,11 +272,8 @@ const AutocrossLive = (function () {
 
     function update(telem) {
         const elapsed = Number(telem.CurrentLap) || 0;
-        const speed = (Number(telem.Speed) || 0) * 2.23694; // m/s to mph
 
         setText('liveElapsed', formatLapTime(elapsed));
-        setText('liveSpeed', `${Math.round(speed)}`);
-        setText('liveGear', telem.Gear === -1 ? 'R' : (telem.Gear === 0 ? 'N' : String(telem.Gear ?? '')));
 
         const x = Number(telem.PositionX);
         const y = Number(telem.PositionZ);
@@ -278,14 +286,9 @@ const AutocrossLive = (function () {
 
         const progress = tracker(x, y);
         const refTime = AutocrossTrack.interpolate(referenceDist, reference.telemetry.timestamps, progress);
-        const refSpeed = AutocrossTrack.interpolate(referenceDist, reference.telemetry.speed, progress);
         const delta = elapsed - refTime;
 
         setDelta(delta);
-        setText('livePredicted', formatLapTime(reference.lapTime + delta));
-        const speedDiff = Math.round(speed - refSpeed);
-        setText('liveSpeedDelta', speedDiff === 0 ? '' : `${speedDiff > 0 ? '+' : ''}${speedDiff}`);
-        document.getElementById('liveSpeedDelta')?.classList.toggle('up', speedDiff > 0);
 
         // Sector split when passing a gate
         while (nextGate < gateProgress.length && gateProgress[nextGate] !== null && progress >= gateProgress[nextGate]) {
@@ -297,26 +300,17 @@ const AutocrossLive = (function () {
     }
 
     // --- Display ---
+    // Time difference to the reference; hidden when there is no reference
     function setDelta(delta) {
         const el = document.getElementById('liveDelta');
-        const fill = document.getElementById('liveBarFill');
-        if (!el || !fill) return;
-
+        if (!el) return;
         if (delta === null) {
-            el.textContent = '—';
-            el.className = 'live-delta';
-            fill.style.width = '0';
+            el.textContent = '';
+            el.className = 'live-delta hidden';
             return;
         }
-
         el.textContent = formatDelta(delta);
         el.className = `live-delta ${delta <= 0 ? 'ahead' : 'behind'}`;
-
-        // Bar grows left (green, ahead) or right (red, behind) from the centre
-        const fraction = Math.min(1, Math.abs(delta) / BAR_RANGE) * 50;
-        fill.style.width = `${fraction}%`;
-        fill.style.left = delta <= 0 ? `${50 - fraction}%` : '50%';
-        fill.className = `live-bar-fill ${delta <= 0 ? 'ahead' : 'behind'}`;
     }
 
     function flashSector(text, split) {

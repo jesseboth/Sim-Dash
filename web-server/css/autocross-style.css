@@ -1853,35 +1853,23 @@ body.runs-collapsed {
     cursor: pointer;
 }
 
-.live-top {
-    display: flex;
-    gap: 2.5rem;
-    align-items: baseline;
-    color: var(--text-secondary);
-    font-family: 'Courier New', monospace;
-    font-size: clamp(1.2rem, 3vw, 2rem);
-}
-
 .live-elapsed {
+    font-family: 'Courier New', monospace;
+    font-weight: 800;
+    font-size: clamp(4rem, 17vw, 15rem);
+    line-height: 1;
     color: var(--text-primary);
-    font-weight: 700;
-}
-
-.live-speed-delta {
-    font-size: 0.7em;
-    color: #ff8a8a;
-}
-
-.live-speed-delta.up {
-    color: #5dff7a;
 }
 
 .live-delta {
     font-family: 'Courier New', monospace;
     font-weight: 800;
-    font-size: clamp(5rem, 18vw, 13rem);
+    font-size: clamp(2.5rem, 9vw, 7rem);
     line-height: 1;
-    color: var(--text-muted);
+}
+
+.live-delta.hidden {
+    display: none;
 }
 
 .live-delta.ahead {
@@ -1890,51 +1878,6 @@ body.runs-collapsed {
 
 .live-delta.behind {
     color: #ff4a4a;
-}
-
-.live-bar {
-    position: relative;
-    width: min(90vw, 900px);
-    height: 28px;
-    background: #222;
-    border-radius: 14px;
-    overflow: hidden;
-}
-
-.live-bar-center {
-    position: absolute;
-    left: 50%;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: #888;
-    z-index: 1;
-}
-
-.live-bar-fill {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    width: 0;
-    transition: width 0.1s linear, left 0.1s linear;
-}
-
-.live-bar-fill.ahead {
-    background: #3dff6a;
-}
-
-.live-bar-fill.behind {
-    background: #ff4a4a;
-}
-
-.live-bar-labels {
-    display: flex;
-    justify-content: space-between;
-    width: min(90vw, 900px);
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    margin-top: -0.75rem;
 }
 
 .live-sector {
@@ -1952,17 +1895,6 @@ body.runs-collapsed {
     color: #ff4a4a;
 }
 
-.live-predicted {
-    color: var(--text-secondary);
-    font-size: clamp(1.1rem, 2.5vw, 1.6rem);
-}
-
-.live-predicted span {
-    font-family: 'Courier New', monospace;
-    color: var(--text-primary);
-    font-weight: 700;
-}
-
 .live-result-text {
     display: none;
     white-space: pre-line;
@@ -1976,9 +1908,8 @@ body.runs-collapsed {
     display: block;
 }
 
-.live-overlay.live-result .live-top,
-.live-overlay.live-result .live-sector,
-.live-overlay.live-result .live-predicted {
+.live-overlay.live-result .live-elapsed,
+.live-overlay.live-result .live-sector {
     display: none;
 }
 

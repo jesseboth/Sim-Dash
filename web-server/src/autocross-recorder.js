@@ -5,6 +5,7 @@ const AutocrossRecorder = (function() {
     // States
     const STATE = {
         IDLE: 'idle',
+        WAITING: 'waiting',     // Start pressed, no live data yet (game menu)
         RECORDING: 'recording',
     };
 
@@ -113,6 +114,9 @@ const AutocrossRecorder = (function() {
     async function toggleRecording() {
         if (state === STATE.IDLE) {
             await startRecording();
+        } else if (state === STATE.WAITING) {
+            state = STATE.IDLE;
+            updateUI();
         } else if (state === STATE.RECORDING) {
             await stopRecording();
         }
@@ -207,19 +211,24 @@ const AutocrossRecorder = (function() {
 
     let lastTelemetry = null;
 
-    // Poll telemetry until the track ID is populated (up to maxWaitMs).
-    // Returns null when no ID came, and undefined at once for a game that sends no track ID.
-    async function waitForTrackId(maxWaitMs = 5000) {
-        const interval = 500;
-        const attempts = maxWaitMs / interval;
-        for (let i = 0; i < attempts; i++) {
-            const telem = await getLiveTelemetry();
-            lastTelemetry = telem;
-            if (telem && Object.keys(telem).length) {
-                const id = telem.TrackId ?? telem.TrackOrdinal;
-                if (id === undefined) return undefined;
-                if (id) return String(id);
-            }
+    // Track ID of the live data: a string, undefined for a game that sends no track ID,
+    // or null when there is no live data yet (game menu, loading)
+    async function detectTrack() {
+        const telem = await getLiveTelemetry();
+        lastTelemetry = telem;
+        if (!telem || !Object.keys(telem).length) return null;
+        const id = telem.TrackId ?? telem.TrackOrdinal;
+        if (id === undefined) return undefined;
+        return id ? String(id) : null;
+    }
+
+    // Poll until the game sends live data. Returns the track (see detectTrack), or null when
+    // the user stops the wait. The poll is fast so the recorder arms before the timer starts.
+    async function waitForTrack() {
+        const interval = 250;
+        while (state === STATE.WAITING) {
+            const track = await detectTrack();
+            if (track !== null) return track;
             await new Promise(r => setTimeout(r, interval));
         }
         return null;
@@ -241,8 +250,15 @@ const AutocrossRecorder = (function() {
                 return;
             }
 
-            // Poll for track ID (the game may need a moment to send packets)
-            const trackId = await waitForTrackId(5000);
+            // In a game menu there is no live data: wait for the next track or stage to load
+            let trackId = await detectTrack();
+            if (trackId === null) {
+                state = STATE.WAITING;
+                updateUI();
+                trackId = await waitForTrack();
+                if (state !== STATE.WAITING) return; // stopped while waiting
+                state = STATE.IDLE;
+            }
 
             const courseId = await resolveCourseForTrack(trackId, await gameName(gameId));
             if (!courseId) return;
@@ -287,11 +303,6 @@ const AutocrossRecorder = (function() {
             (!trackId || !current.trackId || current.trackId === 'manual' || current.trackId === trackId);
         if (currentFits) {
             return current.courseId;
-        }
-
-        if (trackId === null) {
-            showToast(`No track detected yet. Start driving in ${game}, then press Start again.`, 'warning');
-            return null;
         }
 
         // The game sends no track ID
@@ -719,7 +730,7 @@ const AutocrossRecorder = (function() {
             try {
                 if (trackId && trackName) await apiRequest('setTrackName', { trackId, name: trackName });
                 const sent = await saveCurrentDriver(driver, car, carClass);
-                if (state === STATE.IDLE) detailsSetBeforeStart = true;
+                if (state !== STATE.RECORDING) detailsSetBeforeStart = true;
                 if (!sent) showToast('Saved. The recorder gets these details when you press Start.', 'info');
 
                 if (applyCheck.checked && missing.length) {
@@ -855,6 +866,7 @@ const AutocrossRecorder = (function() {
     // Update UI based on state
     function updateUI(elapsed) {
         if (!statusElement || !toggleButton) return;
+        statusElement.title = state === STATE.WAITING ? 'Recording arms when the game loads a track or stage' : '';
 
         switch (state) {
             case STATE.IDLE:
@@ -862,6 +874,14 @@ const AutocrossRecorder = (function() {
                 statusElement.className = 'recording-status';
                 toggleButton.textContent = 'Start';
                 toggleButton.className = 'btn btn-start';
+                toggleButton.disabled = false;
+                break;
+
+            case STATE.WAITING:
+                statusElement.textContent = 'Waiting for track';
+                statusElement.className = 'recording-status armed';
+                toggleButton.textContent = 'Stop';
+                toggleButton.className = 'btn btn-stop';
                 toggleButton.disabled = false;
                 break;
 
