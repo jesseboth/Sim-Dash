@@ -1,6 +1,8 @@
 /* Autocross Telemetry Analyzer Styles */
 
 :root {
+    /* Cousine (Google Fonts) has the same design as Liberation Mono */
+    --font-mono: 'Cousine', 'Liberation Mono', 'Courier New', monospace;
     --bg-primary: #1a1a1a;
     --bg-secondary: #2a2a2a;
     --bg-tertiary: #3a3a3a;
@@ -430,7 +432,7 @@ body.runs-collapsed {
     min-height: 1.1rem;
     padding-top: 0.15rem;
     font-size: 0.75rem;
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
 }
 
 .chart-value-item {
@@ -481,7 +483,7 @@ body.runs-collapsed {
 }
 
 .time-display {
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 1.2rem;
     font-weight: 600;
 }
@@ -526,7 +528,7 @@ body.runs-collapsed {
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--text-primary);
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
 }
 
 /* Runs Section */
@@ -755,7 +757,7 @@ body.runs-collapsed {
 }
 
 .run-time {
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--text-primary);
@@ -1693,7 +1695,7 @@ body.runs-collapsed {
 }
 
 .run-sector {
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 0.8rem;
     color: var(--text-secondary);
     background: rgba(255, 255, 255, 0.05);
@@ -1854,7 +1856,7 @@ body.runs-collapsed {
 }
 
 .live-elapsed {
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-weight: 800;
     font-size: clamp(4rem, 17vw, 15rem);
     line-height: 1;
@@ -1862,7 +1864,7 @@ body.runs-collapsed {
 }
 
 .live-delta {
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-weight: 800;
     font-size: clamp(2.5rem, 9vw, 7rem);
     line-height: 1;
@@ -1882,7 +1884,7 @@ body.runs-collapsed {
 
 .live-sector {
     min-height: 2.5rem;
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-weight: 700;
     font-size: clamp(1.5rem, 4vw, 2.5rem);
 }
@@ -1891,7 +1893,7 @@ body.runs-collapsed {
     display: none;
     white-space: pre-line;
     text-align: center;
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-weight: 700;
     font-size: clamp(1.5rem, 4vw, 2.75rem);
 }
@@ -1980,7 +1982,7 @@ body.runs-collapsed {
 }
 
 .live-sector-label {
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-weight: 700;
     font-size: clamp(0.8rem, 2vw, 1.1rem);
     color: var(--text-muted);
@@ -2182,4 +2184,17 @@ body.runs-collapsed {
 #nameIdentifiersModal .modal-content {
     max-height: 90vh;
     overflow-y: auto;
+}
+
+/* Dialog title with an action at the right */
+.modal-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.modal-content .modal-title-row h2 {
+    margin: 0;
 }

@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telemetry</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cousine:wght@400;700&display=swap">
     <link rel="stylesheet" href="/css/autocross-style.css">
     <!-- Chart.js CSS not needed, it uses canvas -->
     <link rel="manifest" href="/data/manifest.json">
@@ -121,7 +124,6 @@
                 <button id="importBtn" class="btn btn-secondary">Import</button>
                 <button id="archiveBtn" class="btn btn-secondary">Archive</button>
                 <button id="clearSelectionsBtn" class="btn btn-secondary">Clear</button>
-                <button id="deleteRunBtn" class="btn btn-danger" disabled>Delete</button>
             </div>
         </div>
 
@@ -134,7 +136,10 @@
     <!-- Modal: Run Details -->
     <div id="renameModal" class="modal hidden">
         <div class="modal-content">
-            <h2 id="runDetailsTitle">Run Details</h2>
+            <div class="modal-title-row">
+                <h2 id="runDetailsTitle">Run Details</h2>
+                <button type="button" id="deleteRunBtn" class="btn btn-danger btn-sm">Delete</button>
+            </div>
             <form id="renameRunForm">
                 <div class="form-group">
                     <label for="runName">Run Name:</label>
@@ -404,6 +409,7 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="/src/keep-awake.js"></script>
     <script src="/src/autocross-track.js"></script>
     <script src="/src/autocross-align.js"></script>
     <script src="/src/autocross-scripts.js"></script>

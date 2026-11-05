@@ -125,6 +125,7 @@ If the page cannot get the recorder status 10 times (2 s), it shows "Recorder of
 - The live screen shows the run time in large text. When there is a reference run, it also shows:
   - The time difference to the reference, and a pill with a centre line. The pill fills to the left in green when the driver is ahead, and to the right in red when the driver is behind. The pill is full at 2 s.
   - When the course has sector lines: one small pill for each sector, with its split under it. The pill of the current sector shows the split so far. A sector pill is full at 1 s.
+- The screen stays on while the recorder waits for a track or is armed (`src/keep-awake.js`). On a secure page (HTTPS), the page uses the Screen Wake Lock API. On plain HTTP, the API is not available. Then a hidden, muted, looping 16×16 black video keeps the screen on. The video needs a tap before it can play; Start is a tap. When a page loads armed, the first tap starts it.
 - × closes the live screen for the current run. During the run, the "Live" button opens it again. At other times, the "Live" button sets the live screen on or off.
 - Live reference: the best run of the class of new runs. When no class is set, or the class has no runs, the best run of the course. DNF runs are not references.
   - "Live vs selected" (check box in the runs header): the reference is the best of the selected runs. When no valid run is selected, the default reference applies.
@@ -133,6 +134,7 @@ If the page cannot get the recorder status 10 times (2 s), it shows "Recorder of
 - `cumulativeDistance` and `progressAlongPath` in `autocross-track.js` keep their results for each run. Thus a new selection calculates only the new runs. Do not change the arrays that they return.
 
 - Run details (✏️ on the run card): name, driver, class, car and notes, in this order. The driver and class lists are the same as in the Driver, Class & Car dialog (with "+ New driver…", the ⋮ menu and "Other…"). The class list uses the game of the run. The tap-outside area does not close this dialog, so that typed notes stay.
+- "Delete" at the top right of the run details deletes that run, after a confirmation. It is away from "Save", so that the user does not touch it by mistake.
 - The car of a run is its `car` field. If the run has no `car` field, the car is the name of its game car ID (`car-names.json`), else "Car <ID>".
 - In the run details, "Use for all runs with game car ID" saves the car name for the ID and removes the `car` field from the run. If the user clears this box, the car name is only for this run.
 - The "Driver / Car" button sets the driver, the class and the car for new runs. The button shows the driver and the class.

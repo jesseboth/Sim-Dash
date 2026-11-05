@@ -452,14 +452,6 @@ function handleKeyboardShortcuts(e) {
             }
             break;
 
-        case 'Delete':
-        case 'Backspace': // Delete - Delete selected runs
-            e.preventDefault();
-            if (!deleteRunBtn.disabled) {
-                handleDeleteRun();
-            }
-            break;
-
         case 'ArrowLeft':
         case 'ArrowRight': // Step the timeline (Shift = 1 s)
             if (window.AutocrossScrubber) {
@@ -495,7 +487,6 @@ function showKeyboardHelp() {
         '- Space: Play/Pause scrubber',
         '- Left/Right: Step 0.1 s (Shift: 1 s)',
         '- R: Arm/Disarm recording',
-        '- Delete/Backspace: Delete selected runs',
         '- Escape: Close dialog',
         '- ?: Show this help'
     ].join('\n');
@@ -1119,7 +1110,6 @@ function handleAlignChange(reference) {
 function updateButtonStates() {
     const hasSelection = selectedRuns.length > 0;
 
-    deleteRunBtn.disabled = !hasSelection;
 
     // Enable export button if runs are selected
     const exportBtn = document.getElementById('exportBtn');
@@ -1148,13 +1138,14 @@ function updateArchiveButtonState() {
 }
 
 // Handle Delete Run
+// Delete the run open in the run details dialog
 async function handleDeleteRun() {
-    if (selectedRuns.length === 0) return;
+    const run = detailsRun;
+    if (!run || !currentCourse) return;
 
-    const names = selectedRuns.map(id => `Run ${runNumbers.get(id)}`).join(', ');
     const confirmed = await confirmDialog({
-        title: selectedRuns.length === 1 ? 'Delete run' : `Delete ${selectedRuns.length} runs`,
-        message: `${names} will be deleted. This cannot be undone.`,
+        title: 'Delete run',
+        message: `Run ${runNumbers.get(run.runId)} will be deleted. This cannot be undone.`,
         confirmLabel: 'Delete',
         danger: true
     });
@@ -1162,23 +1153,15 @@ async function handleDeleteRun() {
 
     try {
         showLoading();
+        await apiRequest('deleteRun', { courseId: currentCourse, runId: run.runId });
 
-        const deletedIds = [...selectedRuns];
-        await Promise.all(
-            deletedIds.map(runId =>
-                apiRequest('deleteRun', {
-                    courseId: currentCourse,
-                    runId
-                })
-            )
-        );
-
-        deletedIds.forEach(runId => delete loadedRuns[runId]);
-        selectedRuns = [];
+        closeRunDetails();
+        delete loadedRuns[run.runId];
+        selectedRuns = selectedRuns.filter(id => id !== run.runId);
 
         await refreshRuns({ deselectOldMostRecent: false });
 
-        showToast(`Deleted ${deletedIds.length} run${deletedIds.length !== 1 ? 's' : ''}`, 'success');
+        showToast('Run deleted', 'success');
     } catch (error) {
         console.error('Failed to delete run:', error);
     } finally {

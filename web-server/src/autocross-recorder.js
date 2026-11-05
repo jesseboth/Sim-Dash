@@ -865,6 +865,8 @@ const AutocrossRecorder = (function() {
 
     // Update UI based on state
     function updateUI(elapsed) {
+        // The screen stays on while the recorder waits for a track or is armed
+        window.KeepAwake?.set(state !== STATE.IDLE);
         if (!statusElement || !toggleButton) return;
         statusElement.title = state === STATE.WAITING ? 'Recording arms when the game loads a track or stage' : '';
 
